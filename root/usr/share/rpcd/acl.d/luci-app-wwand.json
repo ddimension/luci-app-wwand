@@ -12,6 +12,7 @@
 					"modem_get_settings",
 					"modem_plmn_lists",
 					"modem_sim_slots",
+					"modem_probe",
 					"modem_scan"
 				]
 			},

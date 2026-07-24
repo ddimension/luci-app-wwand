@@ -28,6 +28,7 @@ var callGpioList = rpc.declare({
 var callStatus = rpc.declare({ object: 'wwand', method: 'status', expect: { '': {} } });
 var callRepower = rpc.declare({ object: 'wwand', method: 'modem_repower', params: [ 'modem' ], expect: {} });
 var callSlots = rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} });
+var callProbe = rpc.declare({ object: 'wwand', method: 'modem_probe', expect: {} });
 
 return baseclass.extend({
 	/* Modem & SIM — hardware identity + SIM. The primary "device" itself is set
@@ -36,8 +37,44 @@ return baseclass.extend({
 	addModemSim: function(s, tab, bind) {
 		var o;
 
+		o = s.taboption(tab, form.Value, 'serial', _('Bind by USB serial'),
+			_('Pin this modem by its USB iSerial — a stable identity that follows the modem across renumbering and port changes (read before the modem is opened). Pick a detected modem below, or leave empty.'));
+		o.ucioption = 'serial';
+		bind(o);
+		o.load = function(section_id) {
+			var self = this;
+			return L.resolveDefault(callProbe(), {}).then(function(res) {
+				var seen = {};
+				((res && res.present) || []).forEach(function(p) {
+					if (!p.serial || seen[p.serial]) return;
+					seen[p.serial] = true;
+					self.value(p.serial, p.serial + (p.model ? ' — ' + p.model : '')
+						+ (p.usb_path ? ' (' + p.usb_path + ')' : ''));
+				});
+				return self.cfgvalue(section_id);
+			});
+		};
+
+		o = s.taboption(tab, form.Value, 'imei', _('Bind by IMEI'),
+			_('Pin this modem by its IMEI — globally unique and verified after the modem opens. A configured IMEI that does not match blocks bring-up, so the wrong physical modem never gets this SIM/APN. Pick a detected modem below, or leave empty.'));
+		o.ucioption = 'imei';
+		o.datatype = 'and(uinteger,minlength(14),maxlength(16))';
+		bind(o);
+		o.load = function(section_id) {
+			var self = this;
+			return L.resolveDefault(callProbe(), {}).then(function(res) {
+				var seen = {};
+				((res && res.managed) || []).forEach(function(m) {
+					if (!m.imei || seen[m.imei]) return;
+					seen[m.imei] = true;
+					self.value(m.imei, m.imei + (m.model ? ' — ' + m.model : ''));
+				});
+				return self.cfgvalue(section_id);
+			});
+		};
+
 		o = s.taboption(tab, form.Value, 'path', _('USB path binding'),
-			_('Optional stable USB topology anchor (like a wifi-device <code>path</code>, e.g. 1-1.2) — survives renumbering on multi-modem setups. Empty = bind by the modem device.'));
+			_('Optional stable USB topology anchor (like a wifi-device <code>path</code>, e.g. 1-1.2) — survives renumbering on multi-modem setups. Prefer <em>Bind by USB serial/IMEI</em> above; empty = bind by the modem device.'));
 		o.ucioption = 'path';
 		bind(o);
 
@@ -195,8 +232,14 @@ return baseclass.extend({
 		bind(o);
 
 		o = s.taboption(tab, form.Value, 'failreboot', _('Reboot after N failures'),
-			_('Reboot the router after this many failed connection attempts (0 = never).'));
+			_('Reboot the router after this many failed connection attempts. 0 = never reboot — the hardware recovery rungs (op-mode cycle, modem reset, GPIO/repower) still run and the ladder then keeps retrying.'));
 		o.placeholder = '100';
+		o.datatype = 'uinteger';
+		bind(o);
+
+		o = s.taboption(tab, form.Value, 'proto_error_limit', _('Reboot after N protocol errors'),
+			_('Reboot after this many consecutive control-protocol errors. Gated by the failure-reboot setting above — with reboot disabled it never fires.'));
+		o.placeholder = '25';
 		o.datatype = 'uinteger';
 		bind(o);
 
