@@ -837,7 +837,7 @@ return view.extend({
 
 		// protocol label (shown if the daemon reports it; graceful if absent)
 		var proto = data.info && (data.info.protocol || data.info.proto);
-		var head = _('Modem Settings') + ' — ' + data.modem +
+		var head = _('Modem Tools') + ' — ' + data.modem +
 			(proto ? ' (' + String(proto).toUpperCase() + ')' : '');
 
 		var warns = renderWarnings(data.info && data.info.config_warnings);

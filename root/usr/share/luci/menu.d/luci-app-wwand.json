@@ -49,7 +49,7 @@
 		}
 	},
 	"admin/network/wwand": {
-		"title": "Modem Settings",
+		"title": "Modem Tools",
 		"order": 60,
 		"action": {
 			"type": "view",
