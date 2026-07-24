@@ -371,9 +371,10 @@ return view.extend({
 			slotRows.length ? slotRows : [ E('em', {}, _('No slot information available.')) ]));
 
 		/* --- SIM PIN lock: enable / disable the PIN query, with the current PIN --- */
-		var pinState = (data.state == 'SIM_BLOCKED') ? _('blocked — PUK required')
-			: (data.pin1 && data.pin1.enabled === false) ? _('disabled (SIM boots without PIN)')
-			: (data.pin1 && data.pin1.enabled === true) ? _('enabled')
+		var minfo = data.info || {};
+		var pinState = (minfo.state == 'SIM_BLOCKED') ? _('blocked — PUK required')
+			: (minfo.pin1 && minfo.pin1.enabled === false) ? _('disabled (SIM boots without PIN)')
+			: (minfo.pin1 && minfo.pin1.enabled === true) ? _('enabled')
 			: _('unknown');
 		var pinIn = E('input', { 'type': 'password', 'class': 'cbi-input-password',
 			'style': 'width:12em', 'placeholder': _('current PIN') });
