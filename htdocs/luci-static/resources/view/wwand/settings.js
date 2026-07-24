@@ -71,13 +71,25 @@ function bandPicker(known, selected) {
 			[ cb, ' ' + b.label ]);
 	});
 
+	/* Fallback for bands the checkbox table does not cover (exotic / future
+	   bands are never silently dropped). Hidden when empty — with the tables
+	   complete that is the normal case — behind a small "+ other band" link, so
+	   an empty text box does not sit under the checkboxes and confuse. */
 	var extra = selected.filter(function(n) { return !knownNums[n]; });
 	var rawIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
-		'style': 'width:100%;margin-top:5px',
-		'placeholder': _('additional band numbers (comma/space separated)'),
+		'style': 'width:100%;margin-top:5px' + (extra.length ? '' : ';display:none'),
+		'placeholder': _('additional (non-listed) band numbers, comma/space separated'),
 		'value': extra.join(',') });
+	var moreLink = E('a', { 'href': '#',
+		'style': 'font-size:90%;margin-top:4px;display:' + (extra.length ? 'none' : 'inline-block'),
+		'click': function(ev) {
+			ev.preventDefault();
+			rawIn.style.display = '';
+			rawIn.focus();
+			this.style.display = 'none';
+		} }, _('+ add a non-listed band'));
 
-	var node = E('div', {}, [ E('div', {}, labels), rawIn ]);
+	var node = E('div', {}, [ E('div', {}, labels), rawIn, moreLink ]);
 	node._collect = function() {
 		var out = [];
 		boxes.forEach(function(cb) { if (cb.checked) out.push(+cb.getAttribute('data-band')); });
