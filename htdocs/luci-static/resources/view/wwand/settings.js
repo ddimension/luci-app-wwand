@@ -231,11 +231,12 @@ return view.extend({
 	},
 
 	// the interface section carrying wwand's per-interface config (SIM slot,
-	// cell lock, …). Old-style configs put it on the first proto=qmi interface.
+	// cell lock, …). Old-style configs put it on the first wwand interface
+	// (proto 'wwand', or the historical 'qmi' alias).
 	targetIface: function() {
 		var target = null;
 		uci.sections('network', 'interface', function(s) {
-			if (!target && s.proto == 'qmi')
+			if (!target && (s.proto == 'wwand' || s.proto == 'qmi'))
 				target = s['.name'];
 		});
 		return target;
