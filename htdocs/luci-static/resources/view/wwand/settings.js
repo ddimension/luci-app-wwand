@@ -17,6 +17,7 @@ var callSet  = rpc.declare({ object: 'wwand', method: 'modem_set_settings', para
 var callPlmn = rpc.declare({ object: 'wwand', method: 'modem_plmn_lists', params: [ 'modem' ], expect: {} });
 var callSlots = rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} });
 var callSwitchSlot = rpc.declare({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} });
+var callPinLock = rpc.declare({ object: 'wwand', method: 'modem_sim_pin_lock', params: [ 'modem', 'pin', 'enable' ], expect: {} });
 var callScan = rpc.declare({ object: 'wwand', method: 'modem_scan', params: [ 'modem' ], expect: {} });
 var callSetSelection = rpc.declare({ object: 'wwand', method: 'modem_set_network_selection',
 	params: [ 'modem', 'mode', 'mcc', 'mnc' ], expect: {} });
@@ -240,11 +241,35 @@ return view.extend({
 		return target;
 	},
 
+	// network-native model: SIM slot + cell lock live on the interface's
+	// wwand_modem section. modemSid() resolves it (null until it exists — reads
+	// then fall back to the interface for legacy inline configs); ensureModemSid()
+	// creates it + `option modem` on first write, converting to new-style.
+	modemSid: function() {
+		var iface = this.targetIface();
+		if (!iface) return null;
+		var ref = uci.get('network', iface, 'modem');
+		return (ref && uci.get('network', ref) != null) ? ref : null;
+	},
+
+	ensureModemSid: function() {
+		var iface = this.targetIface();
+		if (!iface) return null;
+		var sid = this.modemSid();
+		if (sid) return sid;
+		var base = 'wwmodem_' + iface, name = base, i = 0;
+		while (uci.get('network', name) != null) name = base + (++i);
+		uci.add('network', 'wwand_modem', name);
+		uci.set('network', iface, 'modem', name);
+		return name;
+	},
+
 	simSlotUci: function(slot) {
-		var target = this.targetIface();
-		if (!target)
+		var sid = this.ensureModemSid();
+		if (!sid)
 			return Promise.reject(new Error('no qmi interface'));
-		uci.set('network', target, 'sim_slot', String(slot));
+		uci.set('network', sid, 'sim_slot', String(slot));
+		uci.unset('network', this.targetIface(), 'sim_slot');   // drop legacy inline
 		return uci.save().then(function() { return uci.apply() });
 	},
 
@@ -278,6 +303,41 @@ return view.extend({
 
 		out.push(E('div', { 'class': 'cbi-section' },
 			slotRows.length ? slotRows : [ E('em', {}, _('No slot information available.')) ]));
+
+		/* --- SIM PIN lock: enable / disable the PIN query, with the current PIN --- */
+		var pinState = (data.state == 'SIM_BLOCKED') ? _('blocked — PUK required')
+			: (data.pin1 && data.pin1.enabled === false) ? _('disabled (SIM boots without PIN)')
+			: (data.pin1 && data.pin1.enabled === true) ? _('enabled')
+			: _('unknown');
+		var pinIn = E('input', { 'type': 'password', 'class': 'cbi-input-password',
+			'style': 'width:12em', 'placeholder': _('current PIN') });
+		var pinAct = function(enable) {
+			var pin = (pinIn.value || '').trim();
+			if (!pin) {
+				ui.addNotification(null, E('p', _('Enter the current SIM PIN first.')), 'warning');
+				return;
+			}
+			return callPinLock(data.modem, pin, enable).then(function(r) {
+				if (r && r.ok === false)
+					ui.addNotification(null, E('p', _('PIN change failed: %s').format(r.error || '?')), 'error');
+				else
+					ui.addNotification(null, E('p', enable ? _('SIM PIN query enabled.') : _('SIM PIN query disabled.')), 'info');
+			});
+		};
+
+		out.push(E('h4', {}, _('SIM PIN')));
+		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('p', {}, [ _('PIN query: '), E('strong', {}, pinState) ]),
+			E('div', { 'style': 'margin-bottom:4px' }, [
+				pinIn, ' ',
+				E('button', { 'class': 'btn cbi-button cbi-button-apply', 'style': 'margin-left:8px',
+					'click': ui.createHandlerFn(self, function() { return pinAct(true); }) }, _('Enable PIN')),
+				E('button', { 'class': 'btn cbi-button cbi-button-remove', 'style': 'margin-left:4px',
+					'click': ui.createHandlerFn(self, function() { return pinAct(false); }) }, _('Disable PIN'))
+			]),
+			E('p', { 'style': 'color:#666;font-size:90%' },
+				_('Enabling or disabling the PIN query needs the current PIN. Disabling lets the SIM boot without a PIN.'))
+		]));
 
 		if (!esimOk) {
 			if (data.esim && data.esim.error == 'esim_not_installed')
@@ -626,15 +686,18 @@ return view.extend({
 		var sid = this.targetIface();
 		if (!sid) {
 			out.push(E('p', {}, E('em', {},
-				_('No qmi interface found — the cell lock is stored on the cellular WAN interface.'))));
+				_('No qmi interface found — the cell lock is stored on the modem.'))));
 			return out;
 		}
 
-		var lock4g = uci.get('network', sid, 'lock_4g') || [];
+		// cell lock lives on the wwand_modem section (radio setting); read it
+		// there, falling back to the interface for a legacy inline config.
+		var readSid = this.modemSid() || sid;
+		var lock4g = uci.get('network', readSid, 'lock_4g') || [];
 		if (!Array.isArray(lock4g))
 			lock4g = (lock4g != null && lock4g !== '') ? [ lock4g ] : [];
-		var lock5g = uci.get('network', sid, 'lock_5g') || '';
-		var persist = uci.get('network', sid, 'lock_persist') == '1';
+		var lock5g = uci.get('network', readSid, 'lock_5g') || '';
+		var persist = uci.get('network', readSid, 'lock_persist') == '1';
 
 		var l4In = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'style': 'width:100%',
 			'placeholder': '1300:246 5230:118', 'value': lock4g.join(' ') });
@@ -643,16 +706,22 @@ return view.extend({
 		var persistChk = E('input', { 'type': 'checkbox', 'checked': persist ? '' : null });
 
 		var save = function() {
+			// write to the wwand_modem section (new-style), clearing any legacy
+			// inline copy on the interface.
+			var wsid = self.ensureModemSid();
 			var l4 = (l4In.value || '').split(/[\s,]+/).filter(function(x) { return x; });
-			if (l4.length) uci.set('network', sid, 'lock_4g', l4);
-			else uci.unset('network', sid, 'lock_4g');
+			if (l4.length) uci.set('network', wsid, 'lock_4g', l4);
+			else uci.unset('network', wsid, 'lock_4g');
+			uci.unset('network', sid, 'lock_4g');
 
 			var v5 = (l5In.value || '').trim();
-			if (v5) uci.set('network', sid, 'lock_5g', v5);
-			else uci.unset('network', sid, 'lock_5g');
+			if (v5) uci.set('network', wsid, 'lock_5g', v5);
+			else uci.unset('network', wsid, 'lock_5g');
+			uci.unset('network', sid, 'lock_5g');
 
-			if (persistChk.checked) uci.set('network', sid, 'lock_persist', '1');
-			else uci.unset('network', sid, 'lock_persist');
+			if (persistChk.checked) uci.set('network', wsid, 'lock_persist', '1');
+			else uci.unset('network', wsid, 'lock_persist');
+			uci.unset('network', sid, 'lock_persist');
 
 			return uci.save().then(function() { return uci.apply(); }).then(function() {
 				ui.addNotification(null, E('p',
