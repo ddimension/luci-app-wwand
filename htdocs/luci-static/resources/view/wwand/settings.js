@@ -419,8 +419,15 @@ return view.extend({
 				_('Enabling or disabling the PIN query needs the current PIN. Disabling lets the SIM boot without a PIN.'))
 		]));
 
-		/* per-SIM overrides (config wwand_sim): PIN/APN keyed by ICCID */
-		out = out.concat(this.renderSimOverrides(data));
+		/* per-SIM overrides (config wwand_sim) are edited on the dedicated
+		   Network → Modems page (shared wwand.simlist) — single source, no
+		   duplicate list here. */
+		out.push(E('h4', {}, _('SIM overrides')));
+		out.push(E('p', {}, [
+			_('Per-card PIN/APN overrides (matched by ICCID) are managed on '),
+			E('a', { 'href': L.url('admin/network/wwand-modems') }, _('Network → Modems')),
+			'.'
+		]));
 
 		if (!esimOk) {
 			if (data.esim && data.esim.error == 'esim_not_installed')
