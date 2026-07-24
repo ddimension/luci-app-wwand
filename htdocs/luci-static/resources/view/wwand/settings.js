@@ -19,6 +19,8 @@ var callSlots = rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params
 var callSwitchSlot = rpc.declare({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} });
 var callPinLock = rpc.declare({ object: 'wwand', method: 'modem_sim_pin_lock', params: [ 'modem', 'pin', 'enable' ], expect: {} });
 var callScan = rpc.declare({ object: 'wwand', method: 'modem_scan', params: [ 'modem' ], expect: {} });
+var callSmsList   = rpc.declare({ object: 'wwand', method: 'modem_sms_list', params: [ 'modem', 'storage' ], expect: {} });
+var callSmsDelete = rpc.declare({ object: 'wwand', method: 'modem_sms_delete', params: [ 'modem', 'storage', 'index' ], expect: {} });
 var callSetSelection = rpc.declare({ object: 'wwand', method: 'modem_set_network_selection',
 	params: [ 'modem', 'mode', 'mcc', 'mnc' ], expect: {} });
 var callEsim = rpc.declare({ object: 'wwand', method: 'modem_esim',
@@ -783,6 +785,87 @@ return view.extend({
 		return out;
 	},
 
+	// SMS inbox: load stored messages on demand (Refresh) from the selected
+	// storage; per-row Delete. Concatenated messages are merged and carry every
+	// part's storage index so Delete removes all parts.
+	renderSms: function(data) {
+		var self = this, modem = data.modem;
+
+		var storageSel = E('select', { 'style': 'width:12em' }, [
+			E('option', { value: 'SM' }, _('SIM card')),
+			E('option', { value: 'ME' }, _('Modem memory')),
+		]);
+
+		var body = E('div', { 'style': 'margin-top:6px' },
+			E('em', {}, _('Choose a storage and click Load.')));
+
+		function set(node) {
+			body.innerHTML = '';
+			body.appendChild(node);
+		}
+
+		function rows(msgs) {
+			if (!msgs || !msgs.length)
+				return E('em', {}, _('No messages stored.'));
+
+			var trs = msgs.map(function(m) {
+				var idxs = (m.indexes && m.indexes.length) ? m.indexes
+					: (m.index != null ? [ m.index ] : []);
+				return E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' }, m.sender || '—'),
+					E('td', { 'class': 'td', 'style': 'white-space:nowrap' }, m.timestamp || ''),
+					E('td', { 'class': 'td', 'style': 'white-space:pre-wrap' },
+						(m.text || '') + (m.incomplete ? ' ' + _('(incomplete)') : '')),
+					E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
+						'class': 'btn cbi-button cbi-button-remove',
+						click: ui.createHandlerFn(self, function() {
+							if (!confirm(_('Delete this message?')))
+								return;
+							return Promise.all(idxs.map(function(i) {
+								return callSmsDelete(modem, storageSel.value, i);
+							})).then(load);
+						}) }, _('Delete'))),
+				]);
+			});
+
+			return E('table', { 'class': 'table' }, [
+				E('tr', { 'class': 'tr table-titles' }, [
+					E('th', { 'class': 'th' }, _('Sender')),
+					E('th', { 'class': 'th' }, _('Received')),
+					E('th', { 'class': 'th' }, _('Message')),
+					E('th', { 'class': 'th', 'style': 'width:1%' }, ''),
+				]),
+			].concat(trs));
+		}
+
+		function load() {
+			set(E('em', {}, _('Loading…')));
+			return callSmsList(modem, storageSel.value).then(function(res) {
+				if (!res || res.ok === false) {
+					var e = res && res.error;
+					set(E('em', {}, e == 'unsupported_on_backend'
+						? _('This modem does not expose SMS access.')
+						: _('Could not read messages: %s').format(e || '?')));
+					return;
+				}
+				set(rows(res.messages));
+			});
+		}
+
+		return [
+			E('h3', {}, _('SMS')),
+			E('div', { 'class': 'cbi-section' }, [
+				E('div', { 'class': 'cbi-value' }, [
+					E('label', { 'class': 'cbi-value-title' }, _('Storage')),
+					E('div', { 'class': 'cbi-value-field' }, [ storageSel, ' ',
+						E('button', { 'class': 'btn cbi-button cbi-button-action',
+							click: ui.createHandlerFn(self, load) }, _('Load')) ]),
+				]),
+				body,
+			]),
+		];
+	},
+
 	render: function(data) {
 		if (!data || !data.modem)
 			return E('p', {}, _('No modem present.'));
@@ -877,6 +960,6 @@ return view.extend({
 				_('optional SIM file — not provisioned on this SIM, and the device cannot create it')),
 			plmnTable(_('Operator-controlled (6F61)'), (data.plmn || {}).operator),
 			plmnTable(_('Home PLMN (6F62)'), (data.plmn || {}).home),
-		]));
+		]).concat(this.renderSms(data)));
 	},
 });

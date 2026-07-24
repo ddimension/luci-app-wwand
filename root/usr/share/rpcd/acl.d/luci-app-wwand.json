@@ -13,6 +13,8 @@
 					"modem_plmn_lists",
 					"modem_sim_slots",
 					"modem_probe",
+					"modem_sms_list",
+					"modem_sms_read",
 					"modem_scan"
 				]
 			},
@@ -30,7 +32,8 @@
 					"modem_sim_pin_lock",
 					"modem_esim",
 					"modem_repower",
-					"modem_sim_pin_verify"
+					"modem_sim_pin_verify",
+					"modem_sms_delete"
 				]
 			}
 		}
