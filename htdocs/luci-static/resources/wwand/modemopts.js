@@ -243,6 +243,12 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		o = s.taboption(tab, form.Value, 'repower_time', _('Repower / reset duration'),
+			_('Seconds the modem is held de-powered during a recovery power-cycle (or held in reset, when a reset GPIO is used). Default 30 s.'));
+		o.placeholder = '30';
+		o.datatype = 'min(1)';
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'zero_rx_timeout', _('Zero-RX timeout'),
 			_('Restart the connection after this many seconds without received packets (0 = off).'));
 		o.placeholder = '21600';
