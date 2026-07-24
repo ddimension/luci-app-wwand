@@ -28,7 +28,8 @@
 					"modem_sim_switch_slot",
 					"modem_sim_pin_lock",
 					"modem_esim",
-					"modem_repower"
+					"modem_repower",
+					"modem_sim_pin_verify"
 				]
 			}
 		}
