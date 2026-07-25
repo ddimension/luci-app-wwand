@@ -373,6 +373,26 @@ function renderLive(name, modem) {
 		if (interRows.length)
 			out.push(cellTable(_('LTE neighbour cells (inter-frequency)'), interRows));
 
+		/* --- 5G NR neighbour cells (AT+QENG only — QMI reports no NR neighbours;
+		   same columns as CA/LTE so all cell tables line up) --- */
+		var nn = cells.nr5g_neigh;
+		if (nn && nn.length) {
+			out.push(cellTable(_('5G NR neighbour cells'), nn.map(function(c){
+				var nf = (c.arfcn != null) ? nrArfcn(c.arfcn) : null;
+				return cellRow({
+					type: _('neighbour'),
+					band: nf ? nf.band : null,
+					earfcn: c.arfcn,           /* NR-ARFCN in the shared column */
+					freq: mhz(nf),
+					bw: null,
+					pci: c.pci,
+					rsrp: dBm(c.rsrp),
+					rsrq: dB(c.rsrq),
+					lock: (c.arfcn != null ? c.arfcn + ':' : '') + c.pci
+				});
+			})));
+		}
+
 		return E('div', {}, out);
 		});
 	});
