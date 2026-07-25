@@ -41,6 +41,28 @@ function fmtRate(bps) {
 function lteEarfcn(e) { return bands.lteEarfcn(e); }
 function nrArfcn(a) { return bands.nrArfcn(a); }
 
+/* Unified cell table: carrier-aggregation carriers and neighbour cells share the
+   same columns in the same positions, so CA cells and neighbours can be compared
+   at a glance. Each source fills the fields it has; the rest show "—". */
+var CELL_HEAD = [ 'Type', 'Band', 'EARFCN', 'Frequency', 'Bandwidth', 'PCI', 'RSRP', 'RSRQ', 'Lock' ];
+function cellHead() {
+	return E('tr', { 'class': 'tr table-titles' }, CELL_HEAD.map(function(h) {
+		return E('th', { 'class': 'th' }, /^(EARFCN|PCI|RSRP|RSRQ)$/.test(h) ? h : _(h));
+	}));
+}
+function cd(v) { return E('td', { 'class': 'td' }, (v == null || v === '') ? '—' : ('' + v)); }
+function cellRow(o) {
+	return E('tr', { 'class': 'tr' }, [ cd(o.type), cd(o.band), cd(o.earfcn),
+		cd(o.freq), cd(o.bw), cd(o.pci), cd(o.rsrp), cd(o.rsrq), cd(o.lock) ]);
+}
+function cellTable(title, rows) {
+	return E('div', { 'class': 'cbi-section' }, [ E('h3', {}, title),
+		E('table', { 'class': 'table' }, [ cellHead() ].concat(rows)) ]);
+}
+function dBm(v) { return (v != null) ? (v / 10).toFixed(1) + ' dBm' : null; }
+function dB(v)  { return (v != null) ? (v / 10).toFixed(1) + ' dB' : null; }
+function mhz(f) { return f ? f.mhz.toFixed(1) + ' MHz' : null; }
+
 /* peak-hold across polls, per modem, for antenna alignment */
 var peak = {};
 function trackPeak(name, key, val) {
@@ -291,76 +313,65 @@ function renderLive(name, modem) {
 		var conns = renderConnections(ctxDetails);
 		if (conns) out.push(conns);
 
-		/* --- carrier aggregation (active carriers, incl. bandwidth) --- */
+		/* --- carrier aggregation (active carriers) --- unified cell columns --- */
 		if (cells.ca && cells.ca.length) {
-			out.push(E('div', { 'class': 'cbi-section' }, [
-				E('h3', {}, _('Carrier aggregation')),
-				E('table', { 'class': 'table' }, [
-					E('tr', { 'class': 'tr table-titles' }, [
-						E('th', { 'class':'th' }, _('Carrier')), E('th', { 'class':'th' }, _('Band')),
-						E('th', { 'class':'th' }, 'EARFCN'), E('th', { 'class':'th' }, _('Frequency')),
-						E('th', { 'class':'th' }, _('Bandwidth')), E('th', { 'class':'th' }, 'PCI')
-					])
-				].concat(cells.ca.map(function(c){
-					var isNR = (''+c.role).indexOf('NR') >= 0;
-					var cf = isNR ? nrArfcn(c.earfcn) : lteEarfcn(c.earfcn);
-					return E('tr', { 'class': 'tr' }, [
-						E('td', { 'class':'td' }, c.role),
-						E('td', { 'class':'td' }, cf ? cf.band : '—'),
-						E('td', { 'class':'td' }, ''+c.earfcn),
-						E('td', { 'class':'td' }, cf ? cf.mhz.toFixed(1)+' MHz' : '—'),
-						E('td', { 'class':'td' }, c.bandwidth_mhz ? c.bandwidth_mhz+' MHz' : '—'),
-						E('td', { 'class':'td' }, ''+c.pci) ]);
-				}))) ]));
+			out.push(cellTable(_('Carrier aggregation'), cells.ca.map(function(c){
+				var isNR = ('' + c.role).indexOf('NR') >= 0;
+				var cf = isNR ? nrArfcn(c.earfcn) : lteEarfcn(c.earfcn);
+				return cellRow({
+					type: c.role,
+					band: cf ? cf.band : null,
+					earfcn: c.earfcn,
+					freq: mhz(cf),
+					bw: c.bandwidth_mhz ? c.bandwidth_mhz + ' MHz' : null,
+					pci: c.pci,
+					rsrp: dBm(c.rsrp),
+					rsrq: dB(c.rsrq),
+					lock: null
+				});
+			})));
 		}
 
-		/* --- intra-frequency neighbour cells --- */
+		/* --- intra-frequency neighbour cells --- same columns as CA --- */
 		if (lc && lc.cells && lc.cells.length > 1) {
 			var neigh = lc.cells.filter(function(c){ return c.pci != lc.serving_cell_id; });
-			out.push(E('div', { 'class': 'cbi-section' }, [
-				E('h3', {}, _('LTE neighbour cells (intra-frequency)')),
-				E('table', { 'class': 'table' }, [
-					E('tr', { 'class': 'tr table-titles' }, [
-						E('th', { 'class':'th' }, 'PCI'), E('th', { 'class':'th' }, _('Freq')),
-						E('th', { 'class':'th' }, 'RSRP'),
-						E('th', { 'class':'th' }, 'RSRQ'), E('th', { 'class':'th' }, _('lock value'))
-					])
-				].concat(neigh.map(function(c){
-					return E('tr', { 'class': 'tr' }, [
-						E('td', { 'class':'td' }, ''+c.pci),
-						E('td', { 'class':'td' }, ef ? ef.mhz.toFixed(1)+' MHz' : '—'),
-						E('td', { 'class':'td' }, (c.rsrp/10).toFixed(1)+' dBm'),
-						E('td', { 'class':'td' }, (c.rsrq/10).toFixed(1)+' dB'),
-						E('td', { 'class':'td' }, '%d:%d'.format(lc.earfcn, c.pci)) ]);
-				}))) ]));
+			out.push(cellTable(_('LTE neighbour cells (intra-frequency)'), neigh.map(function(c){
+				return cellRow({
+					type: _('neighbour'),
+					band: ef ? ef.band : null,
+					earfcn: lc.earfcn,
+					freq: mhz(ef),
+					bw: null,
+					pci: c.pci,
+					rsrp: dBm(c.rsrp),
+					rsrq: dB(c.rsrq),
+					lock: '%d:%d'.format(lc.earfcn, c.pci)
+				});
+			})));
 		}
 
-		/* --- inter-frequency neighbour cells (the extra ones qmicli shows) --- */
+		/* --- inter-frequency neighbour cells --- same columns as CA --- */
 		var li = cells.lte_inter;
 		var interRows = [];
 		if (li && li.freqs)
 			li.freqs.forEach(function(fr){
 				var fef = lteEarfcn(fr.earfcn);
 				(fr.cells || []).forEach(function(c){
-					interRows.push(E('tr', { 'class': 'tr' }, [
-						E('td', { 'class':'td' }, fef ? '%s · %d · %s MHz'.format(fef.band, fr.earfcn, fef.mhz.toFixed(1)) : ''+fr.earfcn),
-						E('td', { 'class':'td' }, ''+c.pci),
-						E('td', { 'class':'td' }, (c.rsrp/10).toFixed(1)+' dBm'),
-						E('td', { 'class':'td' }, (c.rsrq/10).toFixed(1)+' dB'),
-						E('td', { 'class':'td' }, '%d:%d'.format(fr.earfcn, c.pci)) ]));
+					interRows.push(cellRow({
+						type: _('neighbour'),
+						band: fef ? fef.band : null,
+						earfcn: fr.earfcn,
+						freq: mhz(fef),
+						bw: null,
+						pci: c.pci,
+						rsrp: dBm(c.rsrp),
+						rsrq: dB(c.rsrq),
+						lock: '%d:%d'.format(fr.earfcn, c.pci)
+					}));
 				});
 			});
-		if (interRows.length) {
-			out.push(E('div', { 'class': 'cbi-section' }, [
-				E('h3', {}, _('LTE neighbour cells (inter-frequency)')),
-				E('table', { 'class': 'table' }, [
-					E('tr', { 'class': 'tr table-titles' }, [
-						E('th', { 'class':'th' }, _('Band / EARFCN')), E('th', { 'class':'th' }, 'PCI'),
-						E('th', { 'class':'th' }, 'RSRP'), E('th', { 'class':'th' }, 'RSRQ'),
-						E('th', { 'class':'th' }, _('lock value'))
-					])
-				].concat(interRows)) ]));
-		}
+		if (interRows.length)
+			out.push(cellTable(_('LTE neighbour cells (inter-frequency)'), interRows));
 
 		return E('div', {}, out);
 		});
