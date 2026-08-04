@@ -25,6 +25,30 @@ var callSmsList   = rpc.declare({ object: 'wwand', method: 'modem_sms_list', par
 var callSmsDelete = rpc.declare({ object: 'wwand', method: 'modem_sms_delete', params: [ 'modem', 'storage', 'index' ], expect: {} });
 var callSetSelection = rpc.declare({ object: 'wwand', method: 'modem_set_network_selection',
 	params: [ 'modem', 'mode', 'mcc', 'mnc' ], expect: {} });
+var callModemReset = rpc.declare({ object: 'wwand', method: 'modem_reset',
+	params: [ 'modem' ], expect: {} });
+
+// Some modems (e.g. MeiG SLM7xx) apply selection/band changes only after a
+// modem reboot: the daemon flags such results `deferred`. Inform the user and
+// offer the reset — auto interfaces come back up on their own afterwards.
+function notifyDeferred(modem) {
+	ui.addNotification(null, E('div', {}, [
+		E('p', {}, _('Saved — but this modem applies the change only after a modem restart.')),
+		E('button', {
+			'class': 'btn cbi-button cbi-button-negative',
+			'click': function(ev) {
+				ev.target.disabled = true;
+				callModemReset(modem).then(function(r) {
+					if (r && r.ok === false)
+						ui.addNotification(null, E('p', _('Modem reset failed: %s').format(r.error || '?')), 'error');
+					else
+						ui.addNotification(null, E('p',
+							_('Modem is restarting — the connection resumes automatically once it re-registers.')), 'info');
+				});
+			},
+		}, _('Restart modem now')),
+	]), 'warning');
+}
 var callEsim = rpc.declare({ object: 'wwand', method: 'modem_esim',
 	params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify' ], expect: {} });
 
@@ -572,7 +596,11 @@ return view.extend({
 
 	apply: function(modem, settings) {
 		return callSet(modem, settings).then(function(res) {
-			if (res && res.ok)
+			if (res && res.ok && res.unchanged)
+				ui.addNotification(null, E('p', _('No change — the modem already runs these settings.')), 'info');
+			else if (res && res.ok && res.deferred)
+				notifyDeferred(modem);
+			else if (res && res.ok)
 				ui.addNotification(null, E('p', _('Modem settings applied.')), 'info');
 			else
 				ui.addNotification(null, E('p', _('Failed: ') + ((res || {}).error || '?')), 'error');
@@ -606,6 +634,11 @@ return view.extend({
 				.then(function(res) {
 					if (res && res.ok === false)
 						ui.addNotification(null, E('p', _('Failed: ') + (res.error || '?')), 'error');
+					else if (res && res.unchanged)
+						ui.addNotification(null, E('p',
+							_('No change — the modem already runs this selection.')), 'info');
+					else if (res && res.deferred)
+						notifyDeferred(data.modem);
 					else {
 						ui.addNotification(null, E('p', label), 'info');
 						window.setTimeout(function() { window.location.reload(); }, 800);
