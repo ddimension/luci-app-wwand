@@ -114,6 +114,21 @@ return baseclass.extend({
 			_('Override the auto-detected AT serial port (e.g. /dev/ttyUSB2).'));
 		bind(o);
 
+		o = s.taboption(tab, form.Flag, 'at2_external', _('Release secondary AT port'),
+			_('Reserve the modem\'s second AT port for external tools (gpsd, own scripts): wwand never opens it and runs telemetry over the control channel instead. The modem status shows which port was released.'));
+		o.default = '0';
+		bind(o);
+		o.load = function(section_id) {
+			var self = this;
+			return L.resolveDefault(callStatus(), {}).then(function(res) {
+				var mods = (res || {}).modems || {};
+				for (var k in mods)
+					if (mods[k].at2_released)
+						self.description = _('Reserved for external tools: wwand leaves <code>%s</code> untouched and polls telemetry over the control channel.').format(mods[k].at2_released);
+				return self.super('load', [section_id]);
+			});
+		};
+
 		o = s.taboption(tab, form.ListValue, 'mux', _('Data multiplexing'),
 			_('Kernel datapath backend for QMAP multiplexing. Leave on auto unless a modem misbehaves.'));
 		o.default = 'auto';
