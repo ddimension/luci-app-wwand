@@ -19,6 +19,8 @@ var callSlots = rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params
 var callSwitchSlot = rpc.declare({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} });
 var callPinLock = rpc.declare({ object: 'wwand', method: 'modem_sim_pin_lock', params: [ 'modem', 'pin', 'enable' ], expect: {} });
 var callScan = rpc.declare({ object: 'wwand', method: 'modem_scan', params: [ 'modem' ], expect: {} });
+var callScanStart = rpc.declare({ object: 'wwand', method: 'modem_scan_start', params: [ 'modem' ], expect: {} });
+var callScanStatus = rpc.declare({ object: 'wwand', method: 'modem_scan_status', params: [ 'modem' ], expect: {} });
 var callSmsList   = rpc.declare({ object: 'wwand', method: 'modem_sms_list', params: [ 'modem', 'storage' ], expect: {} });
 var callSmsDelete = rpc.declare({ object: 'wwand', method: 'modem_sms_delete', params: [ 'modem', 'storage', 'index' ], expect: {} });
 var callSetSelection = rpc.declare({ object: 'wwand', method: 'modem_set_network_selection',
@@ -655,32 +657,72 @@ return view.extend({
 			].concat(rows)));
 		};
 
+		/* A real operator scan regularly takes MINUTES (AT+COPS=? — and QMI NAS
+		   scans on busy bands too), far beyond the XHR/uhttpd/rpcd timeout
+		   chain. So: start the scan as a daemon-side job and poll its status
+		   every few seconds — every request stays fast. Falls back to the old
+		   blocking call when the daemon predates modem_scan_start. */
 		var scanBtn;
+
+		var scanFail = function(msg) {
+			scanBtn.disabled = false;
+			dom.content(results, E('div', { 'class': 'wwe-banner err' },
+				[ E('span', {}, '✕'), E('span', {}, _('Scan failed: ') + msg) ]));
+		};
+
+		var scanSpinner = function(secs) {
+			dom.content(results, E('div', { 'class': 'wwe-banner run',
+				'style': 'display:flex;align-items:center;gap:9px' }, [
+				E('span', { 'class': 'wwe-spin' }),
+				E('span', {}, _('Scanning for operators — this can take several minutes…')
+					+ (secs ? ' (' + secs + 's)' : '')),
+			]));
+		};
+
+		var pollScan = function(started) {
+			window.setTimeout(function() {
+				callScanStatus(data.modem).then(function(st) {
+					if (st && st.running) {
+						scanSpinner(st.started ? Math.max(0, Math.round(Date.now() / 1000 - st.started)) : null);
+						return pollScan(started);
+					}
+					if (!st || st.ok === false || st.error || st.idle)
+						return scanFail((st && (st.error || (st.idle ? _('scan vanished (daemon restarted?)') : '?'))) || '?');
+					scanBtn.disabled = false;
+					renderOps(st.operators || []);
+				}).catch(function(e) {
+					/* one failed poll is not a failed scan (rpcd hiccup) — retry */
+					pollScan(started);
+				});
+			}, 3000);
+		};
+
+		var legacyScan = function() {
+			/* pre-async daemon: single blocking call with a bumped XHR timeout */
+			var saved = L.env.rpctimeout;
+			L.env.rpctimeout = 120;
+			var restore = function() { L.env.rpctimeout = saved; scanBtn.disabled = false; };
+			return callScan(data.modem).then(function(r) {
+				restore();
+				if (r && r.ok === false)
+					return scanFail(r.error || '?');
+				renderOps((r || {}).operators || []);
+			}).catch(function(e) {
+				restore();
+				scanFail((e && e.message) || e);
+			});
+		};
+
 		scanBtn = E('button', { 'class': 'btn cbi-button',
 			'click': ui.createHandlerFn(self, function() {
 				scanBtn.disabled = true;
-				dom.content(results, E('div', { 'class': 'wwe-banner run',
-					'style': 'display:flex;align-items:center;gap:9px' }, [
-					E('span', { 'class': 'wwe-spin' }),
-					E('span', {}, _('Scanning for operators — this can take up to ~90 s…')),
-				]));
-				// the scan blocks the ubus reply; give the XHR room beyond the
-				// daemon's 90 s scan timeout, then restore the global default.
-				var saved = L.env.rpctimeout;
-				L.env.rpctimeout = 120;
-				var restore = function() { L.env.rpctimeout = saved; scanBtn.disabled = false; };
-				return callScan(data.modem).then(function(r) {
-					restore();
-					if (r && r.ok === false) {
-						dom.content(results, E('div', { 'class': 'wwe-banner err' },
-							[ E('span', {}, '✕'), E('span', {}, _('Scan failed: ') + (r.error || '?')) ]));
-						return;
-					}
-					renderOps((r || {}).operators || []);
+				scanSpinner(null);
+				return callScanStart(data.modem).then(function(r) {
+					if (r && r.ok === false)
+						return scanFail(r.error || '?');
+					pollScan(r && r.started);
 				}).catch(function(e) {
-					restore();
-					dom.content(results, E('div', { 'class': 'wwe-banner err' },
-						[ E('span', {}, '✕'), E('span', {}, _('Scan failed: ') + (e && e.message || e)) ]));
+					return legacyScan();
 				});
 			}) }, _('Scan for operators'));
 

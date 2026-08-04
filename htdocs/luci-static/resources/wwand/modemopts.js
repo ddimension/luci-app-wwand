@@ -51,7 +51,7 @@ return baseclass.extend({
 					self.value(p.serial, p.serial + (p.model ? ' — ' + p.model : '')
 						+ (p.usb_path ? ' (' + p.usb_path + ')' : ''));
 				});
-				return self.cfgvalue(section_id);
+				return self.super('load', [section_id]);
 			});
 		};
 
@@ -69,7 +69,7 @@ return baseclass.extend({
 					seen[m.imei] = true;
 					self.value(m.imei, m.imei + (m.model ? ' — ' + m.model : ''));
 				});
-				return self.cfgvalue(section_id);
+				return self.super('load', [section_id]);
 			});
 		};
 
@@ -92,7 +92,7 @@ return baseclass.extend({
 				var brg = (res[1] || {}).board && res[1].board.reset_gpio;
 				if (brg)
 					self.description = _('Named GPIO on the modem RESET line (invert, wait 30 s, restore instead of a USB power-cycle). This board already provides a default reset GPIO "%s" — set this only to override it.').format(brg);
-				return self.cfgvalue(section_id);
+				return self.super('load', [section_id]);
 			});
 		};
 
@@ -160,7 +160,7 @@ return baseclass.extend({
 							self.value(String(sl.slot), lbl);
 						});
 					});
-					return self.cfgvalue(section_id);
+					return self.super('load', [section_id]);
 				});
 			});
 		};
