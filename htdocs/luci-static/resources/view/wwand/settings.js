@@ -394,6 +394,13 @@ return view.extend({
 		if (!esimOk) {
 			if (data.esim && data.esim.error == 'esim_not_installed')
 				out.push(E('p', {}, E('em', {}, _('eSIM management: package wwand-esim is not installed.'))));
+			else if (data.esim && data.esim.detail && data.esim.detail.error == 'es10_refused') {
+				out.push(E('h4', {}, _('eSIM')));
+				out.push(E('div', { 'class': 'wwe-banner run' },
+					_('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
+						.format(data.esim.detail.sw || '6985')));
+				out.push(E('p', {}, _('This is the normal behaviour of M2M eUICCs (SGP.02) and of vendor-locked cards: profiles are managed over-the-air by the SIM provider (SM-SR), so downloading or switching profiles from this router is not possible. Use the provider’s portal to manage the card — the router only needs to keep the active profile registered and online.')));
+			}
 			return out;
 		}
 
