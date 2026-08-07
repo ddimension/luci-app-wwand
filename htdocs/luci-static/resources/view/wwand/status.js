@@ -203,8 +203,8 @@ function renderLive(name, modem) {
 				msg += ' · ' + _('limited service');
 			srvRows.push([ _('Problem'), E('span', { 'style': 'color:#c00;font-weight:bold' }, msg) ]);
 		}
-		if (plmn) srvRows.push([ _('Operator'), '%s (%s/%s)%s'.format((plmn.description||'').trim(),
-			plmn.mcc, plmn.mnc, reg.roaming ? ' · '+_('roaming') : '') ]);
+		var opLine = fmt.fmtOperator(reg);
+		if (opLine) srvRows.push([ _('Operator'), opLine ]);
 		if (modem.imsi)   srvRows.push([ _('IMSI'), modem.imsi ]);
 		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
 		if (lc) {
@@ -237,23 +237,10 @@ function renderLive(name, modem) {
 		var slots = (res[3] || {}).slots || [];
 		if (slots.length) {
 			var slotRows = slots.map(function(sl) {
-				var line = [
-					E('strong', {}, _('Slot %d').format(sl.physical) +
-						(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' ✓' : '')),
-					' — ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
-						(sl.eid ? (', EID ' + sl.eid) : '')
-				];
-				if (!sl.active && sl.card == 'present')
-					line.push(E('button', {
-						'class': 'btn cbi-button cbi-button-apply',
-						'style': 'margin-left:8px',
-						'click': function() {
-							if (!confirm(_('Switch to SIM slot %d? The connection will drop and re-establish.').format(sl.physical)))
-								return;
-							callSwitchSlot(name, sl.physical);
-						}
-					}, _('Activate')));
-				return E('div', { 'style': 'margin-bottom:4px' }, line);
+				/* shared row renderer (wwand.format) */
+				return fmt.simSlotRow(sl, function(physical) {
+					return callSwitchSlot(name, physical);
+				});
 			});
 			cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
 				E('h3', {}, _('SIM slots')), E('div', {}, slotRows)

@@ -1,5 +1,6 @@
 'use strict';
 'require baseclass';
+'require ui';
 
 /* Shared formatting/rendering helpers for the wwand LuCI packages (status
    page, settings page, Modems overview and the proto handler). Single source
@@ -8,6 +9,39 @@
 
 return baseclass.extend({
 	fmtList: function(a) { return (a && a.length) ? a.join(', ') : '—'; },
+
+	/* registered operator line — "Name (mcc/mnc) · roaming" — from the modem's
+	   `registration` block; shared by the status page and the proto handler */
+	fmtOperator: function(reg) {
+		var plmn = reg && reg.plmn;
+		if (!plmn)
+			return null;
+		return '%s (%s/%s)%s'.format((plmn.description || '').trim(),
+			plmn.mcc, plmn.mnc, (reg && reg.roaming) ? ' \u00b7 ' + _('roaming') : '');
+	},
+
+	/* one SIM-slot row (status page + SIM/eSIM tools panel): identity line
+	   plus a "Switch now" button on an inactive present slot. `extras` =
+	   page-specific buttons rendered before it (e.g. "Set as primary");
+	   `onSwitch(physical)` runs after the shared confirm. */
+	simSlotRow: function(sl, onSwitch, extras) {
+		var line = [
+			E('strong', {}, _('Slot %d').format(sl.physical) +
+				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '')),
+			' \u2014 ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
+				(sl.eid ? (', EID ' + sl.eid) : '')
+		];
+		(extras || []).forEach(function(b) { line.push(b); });
+		if (!sl.active && sl.card == 'present' && onSwitch)
+			line.push(E('button', { 'class': 'btn cbi-button cbi-button-apply',
+				'style': 'margin-left:4px',
+				'click': ui.createHandlerFn(null, function() {
+					if (!confirm(_('Switch to SIM slot %d? The connection will drop and re-establish.').format(sl.physical)))
+						return;
+					return onSwitch(sl.physical);
+				}) }, _('Switch now')));
+		return E('div', { 'style': 'margin-bottom:4px' }, line);
+	},
 
 	fmtBytes: function(n) {
 		if (n == null) return '—';

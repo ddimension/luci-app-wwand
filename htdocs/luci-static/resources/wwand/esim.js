@@ -3,6 +3,7 @@
 'require dom';
 'require ui';
 'require wwand.rpc as wrpc';
+'require wwand.format as fmt';
 
 /* SIM & eSIM management panel, extracted from view/wwand/settings.js: SIM
    slots (primary/switch), SIM PIN lock, and — on an eUICC — the eSIM profile
@@ -78,26 +79,17 @@ return baseclass.extend({
 		var out = [ E('h3', {}, _('SIM')) ];
 
 		var slotRows = (data.slots || []).map(function(sl) {
-			var line = [
-				E('strong', {}, _('Slot %d').format(sl.physical) +
-					(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' ✓' : '')),
-				' — ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
-					(sl.eid ? (', EID ' + sl.eid) : ''), ' '
-			];
-			line.push(E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
+			/* shared row renderer (wwand.format); the persist-to-uci button is
+			   this panel's extra */
+			var primaryBtn = E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
 				'click': ui.createHandlerFn(self, function() {
 					return ctx.simSlotUci(sl.physical).then(function() {
 						ui.addNotification(null, E('p', _('Primary SIM set to slot %d (persisted).').format(sl.physical)), 'info');
 					});
-				}) }, _('Set as primary')));
-			if (!sl.active && sl.card == 'present')
-				line.push(E('button', { 'class': 'btn cbi-button cbi-button-apply', 'style': 'margin-left:4px',
-					'click': ui.createHandlerFn(self, function() {
-						if (!confirm(_('Switch to SIM slot %d now? The connection will drop.').format(sl.physical)))
-							return;
-						return callSwitchSlot(data.modem, sl.physical);
-					}) }, _('Switch now')));
-			return E('div', { 'style': 'margin-bottom:4px' }, line);
+				}) }, _('Set as primary'));
+			return fmt.simSlotRow(sl, function(physical) {
+				return callSwitchSlot(data.modem, physical);
+			}, [ primaryBtn ]);
 		});
 
 		out.push(E('div', { 'class': 'cbi-section' },
