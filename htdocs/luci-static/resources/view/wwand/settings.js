@@ -271,16 +271,21 @@ return view.extend({
 			if (!names.length)
 				return { modem: null };
 
+			/* multi-modem: ?modem=<name> selects the modem, default first */
+			var picked = null;
+			try { picked = new URLSearchParams(window.location.search).get('modem'); } catch(e) {}
+			var name = (picked && names.indexOf(picked) >= 0) ? picked : names[0];
+
 			return Promise.all([
-				callGet(names[0]),
-				callPlmn(names[0]),
-				L.resolveDefault(callSlots(names[0]), {}),
-				L.resolveDefault(callEsim(names[0], 'profiles', 0, '', '', ''), {}),
-				L.resolveDefault(callEsim(names[0], 'backend', 0, '', '', ''), {}),
+				callGet(name),
+				callPlmn(name),
+				L.resolveDefault(callSlots(name), {}),
+				L.resolveDefault(callEsim(name, 'profiles', 0, '', '', ''), {}),
+				L.resolveDefault(callEsim(name, 'backend', 0, '', '', ''), {}),
 			]).then(function(res) {
 				var esim = res[3] || {};
 				esim.backend = (res[4] || {}).backend;
-				return { modem: names[0], info: (r[0] || {})[names[0]] || {},
+				return { modem: name, mods: r[0] || {}, info: (r[0] || {})[name] || {},
 				         settings: res[0], plmn: res[1],
 				         slots: (res[2] || {}).slots || [], esim: esim };
 			});
@@ -398,13 +403,13 @@ return view.extend({
 				_('Enabling or disabling the PIN query needs the current PIN. Disabling lets the SIM boot without a PIN.'))
 		]));
 
-		/* per-SIM overrides (config wwand_sim) are edited on the dedicated
-		   Network → Modems page (shared wwand.simlist) — single source, no
+		/* per-SIM overrides (config wwand_sim) are edited on the Network →
+		   Modems overview page (shared wwand.simlist) — single source, no
 		   duplicate list here. */
 		out.push(E('h4', {}, _('SIM overrides')));
 		out.push(E('p', {}, [
-			_('Per-card PIN/APN overrides (matched by ICCID) are managed on '),
-			E('a', { 'href': L.url('admin/network/wwand-modems') }, _('Network → Modems')),
+			_('Per-card PIN/APN overrides (matched by ICCID or IMSI) are managed on '),
+			E('a', { 'href': L.url('admin/network/wwand') }, _('Network → Modems')),
 			'.'
 		]));
 
@@ -1024,8 +1029,21 @@ return view.extend({
 
 		var warns = renderWarnings(data.info && data.info.config_warnings);
 
+		/* multi-modem: one tab per live modem; a tab reloads the page with
+		   ?modem=<name> so every tool section below targets that modem */
+		var modNames = Object.keys(data.mods || {});
+		var modemSel = (modNames.length < 2) ? '' :
+			E('ul', { 'class': 'cbi-tabmenu', 'style': 'margin:0 0 12px' },
+				modNames.map(function(n) {
+					var m = data.mods[n] || {};
+					return E('li', { 'class': (n == data.modem) ? 'cbi-tab' : 'cbi-tab-disabled' },
+						E('a', { 'href': window.location.pathname + '?modem=' + encodeURIComponent(n) },
+							'%s (%s)'.format(m.netdev || n, m.model || n)));
+				}));
+
 		return E('div', {}, [
 			E('h2', {}, head),
+			modemSel,
 			warns || '',
 			E('div', { 'class': 'cbi-section' }, [
 				row(_('Radio technologies'), E('div', {}, modeBoxes)),
