@@ -164,7 +164,7 @@ function renderLive(name, modem) {
 
 		/* --- signal panel (alignment) --- */
 		var sigRows = [];
-		if (lte.rsrp != null && lte.rsrp > -32768) {
+		if (fmt.hasSignal(lte.rsrp)) {
 			sigRows.push(bar(_('LTE RSRP'), lte.rsrp, 'dBm', -120, -70, -90, -105));
 			sigRows.push(bar(_('LTE RSRQ'), lte.rsrq, 'dB', -20, -3, -10, -15));
 			sigRows.push(bar(_('LTE SINR'), (lte.snr/10), 'dB', -5, 30, 13, 0));
@@ -173,7 +173,7 @@ function renderLive(name, modem) {
 			sigRows.push(E('div', { 'style': 'margin-top:6px;color:#666;font-size:90%' },
 				_('Peak: RSRP %s dBm · SINR %s dB').format(pk, (pkq != null) ? pkq.toFixed(1) : '—')));
 		}
-		if (nr.rsrp != null && nr.rsrp > -32768) {
+		if (fmt.hasSignal(nr.rsrp)) {
 			sigRows.push(E('hr'));
 			sigRows.push(bar(_('5G RSRP'), nr.rsrp, 'dBm', -120, -70, -90, -105));
 			sigRows.push(bar(_('5G SINR'), (nr.snr/10), 'dB', -5, 30, 13, 0));
@@ -192,7 +192,7 @@ function renderLive(name, modem) {
 		var plmn = reg.plmn;
 		var srvRows = [
 			[ _('State'), modem.state || '?' ],
-			[ _('Registration'), (reg.registration == 1) ? _('registered') : _('searching') ]
+			[ _('Registration'), fmt.regShort(reg) ]
 		];
 		/* why registration is stuck: EMM reject cause / limited service */
 		var rd = modem.registration_detail;
@@ -209,7 +209,7 @@ function renderLive(name, modem) {
 		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
-			var tech = 'LTE' + ((nr.rsrp > -32768 || (cells.serving||{}).nr) ? ' + 5G NR' : '');
+			var tech = 'LTE' + ((fmt.hasSignal(nr.rsrp) || (cells.serving||{}).nr) ? ' + 5G NR' : '');
 			if (dsd && dsd.mode && dsd.mode != 'LTE') tech += ' · ' + dsd.mode;
 			srvRows.push([ _('Technology'), tech ]);
 			srvRows.push([ _('Band'), (svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);

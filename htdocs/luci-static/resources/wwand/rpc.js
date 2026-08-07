@@ -30,7 +30,6 @@ return baseclass.extend({
 
 	/* --- hardware -------------------------------------------------------- */
 	probe:      rpc.declare({ object: 'wwand', method: 'modem_probe', expect: {} }),
-	repower:    rpc.declare({ object: 'wwand', method: 'modem_repower', params: [ 'modem' ], expect: {} }),
 	modemReset: rpc.declare({ object: 'wwand', method: 'modem_reset', params: [ 'modem' ], expect: {} }),
 
 	/* --- SIM / eSIM ------------------------------------------------------ */

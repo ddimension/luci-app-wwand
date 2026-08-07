@@ -210,43 +210,52 @@ return view.extend({
 		});
 	},
 
-	// the interface section carrying wwand's per-interface config (SIM slot,
-	// cell lock, …). Old-style configs put it on the first wwand interface
-	// (proto 'wwand', or the historical 'qmi' alias).
-	targetIface: function() {
-		var target = null;
+	// the interface section carrying wwand's per-interface config for the
+	// SELECTED modem (this page is per-modem via ?modem=): prefer the
+	// interface referencing that modem, fall back to the first wwand/qmi
+	// interface (legacy inline configs). MULTI-MODEM FIX: this used to always
+	// pick the first interface, so cell-lock / primary-slot writes landed on
+	// modem 1 regardless of the selected tab.
+	targetIface: function(modem) {
+		var target = null, first = null;
 		uci.sections('network', 'interface', function(s) {
-			if (!target && (s.proto == 'wwand' || s.proto == 'qmi'))
-				target = s['.name'];
+			if (s.proto == 'wwand' || s.proto == 'qmi') {
+				if (!first) first = s['.name'];
+				if (!target && modem && s.modem == modem) target = s['.name'];
+			}
 		});
-		return target;
+		return target || first;
 	},
 
-	// network-native model: SIM slot + cell lock live on the interface's
-	// wwand_modem section. modemSid() resolves it (null until it exists — reads
-	// then fall back to the interface for legacy inline configs); ensureModemSid()
-	// creates it + `option modem` on first write, converting to new-style.
-	// The resolution/migration logic itself is the shared wwand.modemsid module.
-	modemSid: function() {
-		var iface = this.targetIface();
+	// network-native model: SIM slot + cell lock live on the modem's
+	// wwand_modem section. When the selected modem name IS such a section
+	// (the normal case — daemon modem names are the section names) use it
+	// directly; else resolve/migrate via the interface (shared wwand.modemsid).
+	modemSid: function(modem) {
+		var sec = modem ? uci.get('network', modem) : null;
+		if (sec && sec['.type'] == 'wwand_modem')
+			return modem;
+		var iface = this.targetIface(modem);
 		if (!iface) return null;
 		return modemsid.modemSid(iface);
 	},
 
-	ensureModemSid: function() {
-		var iface = this.targetIface();
-		if (!iface) return null;
-		var sid = this.modemSid();
+	ensureModemSid: function(modem) {
+		var sid = this.modemSid(modem);
 		if (sid) return sid;
+		var iface = this.targetIface(modem);
+		if (!iface) return null;
 		return modemsid.ensureModemSid(iface);
 	},
 
-	simSlotUci: function(slot) {
-		var sid = this.ensureModemSid();
+	simSlotUci: function(modem, slot) {
+		var sid = this.ensureModemSid(modem);
 		if (!sid)
-			return Promise.reject(new Error('no qmi interface'));
+			return Promise.reject(new Error('no wwand interface'));
 		uci.set('network', sid, 'sim_slot', String(slot));
-		uci.unset('network', this.targetIface(), 'sim_slot');   // drop legacy inline
+		var iface = this.targetIface(modem);
+		if (iface)
+			uci.unset('network', iface, 'sim_slot');   // drop legacy inline
 		return uci.save().then(function() { return uci.apply() });
 	},
 
@@ -270,7 +279,7 @@ return view.extend({
 		var self = this;
 		var out = [ E('h3', {}, _('Cell lock')) ];
 
-		var sid = this.targetIface();
+		var sid = this.targetIface(data.modem);
 		if (!sid) {
 			out.push(E('p', {}, E('em', {},
 				_('No qmi interface found — the cell lock is stored on the modem.'))));
@@ -279,7 +288,7 @@ return view.extend({
 
 		// cell lock lives on the wwand_modem section (radio setting); read it
 		// there, falling back to the interface for a legacy inline config.
-		var readSid = this.modemSid() || sid;
+		var readSid = this.modemSid(data.modem) || sid;
 		var lock4g = uci.get('network', readSid, 'lock_4g') || [];
 		if (!Array.isArray(lock4g))
 			lock4g = (lock4g != null && lock4g !== '') ? [ lock4g ] : [];
@@ -295,7 +304,7 @@ return view.extend({
 		var save = function() {
 			// write to the wwand_modem section (new-style), clearing any legacy
 			// inline copy on the interface.
-			var wsid = self.ensureModemSid();
+			var wsid = self.ensureModemSid(data.modem);
 			var l4 = (l4In.value || '').split(/[\s,]+/).filter(function(x) { return x; });
 			if (l4.length) uci.set('network', wsid, 'lock_4g', l4);
 			else uci.unset('network', wsid, 'lock_4g');
@@ -501,7 +510,7 @@ return view.extend({
 		/* callbacks the shared SIM/eSIM + network-selection panels need from
 		   this page (uci persistence + the apply notifications) */
 		var panelCtx = {
-			simSlotUci: function(slot) { return self.simSlotUci(slot); },
+			simSlotUci: function(slot) { return self.simSlotUci(data.modem, slot); },
 			notifyEsimApply: notifyEsimApply,
 			notifyDeferred: notifyDeferred,
 		};

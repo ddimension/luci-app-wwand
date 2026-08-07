@@ -69,6 +69,17 @@ return baseclass.extend({
 	dBm: function(v) { return (v != null) ? (v / 10).toFixed(1) + ' dBm' : null; },
 	dB:  function(v) { return (v != null) ? (v / 10).toFixed(1) + ' dB' : null; },
 
+	/* signal values use -32768 as the "not measured" sentinel */
+	hasSignal: function(v) { return v != null && v > -32768; },
+
+	/* frequency in MHz (plain number, NOT tenths) -> "1234.5 MHz" */
+	mhz: function(v) { return (v != null) ? v.toFixed(1) + ' MHz' : null; },
+
+	/* one-word registration state for status rows/columns */
+	regShort: function(reg) {
+		return (reg && reg.registration == 1) ? _('registered') : _('searching');
+	},
+
 	/* two-column label/value table; widthPercent = width of the label column
 	   (default 30 — the proto handler uses 33). */
 	tbl: function(rows, widthPercent) {

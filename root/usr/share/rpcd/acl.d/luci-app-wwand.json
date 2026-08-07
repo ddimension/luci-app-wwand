@@ -34,7 +34,6 @@
 					"modem_esim",
 					"modem_repower",
 					"modem_reset",
-					"modem_sim_pin_verify",
 					"modem_sms_delete"
 				]
 			}

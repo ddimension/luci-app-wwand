@@ -2,8 +2,6 @@
 'require view';
 'require form';
 'require uci';
-'require ui';
-'require dom';
 'require wwand.modemopts as modemopts';
 'require wwand.simlist as simlist';
 'require wwand.rpc as wrpc';
@@ -29,10 +27,10 @@ var fmtSim = fmt.fmtSim;
 function fmtSignal(sig) {
 	var parts = [];
 
-	if (sig && sig.lte && sig.lte.rsrp != null && sig.lte.rsrp > -32768)
+	if (sig && sig.lte && fmt.hasSignal(sig.lte.rsrp))
 		parts.push('LTE %d dBm'.format(sig.lte.rsrp));
 
-	if (sig && sig.nr5g && sig.nr5g.rsrp != null && sig.nr5g.rsrp > -32768)
+	if (sig && sig.nr5g && fmt.hasSignal(sig.nr5g.rsrp))
 		parts.push('NR %d dBm'.format(sig.nr5g.rsrp));
 
 	return parts.length ? parts.join(' / ') : '-';

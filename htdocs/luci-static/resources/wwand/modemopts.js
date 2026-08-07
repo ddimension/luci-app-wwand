@@ -16,7 +16,7 @@
    RAW status object (board/modems), hence statusRaw. */
 var callGpioList = wrpc.gpioList;
 var callStatus = wrpc.statusRaw;
-var callRepower = wrpc.repower;
+var callModemReset = wrpc.modemReset;
 var callSlots = wrpc.slots;
 var callProbe = wrpc.probe;
 
@@ -97,17 +97,17 @@ return baseclass.extend({
 			});
 		};
 
-		o = s.taboption(tab, form.Button, '_repower', _('Reset modem now'),
-			_('Power-cycle (or, with a reset GPIO, reset) the modem. Recovers a modem that hung or dropped off USB.'));
-		o.inputtitle = _('Repower modem');
+		o = s.taboption(tab, form.Button, '_reset', _('Reset modem now'),
+			_('Reset this modem: a dedicated reset GPIO is pulsed when available, otherwise the control protocol performs a soft reset (QMI/MBIM offline+reset, AT+CFUN=1,1). Recovers a modem that hung or dropped off USB.'));
+		o.inputtitle = _('Reset modem');
 		o.inputstyle = 'remove';
 		o.modelabel = false;
-		o.onclick = function() {
-			return callRepower('').then(function(res) {
-				if (res && res.ok)
-					ui.addNotification(null, E('p', {}, _('Modem repower triggered (%s).').format(res.action)), 'info');
+		o.onclick = function(ev, section_id) {
+			return callModemReset(section_id).then(function(res) {
+				if (res && (res.ok || res.resetting))
+					ui.addNotification(null, E('p', {}, _('Modem reset triggered (%s).').format(res.action || '?')), 'info');
 				else
-					ui.addNotification(null, E('p', {}, _('Repower unavailable: %s.').format((res && res.error) || _('no board power/reset control'))), 'warning');
+					ui.addNotification(null, E('p', {}, _('Reset unavailable: %s.').format((res && res.error) || _('no reset control'))), 'warning');
 			});
 		};
 
