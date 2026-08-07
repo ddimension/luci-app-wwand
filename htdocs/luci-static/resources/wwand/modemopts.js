@@ -37,6 +37,13 @@ return baseclass.extend({
 	addModemSim: function(s, tab, bind) {
 		var o;
 
+	/* NOTE (hardware-identity fields serial/imei/path): these render as
+		   create-enabled Comboboxes, and LuCI's ui.Combobox materializes a
+		   stored value that is absent from the (probe-derived) choice list —
+		   THAT invariant is what keeps Save from deleting an existing binding
+		   when no live probe data is available. Keep them create-enabled
+		   (adding .value() choices does that) and keep the load() fallthrough
+		   to super('load'). */
 		o = s.taboption(tab, form.Value, 'serial', _('Bind by USB serial'),
 			_('Pin this modem by its USB iSerial — a stable identity that follows the modem across renumbering and port changes (read before the modem is opened). Pick a detected modem below, or leave empty.'));
 		o.ucioption = 'serial';
@@ -64,11 +71,15 @@ return baseclass.extend({
 			var self = this;
 			return L.resolveDefault(callProbe(), {}).then(function(res) {
 				var seen = {};
-				((res && res.managed) || []).forEach(function(m) {
-					if (!m.imei || seen[m.imei]) return;
-					seen[m.imei] = true;
-					self.value(m.imei, m.imei + (m.model ? ' — ' + m.model : ''));
-				});
+				/* managed carries the live-opened IMEI; present[] carries the
+				   pre-open IMEI too — offer both so a configured-but-waiting
+				   modem still shows a pickable identity */
+				((res && res.managed) || []).concat((res && res.present) || [])
+					.forEach(function(m) {
+						if (!m.imei || seen[m.imei]) return;
+						seen[m.imei] = true;
+						self.value(m.imei, m.imei + (m.model ? ' — ' + m.model : ''));
+					});
 				return self.super('load', [section_id]);
 			});
 		};

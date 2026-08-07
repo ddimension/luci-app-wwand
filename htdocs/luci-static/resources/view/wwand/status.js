@@ -38,8 +38,8 @@ function fmtRate(bps) {
 }
 
 /* Band/frequency helpers come from the shared wwand.bands module. */
-function lteEarfcn(e) { return bands.lteEarfcn(e); }
-function nrArfcn(a) { return bands.nrArfcn(a); }
+
+
 
 /* Unified cell table: carrier-aggregation carriers and neighbour cells share the
    same columns in the same positions, so CA cells and neighbours can be compared
@@ -231,7 +231,7 @@ function renderLive(name, modem) {
 
 		/* --- serving/registration panel --- */
 		var lc = cells.lte_intra;
-		var ef = lc ? lteEarfcn(lc.earfcn) : null;
+		var ef = lc ? bands.lteEarfcn(lc.earfcn) : null;
 		var plmn = reg.plmn;
 		var srvRows = [
 			[ _('State'), modem.state || '?' ],
@@ -263,7 +263,7 @@ function renderLive(name, modem) {
 		}
 		var nc = cells.nr5g_cell, sn = (cells.serving||{}).nr;
 		var narfcn = (sn && sn.arfcn) || cells.nr5g_arfcn;
-		var nf = narfcn ? nrArfcn(narfcn) : null;
+		var nf = narfcn ? bands.nrArfcn(narfcn) : null;
 		if (nc || sn) {
 			var nband = (sn && sn.band != null) ? ('n'+sn.band) : (nf && nf.band ? nf.band : '?');
 			var npci = (sn && sn.pci != null) ? sn.pci : (nc ? nc.pci : '?');
@@ -319,7 +319,7 @@ function renderLive(name, modem) {
 		if (cells.ca && cells.ca.length) {
 			out.push(cellTable(_('Carrier aggregation'), cells.ca.map(function(c){
 				var isNR = ('' + c.role).indexOf('NR') >= 0;
-				var cf = isNR ? nrArfcn(c.earfcn) : lteEarfcn(c.earfcn);
+				var cf = isNR ? bands.nrArfcn(c.earfcn) : bands.lteEarfcn(c.earfcn);
 				return cellRow({
 					type: c.role,
 					band: cf ? cf.band : null,
@@ -357,7 +357,7 @@ function renderLive(name, modem) {
 		var interRows = [];
 		if (li && li.freqs)
 			li.freqs.forEach(function(fr){
-				var fef = lteEarfcn(fr.earfcn);
+				var fef = bands.lteEarfcn(fr.earfcn);
 				(fr.cells || []).forEach(function(c){
 					interRows.push(cellRow({
 						type: _('neighbour'),
@@ -380,7 +380,7 @@ function renderLive(name, modem) {
 		var nn = cells.nr5g_neigh;
 		if (nn && nn.length) {
 			out.push(cellTable(_('5G NR neighbour cells'), nn.map(function(c){
-				var nf = (c.arfcn != null) ? nrArfcn(c.arfcn) : null;
+				var nf = (c.arfcn != null) ? bands.nrArfcn(c.arfcn) : null;
 				return cellRow({
 					type: _('neighbour'),
 					band: nf ? nf.band : null,
