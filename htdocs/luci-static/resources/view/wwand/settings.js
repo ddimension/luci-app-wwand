@@ -49,6 +49,23 @@ function notifyDeferred(modem) {
 		}, _('Restart modem now')),
 	]), 'warning');
 }
+
+// after an eSIM profile switch the daemon applies via an automatic SIM
+// hot-reset (`applied: 'sim_reset'` — connection re-establishes on its own);
+// when no SIM-reset path exists it asks for a full modem restart
+// (`apply: 'modem_reset'`). Surface both.
+function notifyEsimApply(modem, res) {
+	if (res && res.error) {
+		ui.addNotification(null, E('p',
+			_('Profile switch failed: %s').format(res.error)), 'error');
+		return;
+	}
+	if (res && res.apply == 'modem_reset')
+		return notifyDeferred(modem);
+	ui.addNotification(null, E('p',
+		_('Profile switched — the SIM was reset automatically, the connection re-establishes in a few seconds.')), 'info');
+	window.setTimeout(function() { window.location.reload() }, 4000);
+}
 var callEsim = rpc.declare({ object: 'wwand', method: 'modem_esim',
 	params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify' ], expect: {} });
 
@@ -411,14 +428,14 @@ return view.extend({
 					'click': ui.createHandlerFn(self, function() {
 						if (!confirm(_('Enable profile %s? The connection will re-establish.').format(p.iccid)))
 							return;
-						return callEsim(data.modem, 'enable', 0, p.iccid, '', '').then(function() { window.location.reload() });
+						return callEsim(data.modem, 'enable', 0, p.iccid, '', '').then(function(res) { notifyEsimApply(data.modem, res) });
 					}) }, _('Enable')));
 			else
 				acts.push(E('button', { 'class': 'btn cbi-button',
 					'click': ui.createHandlerFn(self, function() {
 						if (!confirm(_('Disable the active profile %s?').format(p.iccid)))
 							return;
-						return callEsim(data.modem, 'disable', 0, p.iccid, '', '').then(function() { window.location.reload() });
+						return callEsim(data.modem, 'disable', 0, p.iccid, '', '').then(function(res) { notifyEsimApply(data.modem, res) });
 					}) }, _('Disable')));
 			acts.push(E('button', { 'class': 'btn cbi-button cbi-button-remove', 'style': 'margin-left:4px',
 				'click': ui.createHandlerFn(self, function() {
