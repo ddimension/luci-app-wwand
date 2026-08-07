@@ -1,8 +1,8 @@
 'use strict';
 'require baseclass';
 'require form';
-'require rpc';
 'require ui';
+'require wwand.rpc as wrpc';
 
 /* Shared wwand_modem option/tab definitions, used by BOTH surfaces:
    - the interface proto handler (protocol/wwand.js), inline WireGuard-style,
@@ -12,23 +12,13 @@
    Options are grouped into the agreed tabs: Modem & SIM · Radio & Cell ·
    Resilience. The interface-owned Connection tab stays in the proto handler. */
 
-var callGpioList = rpc.declare({
-	object: 'file', method: 'list', params: [ 'path' ], expect: { entries: [] },
-	filter: function(list) {
-		var rv = [];
-		for (var i = 0; i < list.length; i++) {
-			var n = list[i].name;
-			if (n && n != 'export' && n != 'unexport' && !/^gpio(chip)?[0-9]+$/.test(n))
-				rv.push(n);
-		}
-		return rv.sort();
-	}
-});
-
-var callStatus = rpc.declare({ object: 'wwand', method: 'status', expect: { '': {} } });
-var callRepower = rpc.declare({ object: 'wwand', method: 'modem_repower', params: [ 'modem' ], expect: {} });
-var callSlots = rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} });
-var callProbe = rpc.declare({ object: 'wwand', method: 'modem_probe', expect: {} });
+/* ubus declarations live in the shared wwand.rpc module; this module wants the
+   RAW status object (board/modems), hence statusRaw. */
+var callGpioList = wrpc.gpioList;
+var callStatus = wrpc.statusRaw;
+var callRepower = wrpc.repower;
+var callSlots = wrpc.slots;
+var callProbe = wrpc.probe;
 
 return baseclass.extend({
 	/* Modem & SIM — hardware identity + SIM. The primary "device" itself is set

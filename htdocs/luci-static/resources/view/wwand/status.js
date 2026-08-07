@@ -2,40 +2,29 @@
 'require view';
 'require poll';
 'require dom';
-'require rpc';
 'require ui';
 'require wwand.bands as bands';
+'require wwand.rpc as wrpc';
+'require wwand.format as fmt';
 
-var callStatus = rpc.declare({ object: 'wwand', method: 'status', expect: { modems: {} } });
-var callContexts = rpc.declare({ object: 'wwand', method: 'status', expect: { contexts: {} } });
-var callSignal = rpc.declare({ object: 'wwand', method: 'modem_signal', params: [ 'modem' ], expect: {} });
-var callCells  = rpc.declare({ object: 'wwand', method: 'modem_cells',  params: [ 'modem' ], expect: {} });
-var callCtxStatus = rpc.declare({ object: 'wwand', method: 'context_status', params: [ 'interface' ], expect: {} });
-var callSlots = rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} });
-var callSwitchSlot = rpc.declare({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} });
+/* ubus declarations live in the shared wwand.rpc module */
+var callStatus = wrpc.status;
+var callContexts = wrpc.contexts;
+var callSignal = wrpc.signal;
+var callCells = wrpc.cells;
+var callCtxStatus = wrpc.ctxStatus;
+var callSlots = wrpc.slots;
+var callSwitchSlot = wrpc.switchSlot;
 
-function fmtList(a) { return (a && a.length) ? a.join(', ') : '—'; }
-
-function fmtBytes(n) {
-	if (n == null) return '—';
-	var u = ['B','KB','MB','GB','TB'], i = 0;
-	while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-	return (i ? n.toFixed(2) : n) + ' ' + u[i];
-}
-function fmtDur(s) {
-	if (s == null) return '—';
-	var d = Math.floor(s/86400); s -= d*86400;
-	var h = Math.floor(s/3600);  s -= h*3600;
-	var m = Math.floor(s/60),  sec = s - m*60;
-	if (d) return '%dd %dh %dm'.format(d, h, m);
-	if (h) return '%dh %dm'.format(h, m);
-	if (m) return '%dm %ds'.format(m, sec);
-	return '%ds'.format(sec);
-}
-function fmtRate(bps) {
-	if (bps == null || bps <= 0) return '—';
-	return (bps >= 1e9) ? (bps/1e9).toFixed(2) + ' Gbps' : (bps/1e6).toFixed(1) + ' Mbps';
-}
+/* value formatters live in the shared wwand.format module */
+var fmtList = fmt.fmtList;
+var fmtBytes = fmt.fmtBytes;
+var fmtDur = fmt.fmtDur;
+var fmtRate = fmt.fmtRate;
+var dBm = fmt.dBm;
+var dB = fmt.dB;
+var tbl = fmt.tbl;
+var renderWarnings = fmt.renderWarnings;
 
 /* Band/frequency helpers come from the shared wwand.bands module. */
 
@@ -59,8 +48,6 @@ function cellTable(title, rows) {
 	return E('div', { 'class': 'cbi-section' }, [ E('h3', {}, title),
 		E('table', { 'class': 'table' }, [ cellHead() ].concat(rows)) ]);
 }
-function dBm(v) { return (v != null) ? (v / 10).toFixed(1) + ' dBm' : null; }
-function dB(v)  { return (v != null) ? (v / 10).toFixed(1) + ' dB' : null; }
 function mhz(f) { return f ? f.mhz.toFixed(1) + ' MHz' : null; }
 
 /* peak-hold across polls, per modem, for antenna alignment */
@@ -91,36 +78,6 @@ function bar(label, val, unit, min, max, good, fair) {
 		E('div', { 'style': 'background:#eee;border-radius:3px;height:10px;overflow:hidden' },
 			E('div', { 'style': 'width:%d%%;height:100%%;background:%s'.format(pct, col) }))
 	]);
-}
-
-function tbl(rows) {
-	return E('table', { 'class': 'table' }, rows.map(function(r) {
-		return E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td left', 'width': '30%' }, r[0]),
-			E('td', { 'class': 'td left' }, r[1]) ]);
-	}));
-}
-
-/* status().config_warnings for a modem (added by a sibling daemon change).
-   Absent/empty -> null so nothing is rendered. */
-function renderWarnings(warns) {
-	if (!warns || !warns.length)
-		return null;
-	var items = warns.map(function(w) {
-		var warn = (w.severity == 'warn');
-		var det = [];
-		if (w.expected != null) det.push(_('expected') + ': ' + w.expected);
-		if (w.actual != null)   det.push(_('actual') + ': ' + w.actual);
-		return E('div', { 'style': 'display:flex;gap:9px;align-items:flex-start;padding:8px 12px;' +
-			'border-radius:6px;margin:5px 0;' +
-			(warn ? 'background:rgba(192,57,43,.12);color:#b3271a' : 'background:rgba(11,111,194,.11);color:#0b6fc2') }, [
-			E('span', { 'style': 'font-size:1.15em;flex:none' }, warn ? '⚠' : 'ℹ'),
-			E('div', {}, [
-				E('div', {}, [ w.check ? E('strong', {}, w.check + ': ') : '', w.message || '' ]),
-				det.length ? E('div', { 'style': 'opacity:.85;font-size:.9em;margin-top:2px' }, det.join(' · ')) : '' ]) ]);
-	});
-	return E('div', { 'class': 'cbi-section' },
-		[ E('h3', {}, _('Configuration warnings')) ].concat(items));
 }
 
 /* Per-context connection detail: IPs, gateways, DNS, MTU — the stuff you

@@ -1,0 +1,361 @@
+'use strict';
+'require baseclass';
+'require dom';
+'require ui';
+'require wwand.rpc as wrpc';
+
+/* SIM & eSIM management panel, extracted from view/wwand/settings.js: SIM
+   slots (primary/switch), SIM PIN lock, and — on an eUICC — the eSIM profile
+   list, profile download with live SGP.22 progress, and the pending operator
+   notifications. render(ctx, data) returns the node array the settings page
+   appends; ctx carries the pieces the page owns:
+     ctx.simSlotUci(slot)          — persist the primary SIM slot to uci
+     ctx.notifyEsimApply(modem, r) — surface how a profile switch applies
+   data: { modem, info, slots, esim } as assembled by the settings view. */
+
+var callSwitchSlot = wrpc.switchSlot;
+var callPinLock = wrpc.pinLock;
+var callEsim = wrpc.esim;
+
+// lpac emits terse ES10/ES9+ step tokens on its progress lines; map them to the
+// download stages a human recognises (order = the SGP.22 download sequence).
+var DL_STEPS = [
+	[ 'es10b_get_euicc_challenge_and_info', _('eUICC challenge') ],
+	[ 'es9p_initiate_authentication',       _('Contacting SM-DP+') ],
+	[ 'es10b_authenticate_server',          _('Verifying server') ],
+	[ 'es9p_authenticate_client',           _('Authenticating') ],
+	[ 'es10b_prepare_download',             _('Preparing download') ],
+	[ 'es9p_get_bound_profile_package',     _('Fetching profile') ],
+	[ 'es10b_load_bound_profile_package',   _('Installing profile') ],
+];
+
+// parse the live bridge log (progress:/result:/data: lines) into a status
+function parseActivity(log) {
+	var seen = {}, order = [], cancelled = false, msg = null, code = null, m;
+	(log || '').split('\n').forEach(function(l) {
+		l = l.trim();
+		if ((m = l.match(/^progress:\s*(\S+)/))) {
+			if (/cancel_session/.test(m[1])) cancelled = true;
+			else if (!seen[m[1]]) { seen[m[1]] = true; order.push(m[1]); }
+		} else if ((m = l.match(/^result:\s*code=(-?\d+)\s*(.*)$/))) {
+			code = parseInt(m[1], 10);
+			if (m[2] && m[2].trim() && m[2].trim() != 'success') msg = m[2].trim();
+		} else if ((m = l.match(/^data:\s*(.+)$/))) {
+			var d = m[1].trim();
+			if (d.length && d[0] != '{') msg = d;   // human message, not the chip JSON blob
+		}
+	});
+	return { seen: seen, order: order, cancelled: cancelled, msg: msg, code: code };
+}
+
+/* banner/spinner/progress CSS; also used by wwand.netsel (scan banners). */
+var ESIM_CSS = '' +
+'.wwe-panel{margin-top:.6em;border:1px solid rgba(128,128,128,.28);border-radius:7px;padding:14px 16px;background:rgba(128,128,128,.06)}' +
+'.wwe-steps{list-style:none;margin:.2em 0 0;padding:0}' +
+'.wwe-step{display:flex;align-items:center;gap:9px;padding:3px 0;color:#8a8a8a;font-size:.95em}' +
+'.wwe-step .ic{width:1.35em;text-align:center;font-weight:700}' +
+'.wwe-step.done{color:#2c8a2c}.wwe-step.cur{color:#0b6fc2;font-weight:600}' +
+'.wwe-bar{height:8px;border-radius:5px;background:rgba(128,128,128,.25);overflow:hidden;margin:11px 0 4px}' +
+'.wwe-bar>span{display:block;height:100%;background:#0b6fc2;transition:width .45s ease}' +
+'.wwe-bar.ok>span{background:#2c8a2c}.wwe-bar.err>span{background:#c0392b}' +
+'.wwe-banner{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:6px;margin-top:11px;font-weight:600}' +
+'.wwe-banner.run{background:rgba(11,111,194,.12);color:#0b6fc2}' +
+'.wwe-banner.ok{background:rgba(44,138,44,.14);color:#1e6b1e}' +
+'.wwe-banner.err{background:rgba(192,57,43,.13);color:#b3271a}' +
+'.wwe-log{max-height:15em;overflow:auto;background:#1e1e1e;color:#dcdcdc;padding:9px 11px;margin-top:9px;' +
+'font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;border-radius:5px;white-space:pre-wrap;word-break:break-all}' +
+'.wwe-det{margin-top:9px;font-size:.9em}.wwe-det>summary{cursor:pointer;color:#0b6fc2}' +
+'.wwe-spin{display:inline-block;width:1.05em;height:1.05em;border:2px solid rgba(11,111,194,.3);' +
+'border-top-color:#0b6fc2;border-radius:50%;animation:wwe-rot .9s linear infinite;flex:none}' +
+'@keyframes wwe-rot{to{transform:rotate(360deg)}}';
+
+return baseclass.extend({
+	CSS: ESIM_CSS,
+
+	render: function(ctx, data) {
+		var self = this;
+		var esimOk = data.esim && data.esim.ok !== false && data.esim.profiles;
+		var out = [ E('h3', {}, _('SIM')) ];
+
+		var slotRows = (data.slots || []).map(function(sl) {
+			var line = [
+				E('strong', {}, _('Slot %d').format(sl.physical) +
+					(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' ✓' : '')),
+				' — ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
+					(sl.eid ? (', EID ' + sl.eid) : ''), ' '
+			];
+			line.push(E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
+				'click': ui.createHandlerFn(self, function() {
+					return ctx.simSlotUci(sl.physical).then(function() {
+						ui.addNotification(null, E('p', _('Primary SIM set to slot %d (persisted).').format(sl.physical)), 'info');
+					});
+				}) }, _('Set as primary')));
+			if (!sl.active && sl.card == 'present')
+				line.push(E('button', { 'class': 'btn cbi-button cbi-button-apply', 'style': 'margin-left:4px',
+					'click': ui.createHandlerFn(self, function() {
+						if (!confirm(_('Switch to SIM slot %d now? The connection will drop.').format(sl.physical)))
+							return;
+						return callSwitchSlot(data.modem, sl.physical);
+					}) }, _('Switch now')));
+			return E('div', { 'style': 'margin-bottom:4px' }, line);
+		});
+
+		out.push(E('div', { 'class': 'cbi-section' },
+			slotRows.length ? slotRows : [ E('em', {}, _('No slot information available.')) ]));
+
+		/* --- SIM PIN lock: enable / disable the PIN query, with the current PIN --- */
+		var minfo = data.info || {};
+		var pinState = (minfo.state == 'SIM_BLOCKED') ? _('blocked — PUK required')
+			: (minfo.pin1 && minfo.pin1.enabled === false) ? _('disabled (SIM boots without PIN)')
+			: (minfo.pin1 && minfo.pin1.enabled === true) ? _('enabled')
+			: _('unknown');
+		var pinIn = E('input', { 'type': 'password', 'class': 'cbi-input-password',
+			'style': 'width:12em', 'placeholder': _('current PIN') });
+		var pinAct = function(enable) {
+			var pin = (pinIn.value || '').trim();
+			if (!pin) {
+				ui.addNotification(null, E('p', _('Enter the current SIM PIN first.')), 'warning');
+				return;
+			}
+			return callPinLock(data.modem, pin, enable).then(function(r) {
+				if (r && r.ok === false)
+					ui.addNotification(null, E('p', _('PIN change failed: %s').format(r.error || '?')), 'error');
+				else
+					ui.addNotification(null, E('p', enable ? _('SIM PIN query enabled.') : _('SIM PIN query disabled.')), 'info');
+			});
+		};
+
+		out.push(E('h4', {}, _('SIM PIN')));
+		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('p', {}, [ _('PIN query: '), E('strong', {}, pinState) ]),
+			E('div', { 'style': 'margin-bottom:4px' }, [
+				pinIn, ' ',
+				E('button', { 'class': 'btn cbi-button cbi-button-apply', 'style': 'margin-left:8px',
+					'click': ui.createHandlerFn(self, function() { return pinAct(true); }) }, _('Enable PIN')),
+				E('button', { 'class': 'btn cbi-button cbi-button-remove', 'style': 'margin-left:4px',
+					'click': ui.createHandlerFn(self, function() { return pinAct(false); }) }, _('Disable PIN'))
+			]),
+			E('p', { 'style': 'color:#666;font-size:90%' },
+				_('Enabling or disabling the PIN query needs the current PIN. Disabling lets the SIM boot without a PIN.'))
+		]));
+
+		/* per-SIM overrides (config wwand_sim) are edited on the Network →
+		   Modems overview page (shared wwand.simlist) — single source, no
+		   duplicate list here. */
+		out.push(E('h4', {}, _('SIM overrides')));
+		out.push(E('p', {}, [
+			_('Per-card PIN/APN overrides (matched by ICCID or IMSI) are managed on '),
+			E('a', { 'href': L.url('admin/network/wwand') }, _('Network → Modems')),
+			'.'
+		]));
+
+		if (!esimOk) {
+			if (data.esim && data.esim.error == 'esim_not_installed')
+				out.push(E('p', {}, E('em', {}, _('eSIM management: package wwand-esim is not installed.'))));
+			else if (data.esim && data.esim.detail && data.esim.detail.error == 'es10_refused') {
+				out.push(E('h4', {}, _('eSIM')));
+				out.push(E('div', { 'class': 'wwe-banner run' },
+					_('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
+						.format(data.esim.detail.sw || '6985')));
+				out.push(E('p', {}, _('This is the normal behaviour of M2M eUICCs (SGP.02) and of vendor-locked cards: profiles are managed over-the-air by the SIM provider (SM-SR), so downloading or switching profiles from this router is not possible. Use the provider’s portal to manage the card — the router only needs to keep the active profile registered and online.')));
+			}
+			return out;
+		}
+
+		var profRows = (data.esim.profiles || []).map(function(p) {
+			var acts = [];
+			if (p.state != 'enabled')
+				acts.push(E('button', { 'class': 'btn cbi-button cbi-button-apply',
+					'click': ui.createHandlerFn(self, function() {
+						if (!confirm(_('Enable profile %s? The connection will re-establish.').format(p.iccid)))
+							return;
+						return callEsim(data.modem, 'enable', 0, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
+					}) }, _('Enable')));
+			else
+				acts.push(E('button', { 'class': 'btn cbi-button',
+					'click': ui.createHandlerFn(self, function() {
+						if (!confirm(_('Disable the active profile %s?').format(p.iccid)))
+							return;
+						return callEsim(data.modem, 'disable', 0, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
+					}) }, _('Disable')));
+			acts.push(E('button', { 'class': 'btn cbi-button cbi-button-remove', 'style': 'margin-left:4px',
+				'click': ui.createHandlerFn(self, function() {
+					if (!confirm(_('Permanently DELETE profile %s from the eUICC?').format(p.iccid)))
+						return;
+					return callEsim(data.modem, 'delete', 0, p.iccid, '', '').then(function() { window.location.reload() });
+				}) }, _('Delete')));
+			return E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td' }, p.iccid),
+				E('td', { 'class': 'td' }, p.provider || p.name || p.nickname || ''),
+				E('td', { 'class': 'td' }, p.state),
+				E('td', { 'class': 'td' }, acts),
+			]);
+		});
+
+		out.push(E('h4', {}, _('eSIM profiles')));
+		out.push(E('table', { 'class': 'table' }, [
+			E('tr', { 'class': 'tr table-titles' }, [
+				E('th', { 'class': 'th' }, 'ICCID'),
+				E('th', { 'class': 'th' }, _('Provider')),
+				E('th', { 'class': 'th' }, _('State')),
+				E('th', { 'class': 'th' }, ''),
+			]),
+		].concat(profRows.length ? profRows : [
+			E('tr', { 'class': 'tr' }, [ E('td', { 'class': 'td', 'colspan': 4 }, E('em', {}, _('no profiles'))) ]) ])));
+
+		out.push(E('style', {}, ESIM_CSS));
+
+		// shared activity panel: live progress for downloads / notifications
+		var panel = E('div', { 'class': 'wwe-panel', 'style': 'display:none' });
+
+		var mkBanner = function(kind, icon, text) {
+			return E('div', { 'class': 'wwe-banner ' + kind }, [
+				(kind == 'run') ? E('span', { 'class': 'wwe-spin' }) : E('span', {}, icon),
+				E('span', {}, text),
+			]);
+		};
+
+		var renderPanel = function(st, mode) {
+			panel.style.display = '';
+			var a = parseActivity(st.log);
+			var running = (st.state == 'running');
+			var kids = [];
+
+			if (mode == 'download') {
+				var doneN = 0;
+				var lastSeen = a.order.length ? a.order[a.order.length - 1] : null;
+				var items = DL_STEPS.map(function(s) {
+					var isDone = !!a.seen[s[0]];
+					if (isDone) doneN++;
+					var isCur = running && !a.cancelled && a.code === null && s[0] == lastSeen;
+					var cls = isDone ? (isCur ? 'wwe-step cur' : 'wwe-step done') : 'wwe-step';
+					return E('li', { 'class': cls }, [
+						E('span', { 'class': 'ic' }, isDone ? (isCur ? '⟳' : '✓') : '○'),
+						E('span', {}, s[1]),
+					]);
+				});
+				// install acknowledgement to the operator (auto_notify) — its
+				// state comes from the daemon phase, not an lpac progress token
+				var ackDone = (st.notified === true);
+				var ackCur = running && st.phase == 'notify';
+				items.push(E('li', { 'class': ackDone ? 'wwe-step done' : (ackCur ? 'wwe-step cur' : 'wwe-step') }, [
+					E('span', { 'class': 'ic' }, ackDone ? '✓' : (ackCur ? '⟳' : '○')),
+					E('span', {}, _('Confirm install to operator')),
+				]));
+
+				var pct = Math.round(doneN / DL_STEPS.length * 100);
+				var barcls = 'wwe-bar' + (a.code === 0 ? ' ok'
+					: (!running && (a.code !== null || a.cancelled)) ? ' err' : '');
+				kids.push(E('ul', { 'class': 'wwe-steps' }, items));
+				kids.push(E('div', { 'class': barcls }, E('span', { 'style': 'width:' + pct + '%' })));
+			}
+
+			if (running)
+				kids.push(mkBanner('run', '', mode == 'download' ? _('Downloading profile…') : _('Contacting operator…')));
+			else if (a.code === 0 && !a.cancelled)
+				kids.push(mkBanner('ok', '✓', mode != 'download' ? _('Done.')
+					: (st.notified === false
+						? _('Profile downloaded (install not yet confirmed to the operator).')
+						: _('Profile downloaded and confirmed — the eUICC will re-initialise.'))));
+			else
+				kids.push(mkBanner('err', '✕', a.msg || _('The operation failed.')));
+
+			if (st.log)
+				kids.push(E('details', { 'class': 'wwe-det' }, [
+					E('summary', {}, _('Show raw lpac log')),
+					E('pre', { 'class': 'wwe-log' }, st.log),
+				]));
+
+			dom.content(panel, kids);
+		};
+
+		var pollStatus = function(mode) {
+			callEsim(data.modem, 'download_status', 0, '', '', '').then(function(st) {
+				renderPanel(st, mode);
+				if (st.state == 'running')
+					window.setTimeout(function() { pollStatus(mode) }, 1200);
+				else if (mode == 'download' && parseActivity(st.log).code === 0)
+					window.setTimeout(function() { window.location.reload() }, 3000);
+			});
+		};
+
+		var startBusy = function(text) {
+			panel.style.display = '';
+			dom.content(panel, mkBanner('run', '', text));
+		};
+
+		var dlHint = (data.esim.backend == 'at')
+			? _('The modem downloads over its own network attach — no router data path or APN needed.')
+			: _('lpac downloads on the router over your uplink and relays the eUICC APDUs through wwand — no dedicated modem APN needed.');
+
+		out.push(E('h4', {}, _('Download profile')));
+		out.push(E('p', {}, E('em', {}, dlHint)));
+
+		var codeIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
+			'style': 'width:min(440px,72%);margin-right:6px',
+			'placeholder': 'LPA:1$rsp.example.com$MATCHING-ID' });
+		var confIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
+			'style': 'width:min(240px,42%);margin-right:6px',
+			'placeholder': _('confirmation code (optional)') });
+		var ackChk = E('input', { 'type': 'checkbox', 'checked': 'checked', 'style': 'margin:0 5px 0 0' });
+
+		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('div', { 'style': 'margin-bottom:8px' }, [ codeIn, confIn,
+				E('button', { 'class': 'btn cbi-button cbi-button-apply',
+					'click': ui.createHandlerFn(self, function() {
+						if (!(codeIn.value || '').trim()) {
+							ui.addNotification(null, E('p', _('Enter an activation code first.')), 'warning');
+							return;
+						}
+						startBusy(_('Starting download…'));
+						return callEsim(data.modem, 'download', 0, '', codeIn.value, confIn.value, ackChk.checked).then(function(res) {
+							if (res && res.ok === false)
+								dom.content(panel, mkBanner('err', '✕', _('Could not start: ') + (res.error || '?')));
+							else
+								pollStatus('download');
+						});
+					}) }, _('Download')),
+			]),
+			E('label', { 'style': 'display:inline-flex;align-items:center;font-weight:normal;color:var(--fg-color-2,#666)' }, [
+				ackChk, _('Confirm the install to the operator automatically (recommended; uncheck only for testing)'),
+			]),
+			panel,
+		]));
+
+		// pending eUICC notifications: confirm the download/enable/disable to
+		// the operator's SM-DP+ (ES9+). Can be done any time the router has
+		// internet — lpac delivers the queued notifications.
+		out.push(E('h4', {}, _('Provider confirmations (notifications)')));
+		out.push(E('p', {}, E('em', {}, _('After a download or profile change the eUICC queues notifications that confirm the operation to the operator. Send them once the router has internet.'))));
+		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('button', { 'class': 'btn cbi-button',
+				'click': ui.createHandlerFn(self, function() {
+					startBusy(_('Listing pending notifications…'));
+					return callEsim(data.modem, 'notifications', 0, '', '', '').then(function(r) {
+						panel.style.display = '';
+						dom.content(panel, [
+							mkBanner((r && r.ok) ? 'ok' : 'err', (r && r.ok) ? '✓' : '✕',
+								(r && r.log && r.log.trim()) ? _('Pending notifications:') : _('No pending notifications.')),
+							(r && r.log && r.log.trim())
+								? E('pre', { 'class': 'wwe-log' }, r.log) : '',
+						]);
+					});
+				}) }, _('List pending')),
+			' ',
+			E('button', { 'class': 'btn cbi-button cbi-button-apply',
+				'click': ui.createHandlerFn(self, function() {
+					if (!confirm(_('Send all pending notifications to the operator now?')))
+						return;
+					startBusy(_('Sending confirmations…'));
+					return callEsim(data.modem, 'notify', 0, '', '', '').then(function(res) {
+						if (res && res.ok === false)
+							dom.content(panel, mkBanner('err', '✕', _('Failed: ') + (res.error || '?')));
+						else
+							pollStatus('notify');
+					});
+				}) }, _('Send confirmations')),
+		]));
+
+		return out;
+	}
+});

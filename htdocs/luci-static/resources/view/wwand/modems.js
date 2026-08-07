@@ -1,12 +1,13 @@
 'use strict';
 'require view';
 'require form';
-'require rpc';
 'require uci';
 'require ui';
 'require dom';
 'require wwand.modemopts as modemopts';
 'require wwand.simlist as simlist';
+'require wwand.rpc as wrpc';
+'require wwand.format as fmt';
 
 /* Network → Modems: interfaces-style overview. One row per configured
    wwand_modem with live status columns (state, SIM, registration, signal) and
@@ -16,45 +17,14 @@
    `managed_by`) are listed below with a one-click Configure. The per-ICCID/IMSI
    wwand_sim override list (shared wwand.simlist) closes the page. */
 
-var callStatus = rpc.declare({ object: 'wwand', method: 'status', expect: { modems: {} } });
-var callProbe  = rpc.declare({ object: 'wwand', method: 'modem_probe', expect: {} });
-var callSignal = rpc.declare({ object: 'wwand', method: 'modem_signal', params: [ 'modem' ], expect: {} });
+/* ubus declarations live in the shared wwand.rpc module */
+var callStatus = wrpc.status;
+var callProbe = wrpc.probe;
+var callSignal = wrpc.signal;
 
-function fmtReg(mi) {
-	var reg = mi && mi.registration;
-
-	if (!reg)
-		return '-';
-
-	if (reg.registration == 1) {
-		var op = (reg.plmn && (reg.plmn.description ||
-			('%d/%02d'.format(reg.plmn.mcc, reg.plmn.mnc)))) || _('registered');
-		return op + (reg.roaming ? ' ' + _('(roaming)') : '');
-	}
-
-	var det = mi.registration_detail;
-
-	if (det && det.reject_text)
-		return _('rejected: %s').format(det.reject_text);
-
-	return _('searching…');
-}
-
-function fmtSim(mi) {
-	if (!mi)
-		return '-';
-
-	if (mi.sim_block)
-		return _('blocked (%s)').format(mi.sim_block.reason || '?');
-
-	if (mi.state == 'WAITING_MODEM' || mi.state == 'UNRESOLVED')
-		return '-';
-
-	if (mi.pin1)
-		return mi.pin1.enabled ? _('ready, PIN enabled') : _('ready');
-
-	return '-';
-}
+/* compact registration/SIM mappings live in the shared wwand.format module */
+var fmtReg = fmt.fmtRegistration;
+var fmtSim = fmt.fmtSim;
 
 function fmtSignal(sig) {
 	var parts = [];
