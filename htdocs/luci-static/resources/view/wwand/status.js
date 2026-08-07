@@ -248,6 +248,8 @@ function renderLive(name, modem) {
 		}
 		if (plmn) srvRows.push([ _('Operator'), '%s (%s/%s)%s'.format((plmn.description||'').trim(),
 			plmn.mcc, plmn.mnc, reg.roaming ? ' · '+_('roaming') : '') ]);
+		if (modem.imsi)   srvRows.push([ _('IMSI'), modem.imsi ]);
+		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
 			var tech = 'LTE' + ((nr.rsrp > -32768 || (cells.serving||{}).nr) ? ' + 5G NR' : '');
@@ -404,7 +406,9 @@ return view.extend({
 	},
 
 	render: function(modems) {
+		/* deep link from the Modems overview: ?modem=<name> preselects */
 		var current = null;
+		try { current = new URLSearchParams(window.location.search).get('modem'); } catch(e) {}
 		var selWrap = E('span', {});   // filled with a modem selector when >1
 		var live = E('div', { 'id': 'wwand-live' }, E('em', {}, _('loading…')));
 

@@ -148,25 +148,36 @@ return view.extend({
 		col('_reg', _('Registration'), function(sid) { return fmtReg(status[sid]); });
 		col('_sig', _('Signal'), function(sid) { return fmtSignal(signals[sid]); });
 
-		/* row actions: Config (the native modal editor) + a Tools jump */
+		/* row actions: Config (the native modal editor) + Status/Tools jumps */
 		s.renderRowActions = function(section_id) {
 			var td = form.GridSection.prototype.renderRowActions.call(this, section_id, _('Config'));
 			var box = td.firstElementChild || td;
-			var tools = E('button', {
-				'class': 'btn cbi-button cbi-button-neutral',
-				'title': _('Band, operator, SIM, eSIM and SMS tools for this modem'),
-				'click': function(ev) {
-					ev.preventDefault();
-					window.location = L.url('admin/network/wwand-tools') +
-						'?modem=' + encodeURIComponent(section_id);
-				},
-			}, _('Tools'));
+
+			var jump = function(label, title, url) {
+				return E('button', {
+					'class': 'btn cbi-button cbi-button-neutral',
+					'title': title,
+					'click': function(ev) {
+						ev.preventDefault();
+						window.location = url + '?modem=' + encodeURIComponent(section_id);
+					},
+				}, label);
+			};
+
+			var extra = [
+				jump(_('Status'), _('Live status page (signal, cells, connection) for this modem'),
+					L.url('admin/status/wwand')),
+				jump(_('Tools'), _('Band, operator, SIM, eSIM and SMS tools for this modem'),
+					L.url('admin/network/wwand-tools')),
+			];
 
 			/* between Config and the trailing Delete button when present */
-			if (box.lastElementChild)
-				box.insertBefore(tools, box.lastElementChild);
-			else
-				box.appendChild(tools);
+			extra.forEach(function(b) {
+				if (box.lastElementChild)
+					box.insertBefore(b, box.lastElementChild);
+				else
+					box.appendChild(b);
+			});
 
 			return td;
 		};
