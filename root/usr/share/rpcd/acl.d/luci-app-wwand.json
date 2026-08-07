@@ -15,7 +15,9 @@
 					"modem_probe",
 					"modem_sms_list",
 					"modem_sms_read",
-					"modem_scan"
+					"modem_scan",
+					"modem_scan_start",
+					"modem_scan_status"
 				]
 			},
 			"file": {
