@@ -74,10 +74,23 @@ return baseclass.extend({
 			});
 		};
 
-		o = s.taboption(tab, form.Value, 'path', _('USB path binding'),
-			_('Optional stable USB topology anchor (like a wifi-device <code>path</code>, e.g. 1-1.2) — survives renumbering on multi-modem setups. Prefer <em>Bind by USB serial/IMEI</em> above; empty = bind by the modem device.'));
+		o = s.taboption(tab, form.Value, 'path', _('Device path binding'),
+			_('Stable device topology anchor (like a wifi-device <code>path</code>) — the modem\'s sysfs path relative to /sys/devices, so it survives USB renumbering and is PCIe/MHI-ready. Pick a detected modem below or type a path; empty = bind by the modem device. Prefer <em>Bind by USB serial/IMEI</em> when available.'));
 		o.ucioption = 'path';
 		bind(o);
+		o.load = function(section_id) {
+			var self = this;
+			return L.resolveDefault(callProbe(), {}).then(function(res) {
+				var seen = {};
+				((res && res.present) || []).forEach(function(p) {
+					if (!p.path || seen[p.path]) return;
+					seen[p.path] = true;
+					self.value(p.path, p.path + (p.model ? ' — ' + p.model : '')
+						+ (p.usb_path ? ' (' + p.usb_path + ')' : ''));
+				});
+				return self.super('load', [section_id]);
+			});
+		};
 
 		o = s.taboption(tab, form.Value, 'reset_gpio', _('Modem reset GPIO'),
 			_('Named GPIO on the modem RESET line. When set, recovery pulses it (invert, wait 30 s, restore) instead of cycling USB power.'));
