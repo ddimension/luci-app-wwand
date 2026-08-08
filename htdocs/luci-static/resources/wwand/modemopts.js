@@ -115,6 +115,16 @@ return baseclass.extend({
 			_('Override the auto-detected AT serial port (e.g. /dev/ttyUSB2).'));
 		bind(o);
 
+		o = s.taboption(tab, form.Combobox, 'fcc_auth', _('FCC unlock'),
+			_('RF unlock for laptop-SKU modems that boot radio-locked (Lenovo/Dell/HP variants of Quectel EM1xx, Foxconn SDX55/SDX62). Default "auto" tries the known QMI unlock messages when the modem stays in low-power after going online; MBIM modems need the explicit "quectel" method. "off" disables the unlock entirely.'));
+		o.value('', _('auto (QMI only)'));
+		o.value('off', _('off'));
+		o.value('dms', _('QMI DMS (Quectel EM1xx)'));
+		o.value('foxconn', _('QMI Foxconn (SDX55, DW5821e)'));
+		o.value('quectel', _('MBIM Quectel radio state'));
+		o.optional = true;
+		bind(o);
+
 		o = s.taboption(tab, form.Flag, 'at2_external', _('Release secondary AT port'),
 			_('Reserve the modem\'s second AT port for external tools (gpsd, own scripts): wwand never opens it and runs telemetry over the control channel instead. The modem status shows which port was released.'));
 		o.default = '0';
