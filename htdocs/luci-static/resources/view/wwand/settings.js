@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require ui';
+'require dom';
 'require uci';
 'require wwand.bands as bands';
 'require wwand.rpc as wrpc';
@@ -370,8 +371,7 @@ return view.extend({
 			E('em', {}, _('Choose a storage and click Load.')));
 
 		function set(node) {
-			body.innerHTML = '';
-			body.appendChild(node);
+			dom.content(body, node);
 		}
 
 		function rows(msgs) {

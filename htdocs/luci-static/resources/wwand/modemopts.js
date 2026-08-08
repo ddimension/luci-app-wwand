@@ -194,21 +194,25 @@ return baseclass.extend({
 		   Best-effort: talks to live modems; on any failure the plain field stays. */
 		o.load = function(section_id) {
 			var self = this;
-			return L.resolveDefault(callStatus(), {}).then(function(modems) {
-				return Promise.all(Object.keys(modems || {}).map(function(n) {
+			/* callStatus is statusRaw ({'':{}}) — unwrap the modem map, else
+			   Object.keys() yields 'modems'/'contexts'/'board' and modem_sim_slots
+			   gets called with those as modem names. Slot number is `physical`
+			   (what format.js/esim.js and modem_sim_switch_slot use), not `slot`. */
+			return L.resolveDefault(callStatus(), {}).then(function(reply) {
+				return Promise.all(Object.keys((reply && reply.modems) || {}).map(function(n) {
 					return L.resolveDefault(callSlots(n), {});
 				})).then(function(results) {
 					var seen = {};
 					results.forEach(function(r) {
 						((r && r.slots) || []).forEach(function(sl) {
-							if (sl.slot == null || seen[sl.slot]) return;
-							seen[sl.slot] = true;
-							var lbl = _('Slot %d').format(sl.slot);
+							if (sl.physical == null || seen[sl.physical]) return;
+							seen[sl.physical] = true;
+							var lbl = _('Slot %d').format(sl.physical);
 							if (sl.iccid)
 								lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
 							else
 								lbl += ' — ' + _('empty');
-							uniqVal(self, String(sl.slot), lbl);
+							uniqVal(self, String(sl.physical), lbl);
 						});
 					});
 					return self.super('load', [section_id]);

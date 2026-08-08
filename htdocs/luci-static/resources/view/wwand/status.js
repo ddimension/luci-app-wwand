@@ -33,10 +33,12 @@ var renderWarnings = fmt.renderWarnings;
 /* Unified cell table: carrier-aggregation carriers and neighbour cells share the
    same columns in the same positions, so CA cells and neighbours can be compared
    at a glance. Each source fills the fields it has; the rest show "—". */
-var CELL_HEAD = [ 'Type', 'Band', 'EARFCN', 'Frequency', 'Bandwidth', 'PCI', 'RSRP', 'RSRQ', 'Lock' ];
+/* translatable headers are marked with literal _() so the i18n scanner picks
+   them up (a runtime _(h) on a variable is invisible to it); acronyms stay as-is */
+var CELL_HEAD = [ _('Type'), _('Band'), 'EARFCN', _('Frequency'), _('Bandwidth'), 'PCI', 'RSRP', 'RSRQ', _('Lock') ];
 function cellHead() {
 	return E('tr', { 'class': 'tr table-titles' }, CELL_HEAD.map(function(h) {
-		return E('th', { 'class': 'th' }, /^(EARFCN|PCI|RSRP|RSRQ)$/.test(h) ? h : _(h));
+		return E('th', { 'class': 'th' }, h);
 	}));
 }
 function cd(v) { return E('td', { 'class': 'td' }, (v == null || v === '') ? '—' : ('' + v)); }
