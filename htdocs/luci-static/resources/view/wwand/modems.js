@@ -19,6 +19,7 @@
 var callStatus = wrpc.status;
 var callProbe = wrpc.probe;
 var callSignal = wrpc.signal;
+var callContexts = wrpc.contexts;
 
 /* compact registration/SIM mappings live in the shared wwand.format module */
 var fmtReg = fmt.fmtRegistration;
@@ -49,6 +50,7 @@ return view.extend({
 			uci.load('network'),
 			L.resolveDefault(callStatus(), {}),
 			L.resolveDefault(callProbe(), {}),
+			L.resolveDefault(callContexts(), {}),
 		]).then(function(r) {
 			var status = r[1] || {};
 			var names = Object.keys(status);
@@ -58,7 +60,7 @@ return view.extend({
 			})).then(function(sigs) {
 				var signals = {};
 				names.forEach(function(n, i) { signals[n] = sigs[i] || {}; });
-				return { status: status, probe: r[2] || {}, signals: signals };
+				return { status: status, probe: r[2] || {}, contexts: r[3] || {}, signals: signals };
 			});
 		});
 	},
@@ -66,6 +68,18 @@ return view.extend({
 	render: function(data) {
 		var status = data.status || {};
 		var signals = data.signals || {};
+		var contexts = data.contexts || {};
+
+		/* per-modem connection counts from the context map (keyed by interface;
+		   each entry carries .modem and .state). */
+		var conns = {};
+		Object.keys(contexts).forEach(function(cn) {
+			var c = contexts[cn] || {}, mn = c.modem;
+			if (!mn) return;
+			conns[mn] = conns[mn] || { up: 0, total: 0 };
+			conns[mn].total++;
+			if (c.state == 'CONNECTED') conns[mn].up++;
+		});
 
 		var m = new form.Map('network', _('Mobile Modems'),
 			_('Cellular modems managed by wwand. Each modem is referenced from an interface (Network → Interfaces, protocol "Cellular / 5G") by its name; several interfaces can share one modem through different mux channels. "Config" edits the modem, "Tools" opens band/operator/SIM/eSIM/SMS tools for it.'));
@@ -110,6 +124,15 @@ return view.extend({
 			var mi = status[sid];
 			var dev = (mi && mi.netdev) || uci.get('network', sid, 'device') || '?';
 			return dev + ((mi && mi.model) ? ' (' + mi.model + ')' : '');
+		});
+		col('_backend', _('Backend'), function(sid) {
+			var mi = status[sid];
+			return (mi && mi.protocol) ? mi.protocol.toUpperCase() : '—';
+		});
+		col('_conns', _('Connections'), function(sid) {
+			var c = conns[sid];
+			if (!c || !c.total) return '—';
+			return (c.up == c.total) ? '%d'.format(c.up) : '%d / %d'.format(c.up, c.total);
 		});
 		col('_state', _('State'), function(sid) { return fmtState(status[sid]); });
 		col('_sim', _('SIM'), function(sid) { return fmtSim(status[sid]); });
