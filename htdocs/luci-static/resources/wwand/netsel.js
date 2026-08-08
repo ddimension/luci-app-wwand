@@ -67,6 +67,17 @@ return baseclass.extend({
 				dom.content(results, E('em', {}, _('No operators found.')));
 				return;
 			}
+			/* a scan lists the same PLMN once per supported RAT (2G/3G/4G/5G) —
+			   collapse to one row per operator, keeping the strongest status */
+			var rank = { current: 3, available: 2, forbidden: 1 };
+			var byPlmn = {}, order = [];
+			ops.forEach(function(op) {
+				var key = op.mcc + '/' + op.mnc;
+				var prev = byPlmn[key];
+				if (!prev) { byPlmn[key] = op; order.push(key); }
+				else if ((rank[op.status] || 0) > (rank[prev.status] || 0)) byPlmn[key] = op;
+			});
+			ops = order.map(function(k) { return byPlmn[k]; });
 			var rows = ops.map(function(op) {
 				var forbidden = (op.status == 'forbidden');
 				var current = (op.status == 'current');

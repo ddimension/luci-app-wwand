@@ -20,6 +20,18 @@ var callModemReset = wrpc.modemReset;
 var callSlots = wrpc.slots;
 var callProbe = wrpc.probe;
 
+/* Add a Combobox choice ONCE. These option objects are shared across every
+   wwand_modem section of the GridSection, so LuCI calls load() (and thus our
+   self.value()) once PER section — a plain self.value() then appends the same
+   probe-derived choice several times, which showed up as duplicate entries in
+   the Bind-by-serial/IMEI/path and reset-GPIO dropdowns on a multi-modem box.
+   Guarding against the option's existing keylist makes it idempotent. */
+function uniqVal(o, k, label) {
+	if (!o.keylist) o.keylist = [];
+	if (o.keylist.indexOf(k) >= 0) return;
+	o.value(k, label);
+}
+
 return baseclass.extend({
 	/* Modem & SIM — hardware identity + SIM. The primary "device" itself is set
 	   elsewhere (the modem dropdown on the interface; the section name / a device
@@ -45,7 +57,7 @@ return baseclass.extend({
 				((res && res.present) || []).forEach(function(p) {
 					if (!p.serial || seen[p.serial]) return;
 					seen[p.serial] = true;
-					self.value(p.serial, p.serial + (p.model ? ' — ' + p.model : '')
+					uniqVal(self, p.serial, p.serial + (p.model ? ' — ' + p.model : '')
 						+ (p.usb_path ? ' (' + p.usb_path + ')' : ''));
 				});
 				return self.super('load', [section_id]);
@@ -68,7 +80,7 @@ return baseclass.extend({
 					.forEach(function(m) {
 						if (!m.imei || seen[m.imei]) return;
 						seen[m.imei] = true;
-						self.value(m.imei, m.imei + (m.model ? ' — ' + m.model : ''));
+						uniqVal(self, m.imei, m.imei + (m.model ? ' — ' + m.model : ''));
 					});
 				return self.super('load', [section_id]);
 			});
@@ -85,7 +97,7 @@ return baseclass.extend({
 				((res && res.present) || []).forEach(function(p) {
 					if (!p.path || seen[p.path]) return;
 					seen[p.path] = true;
-					self.value(p.path, p.path + (p.model ? ' — ' + p.model : '')
+					uniqVal(self, p.path, p.path + (p.model ? ' — ' + p.model : '')
 						+ (p.usb_path ? ' (' + p.usb_path + ')' : ''));
 				});
 				return self.super('load', [section_id]);
@@ -102,7 +114,7 @@ return baseclass.extend({
 				L.resolveDefault(callGpioList('/sys/class/gpio/'), []),
 				L.resolveDefault(callStatus(), {})
 			]).then(function(res) {
-				(res[0] || []).forEach(function(n) { self.value(n, n); });
+				(res[0] || []).forEach(function(n) { uniqVal(self, n, n); });
 				var brg = (res[1] || {}).board && res[1].board.reset_gpio;
 				if (brg)
 					self.description = _('Named GPIO on the modem RESET line (invert, wait 30 s, restore instead of a USB power-cycle). This board already provides a default reset GPIO "%s" — set this only to override it.').format(brg);
@@ -196,7 +208,7 @@ return baseclass.extend({
 								lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
 							else
 								lbl += ' — ' + _('empty');
-							self.value(String(sl.slot), lbl);
+							uniqVal(self, String(sl.slot), lbl);
 						});
 					});
 					return self.super('load', [section_id]);
