@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require form';
+'require ui';
 'require uci';
 'require wwand.modemopts as modemopts';
 'require wwand.simlist as simlist';
@@ -155,11 +156,30 @@ return view.extend({
 				}, label);
 			};
 
+			/* Reboot: GPIO-first then backend soft reset (ubus modem_reset).
+			   Confirm first — it drops this modem's connection(s) briefly. */
+			var reboot = E('button', {
+				'class': 'btn cbi-button cbi-button-negative',
+				'title': _('Reset/reboot this modem (GPIO reset if available, otherwise a backend soft reset). Its connections drop briefly and recover on their own.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!confirm(_('Reset modem "%s" now? Its connection(s) will drop briefly and recover automatically.').format(section_id)))
+						return;
+					return wrpc.modemReset(section_id).then(function(res) {
+						if (res && (res.ok || res.resetting))
+							ui.addNotification(null, E('p', {}, _('Modem reset triggered (%s).').format(res.action || '?')), 'info');
+						else
+							ui.addNotification(null, E('p', {}, _('Reset unavailable: %s.').format((res && res.error) || _('no reset control'))), 'warning');
+					});
+				}),
+			}, _('Reboot'));
+
 			var extra = [
 				jump(_('Status'), _('Live status page (signal, cells, connection) for this modem'),
 					L.url('admin/status/wwand')),
 				jump(_('Tools'), _('Band, operator, SIM, eSIM and SMS tools for this modem'),
 					L.url('admin/network/wwand-tools')),
+				reboot,
 			];
 
 			/* between Config and the trailing Delete button when present */
