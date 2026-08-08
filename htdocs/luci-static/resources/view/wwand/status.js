@@ -210,6 +210,8 @@ function renderLive(name, modem) {
 		if (modem.iccid)  srvRows.push([ _('ICCID'), modem.iccid ]);
 		if (modem.imsi)   srvRows.push([ _('IMSI'), modem.imsi ]);
 		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
+		if (cells.temperature && cells.temperature.celsius != null)
+			srvRows.push([ _('Temperature'), '%d °C'.format(cells.temperature.celsius) ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
 			var tech = 'LTE' + ((fmt.hasSignal(nr.rsrp) || (cells.serving||{}).nr) ? ' + 5G NR' : '');
