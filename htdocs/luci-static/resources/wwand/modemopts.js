@@ -115,7 +115,7 @@ return baseclass.extend({
 			_('Override the auto-detected AT serial port (e.g. /dev/ttyUSB2).'));
 		bind(o);
 
-		o = s.taboption(tab, form.Combobox, 'fcc_auth', _('FCC unlock'),
+		o = s.taboption(tab, form.ListValue, 'fcc_auth', _('FCC unlock'),
 			_('RF unlock for laptop-SKU modems that boot radio-locked (Lenovo/Dell/HP variants of Quectel EM1xx, Foxconn SDX55/SDX62). Default "auto" tries the known QMI unlock messages when the modem stays in low-power after going online; MBIM modems need the explicit "quectel" method. "off" disables the unlock entirely.'));
 		o.value('', _('auto (QMI only)'));
 		o.value('off', _('off'));
