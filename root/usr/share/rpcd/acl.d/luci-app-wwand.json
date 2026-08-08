@@ -34,7 +34,8 @@
 					"modem_esim",
 					"modem_repower",
 					"modem_reset",
-					"modem_sms_delete"
+					"modem_sms_delete",
+					"migrate"
 				]
 			}
 		}

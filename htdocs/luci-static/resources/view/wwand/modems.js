@@ -251,8 +251,73 @@ return view.extend({
 			]);
 		}
 
+		/* interfaces still on a stock cellular proto (qmi/mbim/ncm) with no
+		   `option modem` — wwand does not manage these until they are migrated.
+		   Offer an in-place migration (proto -> wwand + a linked wwand_modem),
+		   reusing the daemon's tested migrate engine over ubus. */
+		var legacy = [];
+		uci.sections('network', 'interface', function(s) {
+			if ((s.proto == 'qmi' || s.proto == 'mbim' || s.proto == 'ncm') && !s.modem)
+				legacy.push(s);
+		});
+
+		var migration = '';
+
+		if (legacy.length) {
+			var checked = {};
+			var migRows = legacy.map(function(s) {
+				var name = s['.name'];
+				checked[name] = true;
+				return E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' },
+						E('input', { 'type': 'checkbox', 'checked': 'checked',
+							'change': function(ev) { checked[name] = ev.target.checked; } })),
+					E('td', { 'class': 'td' }, name),
+					E('td', { 'class': 'td' }, (s.proto || '?').toUpperCase()),
+					E('td', { 'class': 'td' }, s.device || '-'),
+					E('td', { 'class': 'td' }, s.apn || '-'),
+				]);
+			});
+
+			var migBtn = E('button', { 'class': 'btn cbi-button cbi-button-apply',
+				'click': ui.createHandlerFn(this, function() {
+					var sel = legacy.map(function(s) { return s['.name']; })
+						.filter(function(n) { return checked[n]; });
+
+					if (!sel.length)
+						return ui.addNotification(null, E('p', {}, _('No interface selected.')), 'warning');
+
+					if (!confirm(_('Migrate %d interface(s) to proto wwand? Each is converted in place — its name, firewall zone and IP settings are kept — and wwand takes over managing it.').format(sel.length)))
+						return;
+
+					return wrpc.migrate(true, sel).then(function(res) {
+						if (res && (res.ok || res.applied != null)) {
+							ui.addNotification(null, E('p', {}, _('Migrated %d interface(s); reloading…').format(sel.length)), 'info');
+							window.setTimeout(function() { location.reload(); }, 1500);
+						}
+						else {
+							ui.addNotification(null, E('p', {}, _('Migration failed: %s').format((res && res.error) || _('unknown'))), 'error');
+						}
+					});
+				}) }, _('Migrate selected'));
+
+			migration = E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('Migratable interfaces')),
+				E('p', {}, _('Interfaces still using a stock cellular protocol (qmi / mbim / ncm) that wwand does not manage yet. Select the ones to migrate and press "Migrate selected": each is converted in place to proto wwand (its name, firewall zone and IP settings are kept) and a wwand modem section is created and linked.')),
+				E('table', { 'class': 'table' },
+					[ E('tr', { 'class': 'tr table-titles' }, [
+						E('th', { 'class': 'th' }, ''),
+						E('th', { 'class': 'th' }, _('Interface')),
+						E('th', { 'class': 'th' }, _('Protocol')),
+						E('th', { 'class': 'th' }, _('Device')),
+						E('th', { 'class': 'th' }, _('APN')),
+					]) ].concat(migRows)),
+				migBtn,
+			]);
+		}
+
 		return m.render().then(function(mapNode) {
-			return E('div', {}, [ mapNode, detected ]);
+			return E('div', {}, [ mapNode, migration, detected ]);
 		});
 	},
 });

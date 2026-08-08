@@ -54,6 +54,11 @@ return baseclass.extend({
 	smsList:   rpc.declare({ object: 'wwand', method: 'modem_sms_list', params: [ 'modem', 'storage' ], expect: {} }),
 	smsDelete: rpc.declare({ object: 'wwand', method: 'modem_sms_delete', params: [ 'modem', 'storage', 'index' ], expect: {} }),
 
+	/* --- migration -------------------------------------------------------- */
+	/* convert selected legacy proto qmi/mbim/ncm interfaces to proto wwand
+	   in place. apply=false returns the planned changes (preview). */
+	migrate: rpc.declare({ object: 'wwand', method: 'migrate', params: [ 'apply', 'interfaces' ], expect: {} }),
+
 	/* All *named* GPIO lines (from the DT gpio-line-names), for the
 	   reset/power GPIO picker. Skips the export/unexport control files and
 	   the raw gpiochipN/gpioNNN entries. */
