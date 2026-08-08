@@ -10,6 +10,15 @@
 return baseclass.extend({
 	fmtList: function(a) { return (a && a.length) ? a.join(', ') : '—'; },
 
+	/* MNC as a zero-padded code: the leading zero is significant (260/06 is not
+	   260/6). QMI hands us a bare integer (digit count lost), so pad to 2 digits
+	   minimum; genuine 3-digit MNCs (>=100) keep all three. */
+	fmtMnc: function(mnc) {
+		if (mnc == null || mnc === '')
+			return '?';
+		return '%02d'.format(+mnc);
+	},
+
 	/* registered operator line — "Name (mcc/mnc) · roaming" — from the modem's
 	   `registration` block; shared by the status page and the proto handler */
 	fmtOperator: function(reg) {
@@ -17,7 +26,8 @@ return baseclass.extend({
 		if (!plmn)
 			return null;
 		return '%s (%s/%s)%s'.format((plmn.description || '').trim(),
-			plmn.mcc, plmn.mnc, (reg && reg.roaming) ? ' \u00b7 ' + _('roaming') : '');
+			plmn.mcc, this.fmtMnc(plmn.mnc),
+			(reg && reg.roaming) ? ' \u00b7 ' + _('roaming') : '');
 	},
 
 	/* one SIM-slot row (status page + SIM/eSIM tools panel): identity line

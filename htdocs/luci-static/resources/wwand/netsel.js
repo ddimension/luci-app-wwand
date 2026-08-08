@@ -4,6 +4,7 @@
 'require ui';
 'require wwand.rpc as wrpc';
 'require wwand.esim as esim';
+'require wwand.format as fmt';
 
 /* Network selection (operator scan + manual/automatic), extracted from
    view/wwand/settings.js. Protocol-neutral: modem_scan /
@@ -35,7 +36,7 @@ return baseclass.extend({
 		if (reg && (reg.mcc != null || reg.name))
 			infoRows.push(E('div', {}, [ E('strong', {}, _('Registered operator') + ': '),
 				(reg.name || _('unknown')) + ' (' + (reg.mcc != null ? reg.mcc : '?') +
-				'/' + (reg.mnc != null ? reg.mnc : '?') + ')' ]));
+				'/' + fmt.fmtMnc(reg.mnc) + ')' ]));
 
 		var results = E('div', { 'style': 'margin-top:10px' });
 
@@ -88,7 +89,7 @@ return baseclass.extend({
 					act = E('button', { 'class': 'btn cbi-button cbi-button-apply',
 						'click': ui.createHandlerFn(self, function() {
 							if (!confirm(_('Register manually to %s (%s/%s)? The connection may briefly drop.')
-									.format(op.name || '?', op.mcc, op.mnc)))
+									.format(op.name || '?', op.mcc, fmt.fmtMnc(op.mnc))))
 								return;
 							return setSelection('manual', op.mcc, op.mnc,
 								_('Manual network selection applied.'));
@@ -96,7 +97,7 @@ return baseclass.extend({
 				return E('tr', { 'class': 'tr',
 					'style': forbidden ? 'opacity:.5' : (current ? 'font-weight:600' : '') }, [
 					E('td', { 'class': 'td' }, op.name || _('(unnamed)')),
-					E('td', { 'class': 'td' }, op.mcc + '/' + op.mnc),
+					E('td', { 'class': 'td' }, op.mcc + '/' + fmt.fmtMnc(op.mnc)),
 					E('td', { 'class': 'td' }, STATUS_LABEL[op.status] || op.status || ''),
 					E('td', { 'class': 'td', 'style': 'width:1%' }, act),
 				]);
