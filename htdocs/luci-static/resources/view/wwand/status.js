@@ -205,6 +205,7 @@ function renderLive(name, modem) {
 		}
 		var opLine = fmt.fmtOperator(reg);
 		if (opLine) srvRows.push([ _('Operator'), opLine ]);
+		if (modem.iccid)  srvRows.push([ _('ICCID'), modem.iccid ]);
 		if (modem.imsi)   srvRows.push([ _('IMSI'), modem.imsi ]);
 		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
 		if (lc) {
