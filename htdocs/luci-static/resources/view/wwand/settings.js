@@ -515,7 +515,19 @@ return view.extend({
 			notifyDeferred: notifyDeferred,
 		};
 
+		/* backlinks: this page is reached from the Modems overview' Tools button;
+		   offer the way back plus the modem's status/config, so users are never
+		   stranded on the tools page. */
+		var nav = E('div', { 'style': 'margin:0 0 10px;font-size:95%' }, [
+			E('a', { 'href': L.url('admin/network/wwand') }, '← ' + _('Modems')),
+			' · ',
+			E('a', { 'href': L.url('admin/status/wwand') }, _('Status')),
+			' · ',
+			E('a', { 'href': L.url('admin/network/network') }, _('Interfaces')),
+		]);
+
 		return E('div', {}, [
+			nav,
 			E('h2', {}, head),
 			modemSel,
 			warns || '',
