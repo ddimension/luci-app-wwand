@@ -26,6 +26,7 @@ return baseclass.extend({
 	/* --- telemetry ------------------------------------------------------- */
 	signal:     rpc.declare({ object: 'wwand', method: 'modem_signal', params: [ 'modem' ], expect: {} }),
 	cells:      rpc.declare({ object: 'wwand', method: 'modem_cells',  params: [ 'modem' ], expect: {} }),
+	datapath:   rpc.declare({ object: 'wwand', method: 'modem_datapath', params: [ 'modem' ], expect: {} }),
 	ctxStatus:  rpc.declare({ object: 'wwand', method: 'context_status', params: [ 'interface' ], expect: {} }),
 
 	/* --- hardware -------------------------------------------------------- */

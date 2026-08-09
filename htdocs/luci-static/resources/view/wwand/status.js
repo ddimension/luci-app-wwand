@@ -12,6 +12,7 @@ var callStatus = wrpc.status;
 var callContexts = wrpc.contexts;
 var callSignal = wrpc.signal;
 var callCells = wrpc.cells;
+var callDatapath = wrpc.datapath;
 var callCtxStatus = wrpc.ctxStatus;
 var callSlots = wrpc.slots;
 var callSwitchSlot = wrpc.switchSlot;
@@ -142,15 +143,86 @@ function renderConnections(details) {
 	]);
 }
 
+/* Datapath / muxing: the link-layer config wwand applied at datapath setup
+   (backend, QMAP aggregation the modem negotiated, endpoint) plus the live
+   aggregation seen on the wire — the mean number of packets the modem packs
+   into one USB frame (parent frames vs demuxed child packets). */
+function fmtProto(p) {
+	/* WDA data-aggregation protocol enum */
+	return ({ 0: '—', 1: 'none', 2: 'QMAP', 3: 'QMAP', 5: 'QMAPv5' })[p] || ('' + p);
+}
+function renderDatapath(dp) {
+	if (!dp || dp.error || !dp.backend)
+		return null;
+
+	var rows = [
+		[ _('Backend'), dp.backend + (dp.v5 ? ' · QMAPv5' : '') ],
+		[ _('Parent device'), dp.parent || '—' ]
+	];
+	if (dp.urb_size)
+		rows.push([ _('URB / frame size'), fmtBytes(dp.urb_size) ]);
+
+	var wda = dp.wda || {};
+	if (wda.dl_max_datagrams != null)
+		rows.push([ _('Downlink aggregation (negotiated)'),
+			_('%s protocol · up to %d datagrams / %s').format(
+				fmtProto(wda.dl_protocol), wda.dl_max_datagrams, fmtBytes(wda.dl_max_size)) ]);
+	if (wda.ul_max_datagrams != null)
+		rows.push([ _('Uplink aggregation (negotiated)'),
+			_('%s protocol · up to %d datagrams / %s').format(
+				fmtProto(wda.ul_protocol), wda.ul_max_datagrams, fmtBytes(wda.ul_max_size)) ]);
+
+	/* MBIM/NCM NTB aggregation (cdc_ncm framing) */
+	var ntb = dp.ntb;
+	if (ntb) {
+		if (ntb.rx_max != null)
+			rows.push([ _('Downlink NTB (aggregation buffer)'), fmtBytes(ntb.rx_max) ]);
+		if (ntb.tx_max != null)
+			rows.push([ _('Uplink NTB'),
+				fmtBytes(ntb.tx_max) + (ntb.tx_max_datagrams != null ?
+					_(' · up to %d datagrams').format(ntb.tx_max_datagrams) : '') ]);
+		if (ntb.tx_timer_usecs != null)
+			rows.push([ _('Uplink coalescing timer'), ntb.tx_timer_usecs + ' µs' ]);
+	}
+
+	/* mux channels */
+	(dp.channels || []).forEach(function(c) {
+		rows.push([ _('Mux channel %d').format(c.mux_id),
+			'%s → %s'.format(c.netdev, c.interface) ]);
+	});
+
+	/* live aggregation ratio + the counters it is derived from */
+	var st = dp.stats;
+	if (st && st.rx_aggregation != null) {
+		var p = st.parent || {}, kids = st.children || {};
+		var kidRx = 0, kidTx = 0;
+		Object.keys(kids).forEach(function(k){ kidRx += (kids[k].rx_packets||0); kidTx += (kids[k].tx_packets||0); });
+		rows.push([ E('strong', {}, _('Downlink packets / frame')),
+			E('strong', { 'style': 'color:%s'.format(st.rx_aggregation >= 2 ? '#3c3' : '#da3') },
+				st.rx_aggregation.toFixed(2) + '×') ]);
+		rows.push([ _('… based on'),
+			_('%d demuxed packets over %d USB frames').format(kidRx, p.rx_packets || 0) ]);
+		if (st.tx_aggregation != null)
+			rows.push([ _('Uplink packets / frame'),
+				'%s× (%d / %d)'.format(st.tx_aggregation.toFixed(2), kidTx, p.tx_packets || 0) ]);
+	}
+
+	return E('div', { 'class': 'cbi-section' }, [
+		E('h3', {}, _('Datapath & muxing')), tbl(rows)
+	]);
+}
+
 function renderLive(name, modem) {
 	return Promise.all([
 		L.resolveDefault(callSignal(name), {}),
 		L.resolveDefault(callCells(name), {}),
 		L.resolveDefault(callContexts(), {}),
-		L.resolveDefault(callSlots(name), {})
+		L.resolveDefault(callSlots(name), {}),
+		L.resolveDefault(callDatapath(name), {})
 	]).then(function(res) {
 		var sig = res[0] || {}, cells = (res[1] || {}).cells || {};
 		var allCtx = res[2] || {};
+		var dpath = res[4] || {};
 		var myCtx = Object.keys(allCtx)
 			.filter(function(k){ return allCtx[k].modem == name; })
 			.map(function(k){ return { name: k, cfg: allCtx[k] }; });
@@ -263,6 +335,10 @@ function renderLive(name, modem) {
 		/* --- active connections (per context) --- */
 		var conns = renderConnections(ctxDetails);
 		if (conns) out.push(conns);
+
+		/* --- datapath & muxing (aggregation) --- */
+		var dpanel = renderDatapath(dpath);
+		if (dpanel) out.push(dpanel);
 
 		/* --- carrier aggregation (active carriers) --- unified cell columns --- */
 		if (cells.ca && cells.ca.length) {
