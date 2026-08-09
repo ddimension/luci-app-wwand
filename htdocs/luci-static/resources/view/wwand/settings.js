@@ -22,6 +22,7 @@ var callGet = wrpc.getSettings;
 var callSet = wrpc.setSettings;
 var callPlmn = wrpc.plmn;
 var callPlmnSet = wrpc.plmnSet;
+var callPlmnRestore = wrpc.plmnRestore;
 var callSlots = wrpc.slots;
 var callSmsList = wrpc.smsList;
 var callSmsDelete = wrpc.smsDelete;
@@ -156,6 +157,26 @@ function nrKnownBands() {
 /* editable USER-controlled preferred-PLMN list (EF 6F60). Rows carry MCC/MNC
    inputs + per-RAT checkboxes; Apply writes the whole list via modem_plmn_set
    (AT+CPOL) and the daemon reads it back over QMI/UIM to cross-verify. */
+/* uci `list plmn` <-> editor entry: '<mccmnc> rat,rat' */
+function encodePlmnEntries(entries) {
+	return entries.map(function(e) {
+		var rats = [ 'gsm', 'utran', 'eutran', 'ngran' ].filter(function(k) { return e[k]; }).join(',');
+		return (e.mcc || '') + (e.mnc || '') + (rats ? ' ' + rats : '');
+	});
+}
+function decodePlmnEntry(str) {
+	var f = ('' + (str || '')).trim().split(/[ \t,]+/);
+	var id = (f[0] || '').replace(/\D/g, '');
+	var e = { mcc: id.slice(0, 3), mnc: id.slice(3), gsm: false, utran: false, eutran: false, ngran: false };
+	for (var i = 1; i < f.length; i++) {
+		var r = f[i].toLowerCase();
+		if (r == 'gsm' || r == '2g') e.gsm = true;
+		else if (r == 'utran' || r == '3g' || r == 'umts') e.utran = true;
+		else if (r == 'eutran' || r == '4g' || r == 'lte') e.eutran = true;
+		else if (r == 'ngran' || r == '5g' || r == 'nr' || r == 'nr5g') e.ngran = true;
+	}
+	return e;
+}
 function plmnRatBox(e, key, label) {
 	var attrs = { 'type': 'checkbox', 'data-rat': key };
 	if (e && e[key]) attrs.checked = 'checked';
@@ -332,6 +353,144 @@ return view.extend({
 		var iface = this.targetIface(modem);
 		if (!iface) return null;
 		return modemsid.ensureModemSid(iface);
+	},
+
+	/* comfortable preferred-PLMN manager: edit the modem's NAS or EF-6F60 list,
+	   write it now, save it as a named wwand_plmnlist (persisted + re-applied by
+	   the daemon before every radio-on), and attach a saved list to this modem. */
+	renderPlmnManager: function(modem, data) {
+		var self = this, lists = data.plmn || {};
+		var msid = this.modemSid(modem);
+		var curListName = msid ? (uci.get('network', msid, 'plmn_list') || '') : '';
+
+		var typeSel = E('select', { 'class': 'cbi-input-select', 'style': 'width:auto' }, [
+			E('option', { 'value': 'nas' }, _('NAS preferred networks')),
+			E('option', { 'value': 'user' }, _('User list (SIM EF 6F60)')) ]);
+
+		var tbody = E('table', { 'class': 'table' });
+		var mkHead = function() {
+			return E('tr', { 'class': 'tr table-titles' }, [
+				E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
+				E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]);
+		};
+		var seedRows = function(arr) {
+			dom.content(tbody, [ mkHead() ].concat(
+				(arr && arr.length ? arr : [ {} ]).map(plmnEditRow)));
+		};
+		var collect = function() {
+			var out = [], trs = tbody.getElementsByTagName('tr');
+			for (var i = 0; i < trs.length; i++) {
+				var mI = trs[i].querySelector('[data-f="mcc"]');
+				if (!mI) continue;
+				var mcc = (mI.value || '').replace(/\D/g, '');
+				var mnc = (trs[i].querySelector('[data-f="mnc"]').value || '').replace(/\D/g, '');
+				if (!mcc && !mnc) continue;
+				var rec = { mcc: mcc, mnc: mnc }, cbs = trs[i].querySelectorAll('[data-rat]');
+				for (var j = 0; j < cbs.length; j++) rec[cbs[j].getAttribute('data-rat')] = cbs[j].checked;
+				out.push(rec);
+			}
+			return out;
+		};
+		seedRows(lists.nas);
+		typeSel.addEventListener('change', function() { seedRows(lists[typeSel.value]); });
+
+		var note = E('span', { 'style': 'margin-left:8px' });
+		var busy = function(msg) { dom.content(note, msg ? E('em', {}, msg) : ''); };
+
+		var btn = function(label, cls, fn) {
+			return E('button', { 'class': 'btn cbi-button ' + (cls || ''), 'click': fn }, label);
+		};
+
+		/* write the edited list straight to the modem (not persisted) */
+		var writeNow = ui.createHandlerFn(this, function() {
+			var entries = collect(), t = typeSel.value;
+			if (!confirm(_('Write %d record(s) to the modem\'s %s list now? (not saved to config)')
+					.format(entries.length, t == 'nas' ? 'NAS' : 'user')))
+				return;
+			busy(_('writing…'));
+			return callPlmnSet(modem, t, entries).then(function(r) {
+				busy('');
+				if (r && r.ok) ui.addNotification(null, E('p', {}, _('Written to the modem (%d record(s)).').format(r.written != null ? r.written : entries.length)), 'info');
+				else ui.addNotification(null, E('p', {}, _('Write failed: %s. The SIM/modem may reject it.').format((r && (r.note || r.error)) || '?')), 'warning');
+			});
+		});
+
+		/* save the edited list as a named wwand_plmnlist + attach it to this modem */
+		var saveAs = ui.createHandlerFn(this, function() {
+			var entries = collect(), t = typeSel.value;
+			var name = (window.prompt(_('Save as list — name:'), curListName || (t + '-list')) || '').replace(/[^a-zA-Z0-9_]/g, '');
+			if (!name) return;
+			if (uci.get('network', name) == null) uci.add('network', 'wwand_plmnlist', name);
+			uci.set('network', name, 'type', t);
+			uci.set('network', name, 'plmn', encodePlmnEntries(entries));
+			var sid = self.ensureModemSid(modem);
+			if (sid) uci.set('network', sid, 'plmn_list', name);
+			return uci.save().then(function() { return uci.apply(); }).then(function() {
+				ui.addNotification(null, E('p', {}, _('Saved list "%s" (%d record(s)) and attached it to this modem.').format(name, entries.length)), 'info');
+				window.location.reload();
+			});
+		});
+
+		var editorTools = E('div', { 'style': 'margin-top:6px' }, [
+			btn(_('Add entry'), '', function() { tbody.appendChild(plmnEditRow({})); }), ' ',
+			btn(_('Reload from modem'), '', function() { seedRows(lists[typeSel.value]); }), ' ',
+			btn(_('Write to modem now'), 'cbi-button-action', writeNow), ' ',
+			btn(_('Save as list & attach'), 'cbi-button-save', saveAs), note ]);
+
+		/* saved named lists (wwand_plmnlist) */
+		var savedRows = [];
+		uci.sections('network', 'wwand_plmnlist', function(s) {
+			var n = s['.name'], cnt = (L.toArray(s.plmn)).length, t = s.type || 'nas';
+			savedRows.push(E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td', 'style': (n == curListName ? 'font-weight:600' : '') },
+					n + (n == curListName ? ' ✓' : '')),
+				E('td', { 'class': 'td' }, (t == 'nas' ? _('NAS') : _('User')) + ' · ' + cnt),
+				E('td', { 'class': 'td', 'style': 'width:1%;white-space:nowrap' }, [
+					btn(_('Load'), '', function() {
+						typeSel.value = t;
+						seedRows(L.toArray(s.plmn).map(decodePlmnEntry));
+					}), ' ',
+					btn(_('Use here'), '', ui.createHandlerFn(this, function() {
+						var sid = self.ensureModemSid(modem);
+						if (!sid) return;
+						uci.set('network', sid, 'plmn_list', n);
+						return uci.save().then(function() { return uci.apply(); }).then(function() { window.location.reload(); });
+					})), ' ',
+					btn('✕', 'cbi-button-remove', ui.createHandlerFn(this, function() {
+						if (!confirm(_('Delete the saved list "%s"?').format(n))) return;
+						uci.remove('network', n);
+						if (n == curListName && msid) uci.unset('network', msid, 'plmn_list');
+						return uci.save().then(function() { return uci.apply(); }).then(function() { window.location.reload(); });
+					})),
+				]),
+			]));
+		});
+
+		var restoreBtn = curListName ? E('div', { 'style': 'margin-top:6px' }, [
+			E('span', {}, _('This modem restores "%s" before every radio-on. ').format(curListName)),
+			btn(_('Restore now'), 'cbi-button-action', ui.createHandlerFn(this, function() {
+				busy(_('restoring…'));
+				return callPlmnRestore(modem).then(function(r) {
+					busy('');
+					ui.addNotification(null, E('p', {}, (r && r.ok)
+						? _('Configured list restored to the modem.')
+						: _('Restore failed: %s').format((r && (r.note || r.error)) || '?')), (r && r.ok) ? 'info' : 'warning');
+				});
+			})),
+		]) : E('p', {}, E('em', {}, _('No saved list is attached to this modem yet — edit above and "Save as list & attach".')));
+
+		return E('div', { 'class': 'cbi-section' }, [
+			E('h4', {}, [ _('Preferred-PLMN editor — '), typeSel ]),
+			E('p', { 'style': 'color:#666;font-size:90%;margin:2px 0' },
+				_('NAS = the QMI preferred-networks list; User = the SIM EF 6F60 list (AT+CPOL). Editing here is temporary; save it as a list so the daemon re-applies it before every radio-on (survives modem reboots).')),
+			tbody, editorTools,
+			E('h4', { 'style': 'margin-top:12px' }, _('Saved PLMN lists')),
+			savedRows.length ? E('table', { 'class': 'table' }, [
+				E('tr', { 'class': 'tr table-titles' }, [ E('th', { 'class': 'th' }, _('Name')),
+					E('th', { 'class': 'th' }, _('Type · entries')), E('th', { 'class': 'th' }, '') ]) ].concat(savedRows))
+				: E('p', {}, E('em', {}, _('none yet'))),
+			restoreBtn,
+		]);
 	},
 
 	simSlotUci: function(modem, slot) {
@@ -643,8 +802,8 @@ return view.extend({
 			]),
 			netsel.render(panelCtx, data),
 		].concat(this.renderCellLock(data)).concat(esim.render(panelCtx, data)).concat([
-			E('h3', {}, _('SIM PLMN preference lists')),
-			plmnEditor(data.modem, (data.plmn || {}).user),
+			E('h3', {}, _('Preferred PLMN lists')),
+			this.renderPlmnManager(data.modem, data),
 			plmnTable(_('Operator-controlled (6F61)'), (data.plmn || {}).operator),
 			plmnTable(_('Home PLMN (6F62)'), (data.plmn || {}).home),
 		]).concat(this.renderSms(data)));
