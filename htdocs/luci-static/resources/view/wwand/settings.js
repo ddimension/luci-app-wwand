@@ -21,6 +21,7 @@ var callStatus = wrpc.status;
 var callGet = wrpc.getSettings;
 var callSet = wrpc.setSettings;
 var callPlmn = wrpc.plmn;
+var callPlmnSet = wrpc.plmnSet;
 var callSlots = wrpc.slots;
 var callSmsList = wrpc.smsList;
 var callSmsDelete = wrpc.smsDelete;
@@ -150,6 +151,86 @@ function nrKnownBands() {
 	return bands.NR_BANDS.map(function(b) {
 		return { num: parseInt(('' + b[0]).replace(/^n/, ''), 10), label: b[0] };
 	});
+}
+
+/* editable USER-controlled preferred-PLMN list (EF 6F60). Rows carry MCC/MNC
+   inputs + per-RAT checkboxes; Apply writes the whole list via modem_plmn_set
+   (AT+CPOL) and the daemon reads it back over QMI/UIM to cross-verify. */
+function plmnRatBox(e, key, label) {
+	var attrs = { 'type': 'checkbox', 'data-rat': key };
+	if (e && e[key]) attrs.checked = 'checked';
+	return E('label', { 'style': 'margin-right:8px;white-space:nowrap' }, [ E('input', attrs), ' ' + label ]);
+}
+function plmnEditRow(e) {
+	e = e || {};
+	return E('tr', { 'class': 'tr' }, [
+		E('td', { 'class': 'td' }, E('input', { 'type': 'text', 'class': 'cbi-input-text',
+			'style': 'width:5em', 'data-f': 'mcc', 'maxlength': '3', 'placeholder': 'MCC', 'value': e.mcc || '' })),
+		E('td', { 'class': 'td' }, E('input', { 'type': 'text', 'class': 'cbi-input-text',
+			'style': 'width:5em', 'data-f': 'mnc', 'maxlength': '3', 'placeholder': 'MNC', 'value': e.mnc || '' })),
+		E('td', { 'class': 'td' }, [
+			plmnRatBox(e, 'gsm', '2G'), plmnRatBox(e, 'utran', '3G'),
+			plmnRatBox(e, 'eutran', '4G'), plmnRatBox(e, 'ngran', '5G') ]),
+		E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
+			'class': 'btn cbi-button cbi-button-remove',
+			'click': function(ev) { var tr = ev.target.parentNode.parentNode; tr.parentNode.removeChild(tr); } }, '✕')),
+	]);
+}
+function plmnEditor(modem, list) {
+	var body = E('table', { 'class': 'table' }, [
+		E('tr', { 'class': 'tr table-titles' }, [
+			E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
+			E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]),
+	].concat((list || []).map(plmnEditRow)));
+
+	var note = E('span', { 'style': 'margin-left:8px' });
+
+	var collect = function() {
+		var out = [], trs = body.getElementsByTagName('tr');
+		for (var i = 0; i < trs.length; i++) {
+			var mccI = trs[i].querySelector('[data-f="mcc"]');
+			if (!mccI) continue;
+			var mcc = (mccI.value || '').replace(/\D/g, '');
+			var mnc = (trs[i].querySelector('[data-f="mnc"]').value || '').replace(/\D/g, '');
+			if (!mcc && !mnc) continue;
+			var rec = { mcc: mcc, mnc: mnc }, cbs = trs[i].querySelectorAll('[data-rat]');
+			for (var j = 0; j < cbs.length; j++) rec[cbs[j].getAttribute('data-rat')] = cbs[j].checked;
+			out.push(rec);
+		}
+		return out;
+	};
+
+	return E('div', {}, [
+		E('h4', {}, _('User-controlled (EF PLMNwAcT, 6F60)') + (list ? ' (' + list.length + ')' : '')),
+		(list == null) ? E('p', {}, E('em', {},
+			_('Not provisioned on this SIM — Apply will try to create it (fails if the SIM is write-protected).'))) : '',
+		body,
+		E('div', { 'style': 'margin-top:6px' }, [
+			E('button', { 'class': 'btn cbi-button',
+				'click': function() { body.appendChild(plmnEditRow({})); } }, _('Add entry')),
+			' ',
+			E('button', { 'class': 'btn cbi-button cbi-button-apply',
+				'click': ui.createHandlerFn({}, function() {
+					var entries = collect();
+					if (!confirm(_('Write %d preferred-PLMN record(s) to the SIM (EF 6F60)? This replaces the current user list.').format(entries.length)))
+						return;
+					dom.content(note, E('em', {}, _('writing…')));
+					return callPlmnSet(modem, entries).then(function(r) {
+						if (r && r.ok) {
+							ui.addNotification(null, E('p', {},
+								_('Preferred PLMN list written (%d record(s)) and verified.').format(r.written != null ? r.written : entries.length)), 'info');
+							window.location.reload();
+						} else {
+							var why = (r && (r.note || r.error)) || _('unknown error');
+							dom.content(note, E('span', { 'style': 'color:#c00' }, _('failed: %s').format(why)));
+							ui.addNotification(null, E('p', {},
+								_('Could not write the preferred PLMN list: %s. The SIM may be write-protected (ADM).').format(why)), 'warning');
+						}
+					});
+				}) }, _('Apply preferred list')),
+			note,
+		]),
+	]);
 }
 
 function plmnTable(title, list, absentHint) {
@@ -559,8 +640,7 @@ return view.extend({
 			netsel.render(panelCtx, data),
 		].concat(this.renderCellLock(data)).concat(esim.render(panelCtx, data)).concat([
 			E('h3', {}, _('SIM PLMN preference lists')),
-			plmnTable(_('User-controlled (EF PLMNwAcT, 6F60)'), (data.plmn || {}).user,
-				_('optional SIM file — not provisioned on this SIM, and the device cannot create it')),
+			plmnEditor(data.modem, (data.plmn || {}).user),
 			plmnTable(_('Operator-controlled (6F61)'), (data.plmn || {}).operator),
 			plmnTable(_('Home PLMN (6F62)'), (data.plmn || {}).home),
 		]).concat(this.renderSms(data)));

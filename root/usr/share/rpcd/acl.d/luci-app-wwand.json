@@ -34,15 +34,16 @@
             ],
             "ubus": {
                 "wwand": [
-                    "modem_set_settings",
-                    "modem_set_network_selection",
-                    "modem_sim_switch_slot",
-                    "modem_sim_pin_lock",
+                    "migrate",
                     "modem_esim",
+                    "modem_plmn_set",
                     "modem_repower",
                     "modem_reset",
-                    "modem_sms_delete",
-                    "migrate"
+                    "modem_set_network_selection",
+                    "modem_set_settings",
+                    "modem_sim_pin_lock",
+                    "modem_sim_switch_slot",
+                    "modem_sms_delete"
                 ]
             }
         }

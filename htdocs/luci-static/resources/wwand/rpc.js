@@ -47,6 +47,7 @@ return baseclass.extend({
 	setNetsel:   rpc.declare({ object: 'wwand', method: 'modem_set_network_selection',
 		params: [ 'modem', 'mode', 'mcc', 'mnc' ], expect: {} }),
 	plmn:        rpc.declare({ object: 'wwand', method: 'modem_plmn_lists', params: [ 'modem' ], expect: {} }),
+	plmnSet:     rpc.declare({ object: 'wwand', method: 'modem_plmn_set', params: [ 'modem', 'entries' ], expect: {} }),
 	scan:        rpc.declare({ object: 'wwand', method: 'modem_scan', params: [ 'modem' ], expect: {} }),
 	scanStart:   rpc.declare({ object: 'wwand', method: 'modem_scan_start', params: [ 'modem' ], expect: {} }),
 	scanStatus:  rpc.declare({ object: 'wwand', method: 'modem_scan_status', params: [ 'modem' ], expect: {} }),
