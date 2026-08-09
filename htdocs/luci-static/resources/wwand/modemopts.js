@@ -1,5 +1,6 @@
 'use strict';
 'require baseclass';
+'require uci';
 'require form';
 'require ui';
 'require wwand.rpc as wrpc';
@@ -251,6 +252,17 @@ return baseclass.extend({
 		o = s.taboption(tab, form.Value, 'mnc', _('MNC'),
 			_('Mobile Network Code (requires MCC).'));
 		o.datatype = 'uinteger';
+		bind(o);
+
+		/* preferred-PLMN list restored before every radio-on (managed on the
+		   modem status/tools page; a per-SIM list wins over this one) */
+		o = s.taboption(tab, form.ListValue, 'plmn_list', _('Preferred-PLMN list'),
+			_('Optional: a saved PLMN list (config wwand_plmnlist) the daemon restores before every radio-on. Edit lists on the modem status page.'));
+		o.rmempty = true;
+		o.value('', _('(none)'));
+		uci.sections('network', 'wwand_plmnlist').forEach(function(sec) {
+			o.value(sec['.name'], sec['.name'] + ' (' + ((sec.type == 'user') ? 'user' : 'NAS') + ')');
+		});
 		bind(o);
 	},
 

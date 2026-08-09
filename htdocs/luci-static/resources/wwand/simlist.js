@@ -71,6 +71,20 @@ return baseclass.extend({
 		o.value('ipv4', _('IPv4'));
 		o.value('ipv6', _('IPv6'));
 
+		/* optional preferred-PLMN list for this card — the daemon restores it
+		   before every radio-on; a per-SIM list wins over the modem's. The list
+		   itself (and its NAS/user type) is a `config wwand_plmnlist`, managed on
+		   the modem settings page. */
+		o = s.option(form.ListValue, 'plmn_list', _('Preferred-PLMN list'),
+			_('Optional: a saved PLMN list to restore for this SIM (type NAS or user is set on the list). Wins over the modem\'s list.'));
+		o.modalonly = true;
+		o.rmempty = true;
+		o.value('', _('(none)'));
+		uci.sections('network', 'wwand_plmnlist').forEach(function(sec) {
+			var t = (sec.type == 'user') ? 'user' : 'NAS';
+			o.value(sec['.name'], sec['.name'] + ' (' + t + ')');
+		});
+
 		return s;
 	}
 });
