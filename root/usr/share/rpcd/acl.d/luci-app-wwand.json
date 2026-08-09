@@ -36,6 +36,7 @@
                 "wwand": [
                     "migrate",
                     "modem_esim",
+                    "modem_plmn_restore",
                     "modem_plmn_set",
                     "modem_repower",
                     "modem_reset",

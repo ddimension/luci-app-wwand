@@ -219,7 +219,7 @@ function plmnEditor(modem, list) {
 					if (!confirm(_('Write %d preferred-PLMN record(s) to the SIM (EF 6F60)? This replaces the current user list.').format(entries.length)))
 						return;
 					dom.content(note, E('em', {}, _('writing…')));
-					return callPlmnSet(modem, entries).then(function(r) {
+					return callPlmnSet(modem, 'user', entries).then(function(r) {
 						if (r && r.ok) {
 							ui.addNotification(null, E('p', {},
 								_('Preferred PLMN list written (%d record(s)) and verified.').format(r.written != null ? r.written : entries.length)), 'info');
