@@ -191,20 +191,28 @@ function renderDatapath(dp) {
 			'%s → %s'.format(c.netdev, c.interface) ]);
 	});
 
-	/* live aggregation ratio + the counters it is derived from */
+	/* live datapath counters (every backend) + the QMAP aggregation ratio
+	   (rmnet/qmimux only — on MBIM/NCM the NTB block above is the aggregation
+	   indicator; the parent-vs-child packet ratio there is meaningless) */
 	var st = dp.stats;
-	if (st && st.rx_aggregation != null) {
-		var p = st.parent || {}, kids = st.children || {};
+	if (st && st.parent) {
+		var p = st.parent, kids = st.children || {};
 		var kidRx = 0, kidTx = 0;
 		Object.keys(kids).forEach(function(k){ kidRx += (kids[k].rx_packets||0); kidTx += (kids[k].tx_packets||0); });
-		rows.push([ E('strong', {}, _('Downlink packets / frame')),
-			E('strong', { 'style': 'color:%s'.format(st.rx_aggregation >= 2 ? '#3c3' : '#da3') },
-				st.rx_aggregation.toFixed(2) + '×') ]);
-		rows.push([ _('… based on'),
-			_('%d demuxed packets over %d USB frames').format(kidRx, p.rx_packets || 0) ]);
-		if (st.tx_aggregation != null)
-			rows.push([ _('Uplink packets / frame'),
-				'%s× (%d / %d)'.format(st.tx_aggregation.toFixed(2), kidTx, p.tx_packets || 0) ]);
+
+		if (st.rx_aggregation != null) {
+			rows.push([ E('strong', {}, _('Downlink packets / frame')),
+				E('strong', { 'style': 'color:%s'.format(st.rx_aggregation >= 2 ? '#3c3' : '#da3') },
+					st.rx_aggregation.toFixed(2) + '×') ]);
+			rows.push([ _('… based on'),
+				_('%d demuxed packets over %d USB frames').format(kidRx, p.rx_packets || 0) ]);
+			if (st.tx_aggregation != null)
+				rows.push([ _('Uplink packets / frame'),
+					'%s× (%d / %d)'.format(st.tx_aggregation.toFixed(2), kidTx, p.tx_packets || 0) ]);
+		}
+
+		rows.push([ _('Datapath counters (parent)'),
+			'↓ %s · ↑ %s'.format(fmtBytes(p.rx_bytes), fmtBytes(p.tx_bytes)) ]);
 	}
 
 	return E('div', { 'class': 'cbi-section' }, [
