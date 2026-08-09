@@ -367,18 +367,22 @@ return view.extend({
 			E('option', { 'value': 'nas' }, _('NAS preferred networks')),
 			E('option', { 'value': 'user' }, _('User list (SIM EF 6F60)')) ]);
 
-		var tbody = E('table', { 'class': 'table' });
 		var mkHead = function() {
 			return E('tr', { 'class': 'tr table-titles' }, [
 				E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
 				E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]);
 		};
+		/* the editor table lives inside a container div and is REBUILT whole on
+		   each (re)seed — replacing a <table>'s <tr> children in place leaves the
+		   browser's implicit <tbody> around and the rows accumulate on toggle */
+		var tcontainer = E('div');
+		var tableOf = function() { return tcontainer.querySelector('table'); };
 		var seedRows = function(arr) {
-			dom.content(tbody, [ mkHead() ].concat(
-				(arr && arr.length ? arr : [ {} ]).map(plmnEditRow)));
+			dom.content(tcontainer, E('table', { 'class': 'table' },
+				[ mkHead() ].concat((arr && arr.length ? arr : [ {} ]).map(plmnEditRow))));
 		};
 		var collect = function() {
-			var out = [], trs = tbody.getElementsByTagName('tr');
+			var out = [], trs = tcontainer.getElementsByTagName('tr');
 			for (var i = 0; i < trs.length; i++) {
 				var mI = trs[i].querySelector('[data-f="mcc"]');
 				if (!mI) continue;
@@ -391,8 +395,18 @@ return view.extend({
 			}
 			return out;
 		};
-		seedRows(lists.nas);
-		typeSel.addEventListener('change', function() { seedRows(lists[typeSel.value]); });
+		/* re-read the CURRENT list from the modem for the selected type, then seed.
+		   Called on load, on type toggle and from "Reload from modem" so the editor
+		   always reflects what the modem holds right now (not the page-load cache). */
+		var loadFromModem = function() {
+			seedRows([]);   // clear immediately so a stale list never lingers
+			return callPlmn(modem).then(function(r) {
+				lists = r || {};
+				seedRows(lists[typeSel.value]);
+			});
+		};
+		seedRows(lists[typeSel.value]);
+		typeSel.addEventListener('change', loadFromModem);
 
 		var note = E('span', { 'style': 'margin-left:8px' });
 		var busy = function(msg) { dom.content(note, msg ? E('em', {}, msg) : ''); };
@@ -432,8 +446,8 @@ return view.extend({
 		});
 
 		var editorTools = E('div', { 'style': 'margin-top:6px' }, [
-			btn(_('Add entry'), '', function() { tbody.appendChild(plmnEditRow({})); }), ' ',
-			btn(_('Reload from modem'), '', function() { seedRows(lists[typeSel.value]); }), ' ',
+			btn(_('Add entry'), '', function() { var t = tableOf(); if (t) t.appendChild(plmnEditRow({})); }), ' ',
+			btn(_('Reload from modem'), '', loadFromModem), ' ',
 			btn(_('Write to modem now'), 'cbi-button-action', writeNow), ' ',
 			btn(_('Save as list & attach'), 'cbi-button-save', saveAs), note ]);
 
@@ -483,7 +497,7 @@ return view.extend({
 			E('h4', {}, [ _('Preferred-PLMN editor — '), typeSel ]),
 			E('p', { 'style': 'color:#666;font-size:90%;margin:2px 0' },
 				_('NAS = the QMI preferred-networks list; User = the SIM EF 6F60 list (AT+CPOL). Editing here is temporary; save it as a list so the daemon re-applies it before every radio-on (survives modem reboots).')),
-			tbody, editorTools,
+			tcontainer, editorTools,
 			E('h4', { 'style': 'margin-top:12px' }, _('Saved PLMN lists')),
 			savedRows.length ? E('table', { 'class': 'table' }, [
 				E('tr', { 'class': 'tr table-titles' }, [ E('th', { 'class': 'th' }, _('Name')),
