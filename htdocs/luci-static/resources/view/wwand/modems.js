@@ -196,6 +196,26 @@ return view.extend({
 				}),
 			}, _('Reboot'));
 
+			/* Reattach: force a network deregister + re-register (QMI opmode
+			   bounce, else AT+COPS) so automatic selection re-scans — for a
+			   modem stuck on a previously-selected PLMN. Lighter than Reboot:
+			   no modem reset, the PDP context re-establishes on its own. */
+			var reattach = E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'title': _('Force a network re-registration (deregister + re-attach) so automatic selection re-scans. Use when the modem stays on a network you manually selected earlier. The connection blips and recovers on its own; not a modem reset.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!confirm(_('Re-attach modem "%s" to the network now? It briefly deregisters and re-registers; the connection recovers automatically.').format(section_id)))
+						return;
+					return wrpc.modemReattach(section_id).then(function(res) {
+						if (res && res.ok)
+							ui.addNotification(null, E('p', {}, _('Network re-attach triggered (%s).').format(res.via || '?')), 'info');
+						else
+							ui.addNotification(null, E('p', {}, _('Re-attach unavailable: %s.').format((res && res.error) || '?')), 'warning');
+					});
+				}),
+			}, _('Reattach'));
+
 			/* Save SIM: capture this card's live ICCID + the modem's current
 			   PIN/APN/auth into a per-ICCID wwand_sim override (the list below),
 			   so a swapped-in card keeps its own PIN/APN. Only when a card with a
@@ -232,6 +252,7 @@ return view.extend({
 					L.url('admin/network/wwand-tools')),
 			];
 			if (saveSim) extra.push(saveSim);
+			extra.push(reattach);
 			extra.push(reboot);
 
 			/* between Config and the trailing Delete button when present */

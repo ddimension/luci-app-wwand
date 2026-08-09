@@ -38,6 +38,7 @@
                     "modem_esim",
                     "modem_plmn_restore",
                     "modem_plmn_set",
+                    "modem_reattach",
                     "modem_repower",
                     "modem_reset",
                     "modem_set_network_selection",
