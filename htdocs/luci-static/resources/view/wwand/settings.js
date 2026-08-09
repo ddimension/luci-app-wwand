@@ -177,11 +177,15 @@ function plmnEditRow(e) {
 	]);
 }
 function plmnEditor(modem, list) {
+	/* an empty or not-yet-provisioned list still gets one blank input row so the
+	   user can create entries right away (the write only fails if the SIM's
+	   access conditions forbid it) */
+	var seedRows = (list && list.length) ? list.map(plmnEditRow) : [ plmnEditRow({}) ];
 	var body = E('table', { 'class': 'table' }, [
 		E('tr', { 'class': 'tr table-titles' }, [
 			E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
 			E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]),
-	].concat((list || []).map(plmnEditRow)));
+	].concat(seedRows));
 
 	var note = E('span', { 'style': 'margin-left:8px' });
 
