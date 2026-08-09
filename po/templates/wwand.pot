@@ -39,7 +39,7 @@ msgstr ""
 msgid "5G NR SA cell lock"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:415
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:424
 msgid "5G NR neighbour cells"
 msgstr ""
 
@@ -51,7 +51,7 @@ msgstr ""
 msgid "5G SINR"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:313
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:322
 msgid "5G cell"
 msgstr ""
 
@@ -142,7 +142,7 @@ msgid "Backend"
 msgstr ""
 
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:39
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:300
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:309
 msgid "Band"
 msgstr ""
 
@@ -162,7 +162,7 @@ msgstr ""
 msgid "Bind by USB serial"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:353
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:362
 msgid "Carrier aggregation"
 msgstr ""
 
@@ -329,7 +329,7 @@ msgstr ""
 msgid "Downloading profile…"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:303
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:312
 msgid "EARFCN / PCI"
 msgstr ""
 
@@ -385,8 +385,12 @@ msgstr ""
 msgid "Fetching profile"
 msgstr ""
 
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:285
+msgid "Firmware"
+msgstr ""
+
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:39
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:301
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:310
 msgid "Frequency"
 msgstr ""
 
@@ -398,12 +402,12 @@ msgstr ""
 msgid "Home PLMN (6F62)"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:290
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:299
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/simlist.js:29
 msgid "ICCID"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:291
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:300
 msgid "IMSI"
 msgstr ""
 
@@ -492,11 +496,11 @@ msgstr ""
 msgid "LTE cell lock"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:409
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:418
 msgid "LTE neighbour cells (inter-frequency)"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:373
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:382
 msgid "LTE neighbour cells (intra-frequency)"
 msgstr ""
 
@@ -524,7 +528,7 @@ msgstr ""
 msgid "Listing pending notifications…"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:507
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:516
 msgid ""
 "Live cellular signal and cell environment — updates about once per second. "
 "Aim the antenna for the highest RSRP / SINR; the peak values below help "
@@ -568,7 +572,7 @@ msgstr ""
 msgid "MNC"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:292
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:301
 msgid "MSISDN"
 msgstr ""
 
@@ -578,6 +582,10 @@ msgstr ""
 
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/netsel.js:110
 msgid "Manual network selection applied."
+msgstr ""
+
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:283
+msgid "Manufacturer"
 msgstr ""
 
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/simlist.js:20
@@ -635,8 +643,16 @@ msgstr ""
 msgid "Mobile Network Code (requires MCC)."
 msgstr ""
 
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:282
+msgid "Mode"
+msgstr ""
+
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:284
+msgid "Model"
+msgstr ""
+
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:94
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:471
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:480
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/simlist.js:44
 #: applications/luci-app-wwand/root/usr/share/luci/menu.d/luci-app-wwand.json:3
 msgid "Modem"
@@ -646,7 +662,7 @@ msgstr ""
 msgid "Modem & SIM"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:505
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:514
 msgid "Modem Status"
 msgstr ""
 
@@ -778,7 +794,7 @@ msgstr ""
 msgid "None"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:289
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:298
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/netsel.js:126
 msgid "Operator"
 msgstr ""
@@ -890,7 +906,7 @@ msgstr ""
 msgid "Primary SIM set to slot %d (persisted)."
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:286
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:295
 msgid "Problem"
 msgstr ""
 
@@ -1046,7 +1062,7 @@ msgstr ""
 msgid "Reset modem now"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:499
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:508
 msgid "Reset peak"
 msgstr ""
 
@@ -1094,6 +1110,10 @@ msgstr ""
 msgid "Restrict the modem to certain radio access technologies."
 msgstr ""
 
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:287
+msgid "Revision"
+msgstr ""
+
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/settings.js:537
 msgid "Roaming"
 msgstr ""
@@ -1132,7 +1152,7 @@ msgstr ""
 msgid "SIM slot"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:331
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:340
 msgid "SIM slots"
 msgstr ""
 
@@ -1202,7 +1222,7 @@ msgstr ""
 msgid "Serial"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:318
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:327
 msgid "Serving cell"
 msgstr ""
 
@@ -1287,11 +1307,11 @@ msgstr ""
 msgid "Switch to SIM slot %d? The connection will drop and re-establish."
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:304
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:313
 msgid "TAC / Cell ID"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:299
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:308
 msgid "Technology"
 msgstr ""
 
@@ -1299,7 +1319,7 @@ msgstr ""
 msgid "Telemetry interval"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:294
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:303
 msgid "Temperature"
 msgstr ""
 
@@ -1487,12 +1507,12 @@ msgstr ""
 msgid "forbidden"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:283
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:285
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:292
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:294
 msgid "limited service"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:446
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:455
 msgid "loading…"
 msgstr ""
 
@@ -1506,9 +1526,9 @@ msgstr ""
 msgid "manual"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:375
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:396
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:418
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:384
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:405
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:427
 msgid "neighbour"
 msgstr ""
 
@@ -1561,7 +1581,7 @@ msgstr ""
 msgid "registered"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:283
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:292
 msgid "reject cause %d"
 msgstr ""
 
@@ -1596,7 +1616,7 @@ msgstr ""
 msgid "voice centric"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:484
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:493
 msgid "wwand is not running or no modem present yet."
 msgstr ""
 

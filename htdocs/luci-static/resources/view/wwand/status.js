@@ -276,6 +276,15 @@ function renderLive(name, modem) {
 			[ _('State'), modem.state || '?' ],
 			[ _('Registration'), fmt.regShort(reg) ]
 		];
+		/* modem identity: control mode (QMI/MBIM/NCM) + manufacturer / model /
+		   firmware, read via the backend's native path (QMI DMS, MBIM device
+		   caps, AT CGMI/CGMR) — absent fields are hidden */
+		srvRows.push([ _('Mode'), (modem.protocol || '?').toUpperCase() ]);
+		if (modem.manufacturer) srvRows.push([ _('Manufacturer'), modem.manufacturer ]);
+		if (modem.model)        srvRows.push([ _('Model'), modem.model ]);
+		if (modem.firmware)     srvRows.push([ _('Firmware'), modem.firmware ]);
+		if (modem.revision && modem.revision != modem.firmware)
+			srvRows.push([ _('Revision'), modem.revision ]);
 		/* why registration is stuck: EMM reject cause / limited service */
 		var rd = modem.registration_detail;
 		if (rd && (rd.reject_text || rd.reject_cause != null || rd.limited)) {
