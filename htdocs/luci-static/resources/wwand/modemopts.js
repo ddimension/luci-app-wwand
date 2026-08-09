@@ -261,7 +261,7 @@ return baseclass.extend({
 		o.rmempty = true;
 		o.value('', _('(none)'));
 		uci.sections('network', 'wwand_plmnlist').forEach(function(sec) {
-			o.value(sec['.name'], sec['.name'] + ' (' + ((sec.type == 'user') ? 'user' : 'NAS') + ')');
+			o.value(sec['.name'], sec['.name'] + ' (' + ((sec.type == 'user') ? 'user' : (sec.type == 'fplmn') ? 'FPLMN' : 'NAS') + ')');
 		});
 		bind(o);
 	},

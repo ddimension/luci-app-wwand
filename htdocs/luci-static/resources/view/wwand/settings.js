@@ -182,20 +182,23 @@ function plmnRatBox(e, key, label) {
 	if (e && e[key]) attrs.checked = 'checked';
 	return E('label', { 'style': 'margin-right:8px;white-space:nowrap' }, [ E('input', attrs), ' ' + label ]);
 }
-function plmnEditRow(e) {
+function plmnEditRow(e, noRat) {
 	e = e || {};
-	return E('tr', { 'class': 'tr' }, [
+	var cells = [
 		E('td', { 'class': 'td' }, E('input', { 'type': 'text', 'class': 'cbi-input-text',
 			'style': 'width:5em', 'data-f': 'mcc', 'maxlength': '3', 'placeholder': 'MCC', 'value': e.mcc || '' })),
 		E('td', { 'class': 'td' }, E('input', { 'type': 'text', 'class': 'cbi-input-text',
 			'style': 'width:5em', 'data-f': 'mnc', 'maxlength': '3', 'placeholder': 'MNC', 'value': e.mnc || '' })),
-		E('td', { 'class': 'td' }, [
+	];
+	/* the forbidden list (EF_FPLMN) has no per-RAT flags — just MCC/MNC */
+	if (!noRat)
+		cells.push(E('td', { 'class': 'td' }, [
 			plmnRatBox(e, 'gsm', '2G'), plmnRatBox(e, 'utran', '3G'),
-			plmnRatBox(e, 'eutran', '4G'), plmnRatBox(e, 'ngran', '5G') ]),
-		E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
-			'class': 'btn cbi-button cbi-button-remove',
-			'click': function(ev) { var tr = ev.target.parentNode.parentNode; tr.parentNode.removeChild(tr); } }, '✕')),
-	]);
+			plmnRatBox(e, 'eutran', '4G'), plmnRatBox(e, 'ngran', '5G') ]));
+	cells.push(E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
+		'class': 'btn cbi-button cbi-button-remove',
+		'click': function(ev) { var tr = ev.target.parentNode.parentNode; tr.parentNode.removeChild(tr); } }, '✕')));
+	return E('tr', { 'class': 'tr' }, cells);
 }
 function plmnEditor(modem, list) {
 	/* an empty or not-yet-provisioned list still gets one blank input row so the
@@ -303,7 +306,7 @@ return view.extend({
 
 			return Promise.all([
 				callGet(name),
-				callPlmn(name),
+				L.resolveDefault(callPlmn(name), {}),
 				L.resolveDefault(callSlots(name), {}),
 				L.resolveDefault(callEsim(name, 'profiles', 0, '', '', ''), {}),
 				L.resolveDefault(callEsim(name, 'backend', 0, '', '', ''), {}),
@@ -365,12 +368,14 @@ return view.extend({
 
 		var typeSel = E('select', { 'class': 'cbi-input-select', 'style': 'width:auto' }, [
 			E('option', { 'value': 'nas' }, _('NAS preferred networks')),
-			E('option', { 'value': 'user' }, _('User list (SIM EF 6F60)')) ]);
+			E('option', { 'value': 'user' }, _('User list (SIM EF 6F60)')),
+			E('option', { 'value': 'fplmn' }, _('Forbidden list (FPLMN, EF 6F7B)')) ]);
 
-		var mkHead = function() {
-			return E('tr', { 'class': 'tr table-titles' }, [
-				E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
-				E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]);
+		var mkHead = function(noRat) {
+			var th = [ E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC') ];
+			if (!noRat) th.push(E('th', { 'class': 'th' }, _('Access technologies')));
+			th.push(E('th', { 'class': 'th' }, ''));
+			return E('tr', { 'class': 'tr table-titles' }, th);
 		};
 		/* the editor table lives inside a container div and is REBUILT whole on
 		   each (re)seed — replacing a <table>'s <tr> children in place leaves the
@@ -378,8 +383,11 @@ return view.extend({
 		var tcontainer = E('div');
 		var tableOf = function() { return tcontainer.querySelector('table'); };
 		var seedRows = function(arr) {
+			var noRat = (typeSel.value == 'fplmn');
 			dom.content(tcontainer, E('table', { 'class': 'table' },
-				[ mkHead() ].concat((arr && arr.length ? arr : [ {} ]).map(plmnEditRow))));
+				[ mkHead(noRat) ].concat((arr && arr.length ? arr : [ {} ]).map(function(e) {
+					return plmnEditRow(e, noRat);
+				}))));
 		};
 		var collect = function() {
 			var out = [], trs = tcontainer.getElementsByTagName('tr');
@@ -400,9 +408,14 @@ return view.extend({
 		   always reflects what the modem holds right now (not the page-load cache). */
 		var loadFromModem = function() {
 			seedRows([]);   // clear immediately so a stale list never lingers
+			busy(_('reading…'));
 			return callPlmn(modem).then(function(r) {
+				busy('');
 				lists = r || {};
 				seedRows(lists[typeSel.value]);
+			}).catch(function(e) {
+				busy('');
+				ui.addNotification(null, E('p', {}, _('Could not read the %s list: %s').format(typeSel.value == 'nas' ? 'NAS' : typeSel.value == 'fplmn' ? 'FPLMN' : 'user', (e && e.message) || e)), 'warning');
 			});
 		};
 		seedRows(lists[typeSel.value]);
@@ -416,21 +429,27 @@ return view.extend({
 		};
 
 		/* write the edited list straight to the modem (not persisted) */
-		var writeNow = ui.createHandlerFn(this, function() {
+		var writeNow = ui.createHandlerFn(self, function() {
 			var entries = collect(), t = typeSel.value;
 			if (!confirm(_('Write %d record(s) to the modem\'s %s list now? (not saved to config)')
-					.format(entries.length, t == 'nas' ? 'NAS' : 'user')))
+					.format(entries.length, t == 'nas' ? 'NAS' : t == 'fplmn' ? 'FPLMN' : 'user')))
 				return;
 			busy(_('writing…'));
 			return callPlmnSet(modem, t, entries).then(function(r) {
 				busy('');
-				if (r && r.ok) ui.addNotification(null, E('p', {}, _('Written to the modem (%d record(s)).').format(r.written != null ? r.written : entries.length)), 'info');
-				else ui.addNotification(null, E('p', {}, _('Write failed: %s. The SIM/modem may reject it.').format((r && (r.note || r.error)) || '?')), 'warning');
+				if (r && r.ok) {
+					ui.addNotification(null, E('p', {}, _('Written to the modem (%d record(s)).').format(r.written != null ? r.written : entries.length)), 'info');
+					return loadFromModem();   // reflect what the modem now actually holds
+				}
+				ui.addNotification(null, E('p', {}, _('Write failed: %s. The SIM/modem may reject it.').format((r && (r.note || r.error)) || '?')), 'warning');
+			}).catch(function(e) {
+				busy('');
+				ui.addNotification(null, E('p', {}, _('Write failed: %s').format((e && e.message) || e)), 'warning');
 			});
 		});
 
 		/* save the edited list as a named wwand_plmnlist + attach it to this modem */
-		var saveAs = ui.createHandlerFn(this, function() {
+		var saveAs = ui.createHandlerFn(self, function() {
 			var entries = collect(), t = typeSel.value;
 			var name = (window.prompt(_('Save as list — name:'), curListName || (t + '-list')) || '').replace(/[^a-zA-Z0-9_]/g, '');
 			if (!name) return;
@@ -458,19 +477,19 @@ return view.extend({
 			savedRows.push(E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td', 'style': (n == curListName ? 'font-weight:600' : '') },
 					n + (n == curListName ? ' ✓' : '')),
-				E('td', { 'class': 'td' }, (t == 'nas' ? _('NAS') : _('User')) + ' · ' + cnt),
+				E('td', { 'class': 'td' }, (t == 'nas' ? _('NAS') : t == 'fplmn' ? _('Forbidden') : _('User')) + ' · ' + cnt),
 				E('td', { 'class': 'td', 'style': 'width:1%;white-space:nowrap' }, [
 					btn(_('Load'), '', function() {
 						typeSel.value = t;
 						seedRows(L.toArray(s.plmn).map(decodePlmnEntry));
 					}), ' ',
-					btn(_('Use here'), '', ui.createHandlerFn(this, function() {
+					btn(_('Use here'), '', ui.createHandlerFn(self, function() {
 						var sid = self.ensureModemSid(modem);
 						if (!sid) return;
 						uci.set('network', sid, 'plmn_list', n);
 						return uci.save().then(function() { return uci.apply(); }).then(function() { window.location.reload(); });
 					})), ' ',
-					btn('✕', 'cbi-button-remove', ui.createHandlerFn(this, function() {
+					btn('✕', 'cbi-button-remove', ui.createHandlerFn(self, function() {
 						if (!confirm(_('Delete the saved list "%s"?').format(n))) return;
 						uci.remove('network', n);
 						if (n == curListName && msid) uci.unset('network', msid, 'plmn_list');
@@ -482,7 +501,7 @@ return view.extend({
 
 		var restoreBtn = curListName ? E('div', { 'style': 'margin-top:6px' }, [
 			E('span', {}, _('This modem restores "%s" before every radio-on. ').format(curListName)),
-			btn(_('Restore now'), 'cbi-button-action', ui.createHandlerFn(this, function() {
+			btn(_('Restore now'), 'cbi-button-action', ui.createHandlerFn(self, function() {
 				busy(_('restoring…'));
 				return callPlmnRestore(modem).then(function(r) {
 					busy('');
@@ -496,7 +515,7 @@ return view.extend({
 		return E('div', { 'class': 'cbi-section' }, [
 			E('h4', {}, [ _('Preferred-PLMN editor — '), typeSel ]),
 			E('p', { 'style': 'color:#666;font-size:90%;margin:2px 0' },
-				_('NAS = the QMI preferred-networks list; User = the SIM EF 6F60 list (AT+CPOL). Editing here is temporary; save it as a list so the daemon re-applies it before every radio-on (survives modem reboots).')),
+				_('NAS = QMI preferred-networks list; User = SIM EF 6F60 (preference, not a lock); Forbidden = SIM EF 6F7B (FPLMN) — networks the modem must NOT use. Editing here is temporary; save it as a list so the daemon re-applies it before every radio-on (survives modem reboots).')),
 			tcontainer, editorTools,
 			E('h4', { 'style': 'margin-top:12px' }, _('Saved PLMN lists')),
 			savedRows.length ? E('table', { 'class': 'table' }, [

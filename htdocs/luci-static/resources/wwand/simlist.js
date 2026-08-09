@@ -81,7 +81,7 @@ return baseclass.extend({
 		o.rmempty = true;
 		o.value('', _('(none)'));
 		uci.sections('network', 'wwand_plmnlist').forEach(function(sec) {
-			var t = (sec.type == 'user') ? 'user' : 'NAS';
+			var t = (sec.type == 'user') ? 'user' : (sec.type == 'fplmn') ? 'FPLMN' : 'NAS';
 			o.value(sec['.name'], sec['.name'] + ' (' + t + ')');
 		});
 

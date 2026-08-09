@@ -155,6 +155,22 @@ function ratBadges(e) {
 	});
 	return out.length ? out : E('span', { 'style': 'color:#999' }, '—');
 }
+/* capability chips: each supported RAT slug from the daemon's caps.rats; the
+   IoT / RedCap / NTN variants (which QMI/MBIM cannot even name) are highlighted. */
+function capsBadges(caps) {
+	if (!caps || !caps.rats || !caps.rats.length)
+		return E('span', { 'style': 'color:#999' }, '—');
+	var labels = { 'gsm': '2G', 'gprs': '2G', 'edge': '2G', 'umts': '3G', 'hspa': '3G',
+		'td-scdma': '3G', 'cdma': 'CDMA', 'evdo': 'EVDO', 'lte': 'LTE', 'nr5g': '5G',
+		'lte-m': 'LTE-M', 'nb-iot': 'NB-IoT', 'ec-gsm-iot': 'EC-GSM-IoT', 'redcap': 'RedCap', 'ntn': 'NTN' };
+	var iot = { 'lte-m': 1, 'nb-iot': 1, 'ec-gsm-iot': 1, 'redcap': 1, 'ntn': 1 };
+	return caps.rats.map(function(s) {
+		return E('span', { 'style':
+			'display:inline-block;padding:0 5px;margin-right:3px;border-radius:3px;font-size:85%;' +
+			(iot[s] ? 'background:#f7e6ee;color:#524;font-weight:600' : 'background:#e6eef7;color:#245') },
+			labels[s] || s);
+	});
+}
 function renderNasList(nas) {
 	if (!nas || !nas.length)
 		return null;
@@ -321,6 +337,9 @@ function renderLive(name, modem) {
 		if (modem.firmware)     srvRows.push([ _('Firmware'), modem.firmware ]);
 		if (modem.revision && modem.revision != modem.firmware)
 			srvRows.push([ _('Revision'), modem.revision ]);
+		/* which RATs the modem supports (best-effort) — incl. IoT/RedCap/NTN */
+		if (modem.caps && modem.caps.rats && modem.caps.rats.length)
+			srvRows.push([ _('Capabilities'), E('span', {}, capsBadges(modem.caps)) ]);
 		/* why registration is stuck: EMM reject cause / limited service */
 		var rd = modem.registration_detail;
 		if (rd && (rd.reject_text || rd.reject_cause != null || rd.limited)) {
@@ -337,11 +356,15 @@ function renderLive(name, modem) {
 		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
 		if (cells.temperature && cells.temperature.celsius != null)
 			srvRows.push([ _('Temperature'), '%d °C'.format(cells.temperature.celsius) ]);
+		/* the daemon-identified fine access technology (NB-IoT/LTE-M/5G-SA/…, from
+		   AT where QMI/MBIM can't name it) wins; else the LTE/5G block derives it */
+		if (modem.rat)
+			srvRows.push([ _('Technology'), modem.rat ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
 			var tech = 'LTE' + ((fmt.hasSignal(nr.rsrp) || (cells.serving||{}).nr) ? ' + 5G NR' : '');
 			if (dsd && dsd.mode && dsd.mode != 'LTE') tech += ' · ' + dsd.mode;
-			srvRows.push([ _('Technology'), tech ]);
+			if (!modem.rat) srvRows.push([ _('Technology'), tech ]);
 			srvRows.push([ _('Band'), (svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);
 			srvRows.push([ _('Frequency'), (ef ? ef.mhz.toFixed(1)+' MHz' : '—') +
 				((svl && svl.bandwidth_mhz) ? ' · ' + svl.bandwidth_mhz + ' MHz' : '') ]);

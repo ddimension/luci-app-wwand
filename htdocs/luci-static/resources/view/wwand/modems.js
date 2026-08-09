@@ -140,6 +140,28 @@ return view.extend({
 		col('_reg', _('Registration'), function(sid) { return fmtReg(status[sid]); });
 		col('_sig', _('Signal'), function(sid) { return fmtSignal(signals[sid]); });
 
+		/* the currently-used dial params + PIN for a modem, reconstructed from
+		   UCI (the effective config is resolved only at dial time and is not on
+		   the status bus): PIN from the wwand_modem default, APN/auth/credentials
+		   from the first interface that points at this modem. Feeds the one-click
+		   "Save SIM" (per-ICCID override) button below. */
+		var simParamsFrom = function(sid) {
+			var out = {};
+			var pin = uci.get('network', sid, 'pincode');
+			if (pin) out.pincode = pin;
+			var iface = null;
+			uci.sections('network', 'interface', function(s) {
+				if (!iface && s.modem == sid &&
+				    (s.proto == 'wwand' || s.proto == 'qmi' || s.proto == 'mbim' || s.proto == 'ncm'))
+					iface = s;
+			});
+			if (iface)
+				[ 'apn', 'auth', 'username', 'password' ].forEach(function(k) {
+					if (iface[k] != null && iface[k] !== '') out[k] = iface[k];
+				});
+			return out;
+		};
+
 		/* row actions: Config (the native modal editor) + Status/Tools jumps */
 		s.renderRowActions = function(section_id) {
 			var td = form.GridSection.prototype.renderRowActions.call(this, section_id, _('Config'));
@@ -174,13 +196,43 @@ return view.extend({
 				}),
 			}, _('Reboot'));
 
+			/* Save SIM: capture this card's live ICCID + the modem's current
+			   PIN/APN/auth into a per-ICCID wwand_sim override (the list below),
+			   so a swapped-in card keeps its own PIN/APN. Only when a card with a
+			   readable ICCID is present, and refused if one already exists. */
+			var mi = status[section_id] || {};
+			var liveIccid = mi.iccid ? ('' + mi.iccid).replace(/[^0-9]+$/, '') : '';
+			var saveSim = liveIccid ? E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'title': _('Create a per-ICCID SIM override for the inserted card (ICCID %s), pre-filled with the modem\'s current PIN and the interface APN/auth. Edit it in the SIMs list below, then Save & Apply.').format(liveIccid),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					var dup = null;
+					uci.sections('network', 'wwand_sim', function(sc) {
+						var ic = ('' + (sc.iccid || '')).replace(/[^0-9]+$/, '');
+						if (ic && ic == liveIccid) dup = sc['.name'];
+					});
+					if (dup) {
+						ui.addNotification(null, E('p', {}, _('A SIM override for ICCID %s already exists (section %s) — edit it in the SIMs list below.').format(liveIccid, dup)), 'warning');
+						return;
+					}
+					var p = simParamsFrom(section_id);
+					var nsid = uci.add('network', 'wwand_sim');
+					uci.set('network', nsid, 'iccid', liveIccid);
+					Object.keys(p).forEach(function(k) { uci.set('network', nsid, k, p[k]); });
+					ui.addNotification(null, E('p', {}, _('Created SIM override for ICCID %s — review it in the SIMs list below, then Save & Apply.').format(liveIccid)), 'info');
+					return m.save(null, true);
+				}),
+			}, _('Save SIM')) : null;
+
 			var extra = [
 				jump(_('Status'), _('Live status page (signal, cells, connection) for this modem'),
 					L.url('admin/status/wwand')),
 				jump(_('Tools'), _('Band, operator, SIM, eSIM and SMS tools for this modem'),
 					L.url('admin/network/wwand-tools')),
-				reboot,
 			];
+			if (saveSim) extra.push(saveSim);
+			extra.push(reboot);
 
 			/* between Config and the trailing Delete button when present */
 			extra.forEach(function(b) {
