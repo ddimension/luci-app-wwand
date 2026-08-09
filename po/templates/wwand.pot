@@ -50,7 +50,7 @@ msgstr ""
 msgid "A single 5G SA cell as \"pci:arfcn:scs:band\"."
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:313
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:314
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/simlist.js:40
 msgid "APN"
 msgstr ""
@@ -263,7 +263,7 @@ msgstr ""
 
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:124
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:221
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:312
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:313
 msgid "Device"
 msgstr ""
 
@@ -415,7 +415,7 @@ msgstr ""
 msgid "Installing profile"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:310
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:311
 #: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/status.js:96
 msgid "Interface"
 msgstr ""
@@ -424,13 +424,15 @@ msgstr ""
 msgid "Interfaces"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:306
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:307
 msgid ""
-"Interfaces still using a stock cellular protocol (qmi / mbim / ncm) that "
-"wwand does not manage yet. Select the ones to migrate and press \"Migrate "
-"selected\": each is converted in place to proto wwand (its name, firewall "
-"zone and IP settings are kept) and a wwand modem section is created and "
-"linked."
+"Interfaces still using a stock cellular protocol (qmi / mbim / ncm / "
+"modemmanager) that wwand does not manage yet. Select the ones to migrate and "
+"press \"Migrate selected\": each is converted in place to proto wwand (its "
+"name, firewall zone and IP settings are kept) and a wwand modem section is "
+"created and linked. When migrating a ModemManager interface, stop and remove "
+"the ModemManager service afterwards — it would otherwise keep claiming the "
+"modem's control port."
 msgstr ""
 
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/modemopts.js:169
@@ -568,26 +570,26 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:305
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:306
 msgid "Migratable interfaces"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:290
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:291
 msgid ""
 "Migrate %d interface(s) to proto wwand? Each is converted in place — its "
 "name, firewall zone and IP settings are kept — and wwand takes over managing "
 "it."
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:302
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:303
 msgid "Migrate selected"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:295
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:296
 msgid "Migrated %d interface(s); reloading…"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:299
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:300
 msgid "Migration failed: %s"
 msgstr ""
 
@@ -710,7 +712,7 @@ msgstr ""
 msgid "No change — the modem already runs this selection."
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:288
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:289
 msgid "No interface selected."
 msgstr ""
 
@@ -872,7 +874,7 @@ msgid ""
 "establishes in a few seconds."
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:311
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:312
 msgid "Protocol"
 msgstr ""
 
@@ -1521,7 +1523,7 @@ msgstr ""
 msgid "searching…"
 msgstr ""
 
-#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:299
+#: applications/luci-app-wwand/htdocs/luci-static/resources/view/wwand/modems.js:300
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/esim.js:103
 #: applications/luci-app-wwand/htdocs/luci-static/resources/wwand/netsel.js:38
 msgid "unknown"

@@ -257,7 +257,8 @@ return view.extend({
 		   reusing the daemon's tested migrate engine over ubus. */
 		var legacy = [];
 		uci.sections('network', 'interface', function(s) {
-			if ((s.proto == 'qmi' || s.proto == 'mbim' || s.proto == 'ncm') && !s.modem)
+			if ((s.proto == 'qmi' || s.proto == 'mbim' || s.proto == 'ncm' ||
+			     s.proto == 'modemmanager') && !s.modem)
 				legacy.push(s);
 		});
 
@@ -303,7 +304,7 @@ return view.extend({
 
 			migration = E('div', { 'class': 'cbi-section' }, [
 				E('h3', {}, _('Migratable interfaces')),
-				E('p', {}, _('Interfaces still using a stock cellular protocol (qmi / mbim / ncm) that wwand does not manage yet. Select the ones to migrate and press "Migrate selected": each is converted in place to proto wwand (its name, firewall zone and IP settings are kept) and a wwand modem section is created and linked.')),
+				E('p', {}, _('Interfaces still using a stock cellular protocol (qmi / mbim / ncm / modemmanager) that wwand does not manage yet. Select the ones to migrate and press "Migrate selected": each is converted in place to proto wwand (its name, firewall zone and IP settings are kept) and a wwand modem section is created and linked. When migrating a ModemManager interface, stop and remove the ModemManager service afterwards — it would otherwise keep claiming the modem\'s control port.')),
 				E('table', { 'class': 'table' },
 					[ E('tr', { 'class': 'tr table-titles' }, [
 						E('th', { 'class': 'th' }, ''),
