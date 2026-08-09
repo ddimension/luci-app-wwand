@@ -68,20 +68,35 @@ return baseclass.extend({
 				dom.content(results, E('em', {}, _('No operators found.')));
 				return;
 			}
-			/* a scan lists the same PLMN once per supported RAT (2G/3G/4G/5G) —
-			   collapse to one row per operator, keeping the strongest status */
+			/* a scan may list the same PLMN once per supported RAT (2G/3G/4G/5G) —
+			   collapse to one row per operator, keeping the strongest status and
+			   UNIONing the radio access technologies the scan reported for it */
 			var rank = { current: 3, available: 2, forbidden: 1 };
+			var RAT_ORDER = { 'NR5G': 0, 'LTE': 1, 'TD-SCDMA': 2, 'UMTS': 3, 'GSM': 4, 'EVDO': 5, 'CDMA': 6 };
 			var byPlmn = {}, order = [];
 			ops.forEach(function(op) {
 				var key = op.mcc + '/' + op.mnc;
 				var prev = byPlmn[key];
-				if (!prev) { byPlmn[key] = op; order.push(key); }
-				else if ((rank[op.status] || 0) > (rank[prev.status] || 0)) byPlmn[key] = op;
+				if (!prev) {
+					op._rats = {};
+					(op.rats || []).forEach(function(r) { op._rats[r] = true; });
+					byPlmn[key] = op; order.push(key);
+				} else {
+					(op.rats || []).forEach(function(r) { prev._rats[r] = true; });
+					if (op.roaming) prev.roaming = true;
+					if ((rank[op.status] || 0) > (rank[prev.status] || 0)) {
+						op._rats = prev._rats; op.roaming = prev.roaming || op.roaming;
+						byPlmn[key] = op;
+					}
+				}
 			});
 			ops = order.map(function(k) { return byPlmn[k]; });
 			var rows = ops.map(function(op) {
 				var forbidden = (op.status == 'forbidden');
 				var current = (op.status == 'current');
+				var rats = Object.keys(op._rats || {}).sort(function(a, b) {
+					return (RAT_ORDER[a] == null ? 9 : RAT_ORDER[a]) - (RAT_ORDER[b] == null ? 9 : RAT_ORDER[b]);
+				});
 				var act;
 				if (forbidden)
 					act = E('span', { 'style': 'color:#999' }, '—');
@@ -98,7 +113,11 @@ return baseclass.extend({
 					'style': forbidden ? 'opacity:.5' : (current ? 'font-weight:600' : '') }, [
 					E('td', { 'class': 'td' }, op.name || _('(unnamed)')),
 					E('td', { 'class': 'td' }, op.mcc + '/' + fmt.fmtMnc(op.mnc)),
-					E('td', { 'class': 'td' }, STATUS_LABEL[op.status] || op.status || ''),
+					E('td', { 'class': 'td' }, rats.length ? rats.join(', ') : '—'),
+					E('td', { 'class': 'td' }, [
+						STATUS_LABEL[op.status] || op.status || '',
+						op.roaming ? E('span', { 'style': 'color:#da3;margin-left:4px', 'title': _('roaming') }, '✈') : '',
+					]),
 					E('td', { 'class': 'td', 'style': 'width:1%' }, act),
 				]);
 			});
@@ -106,6 +125,7 @@ return baseclass.extend({
 				E('tr', { 'class': 'tr table-titles' }, [
 					E('th', { 'class': 'th' }, _('Operator')),
 					E('th', { 'class': 'th' }, _('PLMN')),
+					E('th', { 'class': 'th' }, _('RAT')),
 					E('th', { 'class': 'th' }, _('Status')),
 					E('th', { 'class': 'th' }, ''),
 				]),
