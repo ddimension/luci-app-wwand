@@ -4,6 +4,7 @@
 'require form';
 'require ui';
 'require wwand.rpc as wrpc';
+'require wwand.modemsid as modemsid';
 
 /* Shared wwand_modem option/tab definitions, used by BOTH surfaces:
    - the interface proto handler (protocol/wwand.js), inline WireGuard-style,
@@ -129,7 +130,12 @@ return baseclass.extend({
 		o.inputstyle = 'remove';
 		o.modelabel = false;
 		o.onclick = function(ev, section_id) {
-			return callModemReset(section_id).then(function(res) {
+			// this module is shared: on the Modems page `section_id` IS the
+			// wwand_modem name, but on the interface page it's the interface
+			// section — resolve to the modem it references (falls back to
+			// section_id, which is already the modem name on the Modems page).
+			var modem = modemsid.modemSid(section_id) || section_id;
+			return callModemReset(modem).then(function(res) {
 				if (res && (res.ok || res.resetting))
 					ui.addNotification(null, E('p', {}, _('Modem reset triggered (%s).').format(res.action || '?')), 'info');
 				else
