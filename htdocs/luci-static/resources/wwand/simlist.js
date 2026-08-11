@@ -33,7 +33,8 @@ return baseclass.extend({
 		if (opts.prefillIccid)
 			o.default = opts.prefillIccid;
 
-		o = s.option(form.Value, 'pincode', _('PIN'));
+		o = s.option(form.Value, 'pincode', _('PIN'),
+			_('SIM PIN for this card. Overrides the modem\'s default PIN; wwand never retries a PIN when only one attempt is left.'));
 		o.datatype = 'and(uinteger,minlength(4),maxlength(8))';
 		o.password = true;
 
@@ -47,7 +48,8 @@ return baseclass.extend({
 		uci.sections('network', 'wwand_modem').forEach(function(sec) { o.value(sec['.name'], sec['.name']); });
 
 		/* modal-only detail: auth + credentials + PDP override */
-		o = s.option(form.ListValue, 'auth', _('Authentication type'));
+		o = s.option(form.ListValue, 'auth', _('Authentication type'),
+			_('APN authentication for this card (only needed when the operator requires a username/password).'));
 		o.modalonly = true;
 		o.default = 'none';
 		o.value('none', _('None'));
@@ -55,16 +57,19 @@ return baseclass.extend({
 		o.value('chap', 'CHAP');
 		o.value('both', 'PAP/CHAP');
 
-		o = s.option(form.Value, 'username', _('PAP/CHAP username'));
+		o = s.option(form.Value, 'username', _('PAP/CHAP username'),
+			_('Username for the APN authentication.'));
 		o.modalonly = true;
 		o.depends('auth', 'pap'); o.depends('auth', 'chap'); o.depends('auth', 'both');
 
-		o = s.option(form.Value, 'password', _('PAP/CHAP password'));
+		o = s.option(form.Value, 'password', _('PAP/CHAP password'),
+			_('Password for the APN authentication.'));
 		o.modalonly = true;
 		o.password = true;
 		o.depends('auth', 'pap'); o.depends('auth', 'chap'); o.depends('auth', 'both');
 
-		o = s.option(form.ListValue, 'pdp_type', _('PDP type'));
+		o = s.option(form.ListValue, 'pdp_type', _('PDP type'),
+			_('IP version(s) requested for this card\'s data session, overriding the interface setting.'));
 		o.modalonly = true;
 		o.value('', _('(interface default)'));
 		o.value('ipv4v6', _('IPv4 + IPv6'));

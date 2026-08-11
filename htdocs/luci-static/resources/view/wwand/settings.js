@@ -9,6 +9,7 @@
 'require wwand.modemsid as modemsid';
 'require wwand.esim as esim';
 'require wwand.netsel as netsel';
+'require wwand.mccmnc as mccmnc';
 
 // wwand modem settings editor. All values go through the daemon's now
 // protocol-neutral ubus methods (QMI NAS, MBIM QMI-over-MBIM passthrough, or an
@@ -59,8 +60,20 @@ function notifyDeferred(modem) {
 // (`apply: 'modem_reset'`). Surface both.
 function notifyEsimApply(modem, res) {
 	if (res && res.error) {
+		/* SGP.22 test-profile rule: while a test profile is enabled the eUICC
+		   only re-enables the profile that was active before it — enabling a
+		   never-enabled profile fails with "wrongProfileReenabling" (lpac:
+		   "wrong profile reenabling"). Turn that into an actionable hint. */
+		var lpacLog = (res.detail && res.detail.log) || '';
+		if (/wrong ?profile ?reenabling/i.test(lpacLog)) {
+			ui.addNotification(null, E('div', {}, [
+				E('p', {}, _('The eUICC refused to enable this profile: while a test profile is enabled, only the profile that was active before it can be re-enabled (SGP.22 "wrongProfileReenabling").')),
+				E('p', {}, _('Disable the currently enabled (test) profile first, then enable this profile.')),
+			]), 'warning');
+			return;
+		}
 		ui.addNotification(null, E('p',
-			_('Profile switch failed: %s').format(res.error)), 'error');
+			_('Profile switch failed: %s').format((res.detail && res.detail.error) || res.error)), 'error');
 		return;
 	}
 	if (res && res.apply == 'modem_reset')
@@ -184,11 +197,25 @@ function plmnRatBox(e, key, label) {
 }
 function plmnEditRow(e, noRat) {
 	e = e || {};
+	var mccIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
+		'style': 'width:5em', 'data-f': 'mcc', 'maxlength': '3', 'placeholder': 'MCC', 'value': e.mcc || '' });
+	var mncIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
+		'style': 'width:5em', 'data-f': 'mnc', 'maxlength': '3', 'placeholder': 'MNC', 'value': e.mnc || '' });
+	/* live operator-name resolution from the bundled MCC/MNC table, updated
+	   while typing so a typo is caught before writing to the SIM */
+	var nameEl = E('td', { 'class': 'td', 'style': 'color:#666' },
+		mccmnc.describe(e.mcc, e.mnc) || '');
+	var upd = function() {
+		nameEl.textContent = mccmnc.describe(
+			(mccIn.value || '').replace(/\D/g, ''),
+			(mncIn.value || '').replace(/\D/g, '')) || '';
+	};
+	mccIn.addEventListener('input', upd);
+	mncIn.addEventListener('input', upd);
 	var cells = [
-		E('td', { 'class': 'td' }, E('input', { 'type': 'text', 'class': 'cbi-input-text',
-			'style': 'width:5em', 'data-f': 'mcc', 'maxlength': '3', 'placeholder': 'MCC', 'value': e.mcc || '' })),
-		E('td', { 'class': 'td' }, E('input', { 'type': 'text', 'class': 'cbi-input-text',
-			'style': 'width:5em', 'data-f': 'mnc', 'maxlength': '3', 'placeholder': 'MNC', 'value': e.mnc || '' })),
+		E('td', { 'class': 'td' }, mccIn),
+		E('td', { 'class': 'td' }, mncIn),
+		nameEl,
 	];
 	/* the forbidden list (EF_FPLMN) has no per-RAT flags — just MCC/MNC */
 	if (!noRat)
@@ -208,6 +235,7 @@ function plmnEditor(modem, list) {
 	var body = E('table', { 'class': 'table' }, [
 		E('tr', { 'class': 'tr table-titles' }, [
 			E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
+			E('th', { 'class': 'th' }, _('Operator')),
 			E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]),
 	].concat(seedRows));
 
@@ -272,6 +300,7 @@ function plmnTable(title, list, absentHint) {
 			.map(function(k) { return k.toUpperCase() }).join(' ');
 		return E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td' }, e.mcc + '/' + e.mnc),
+			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, e.mnc) || '—'),
 			E('td', { 'class': 'td' }, rats),
 		]);
 	});
@@ -281,6 +310,7 @@ function plmnTable(title, list, absentHint) {
 		E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr table-titles' }, [
 				E('th', { 'class': 'th' }, 'PLMN'),
+				E('th', { 'class': 'th' }, _('Operator')),
 				E('th', { 'class': 'th' }, _('Access technologies')),
 			]),
 		].concat(rows)),
@@ -372,7 +402,8 @@ return view.extend({
 			E('option', { 'value': 'fplmn' }, _('Forbidden list (FPLMN, EF 6F7B)')) ]);
 
 		var mkHead = function(noRat) {
-			var th = [ E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC') ];
+			var th = [ E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
+				E('th', { 'class': 'th' }, _('Operator')) ];
 			if (!noRat) th.push(E('th', { 'class': 'th' }, _('Access technologies')));
 			th.push(E('th', { 'class': 'th' }, ''));
 			return E('tr', { 'class': 'tr table-titles' }, th);
