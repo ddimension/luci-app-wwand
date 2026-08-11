@@ -309,25 +309,37 @@ return view.extend({
 							E('td', { 'class': 'td' },
 								E('button', { 'class': 'btn cbi-button cbi-button-apply',
 									'click': function(ev) {
-										/* stage the section in the save CALLBACK:
-										   Map.save() parses first, and parse()
-										   strips staged options of sections without
-										   a rendered row (isActive is a DOM check) —
-										   an uci.add/set done before m.save() loses
-										   the path/device binding */
-										ev.target.disabled = true;
-										ev.target.textContent = _('added — Save & Apply');
-										return m.save(function() {
-											var name = nextName();
-											uci.add('network', 'wwand_modem', name);
-											/* bind by stable sysfs path (survives
-											   USB enumeration order); device name
-											   only as last resort */
-											if (path)
-												uci.set('network', name, 'path', path);
-											else
-												uci.set('network', name, 'device', dev);
-										}, true);
+										/* Persist immediately. Staging the new
+										   section via m.save() lets the page's next
+										   parse() strip its options — parse() drops
+										   staged options of sections without a
+										   rendered row (isActive is a DOM check) — so
+										   the path/device binding is lost on the
+										   subsequent Save & Apply. add/set + save() +
+										   apply() writes it straight to config,
+										   bypassing the Map parse cycle. */
+										var btn = ev.target;
+										btn.disabled = true;
+										btn.textContent = _('configuring…');
+										var name = nextName();
+										uci.add('network', 'wwand_modem', name);
+										/* bind by stable sysfs path (survives
+										   USB enumeration order); device name
+										   only as last resort */
+										if (path)
+											uci.set('network', name, 'path', path);
+										else
+											uci.set('network', name, 'device', dev);
+										return uci.save().then(function() {
+											return uci.apply();
+										}).then(function() {
+											location.reload();
+										}).catch(function(e) {
+											btn.disabled = false;
+											btn.textContent = _('Configure');
+											ui.addNotification(null, E('p', {},
+												_('Could not configure modem: %s').format(e)));
+										});
 									} }, _('Configure'))),
 						]);
 					}))),
