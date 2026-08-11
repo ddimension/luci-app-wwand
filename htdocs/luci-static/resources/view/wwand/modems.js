@@ -237,11 +237,14 @@ return view.extend({
 						return;
 					}
 					var p = simParamsFrom(section_id);
-					var nsid = uci.add('network', 'wwand_sim');
-					uci.set('network', nsid, 'iccid', liveIccid);
-					Object.keys(p).forEach(function(k) { uci.set('network', nsid, k, p[k]); });
 					ui.addNotification(null, E('p', {}, _('Created SIM override for ICCID %s — review it in the SIMs list below, then Save & Apply.').format(liveIccid)), 'info');
-					return m.save(null, true);
+					/* stage in the save callback — see the Configure button:
+					   parse() would strip options of a not-yet-rendered row */
+					return m.save(function() {
+						var nsid = uci.add('network', 'wwand_sim');
+						uci.set('network', nsid, 'iccid', liveIccid);
+						Object.keys(p).forEach(function(k) { uci.set('network', nsid, k, p[k]); });
+					}, true);
 				}),
 			}, _('Save SIM')) : null;
 
@@ -306,18 +309,25 @@ return view.extend({
 							E('td', { 'class': 'td' },
 								E('button', { 'class': 'btn cbi-button cbi-button-apply',
 									'click': function(ev) {
-										var name = nextName();
-										uci.add('network', 'wwand_modem', name);
-										/* bind by stable sysfs path (survives
-										   USB enumeration order); device name
-										   only as last resort */
-										if (path)
-											uci.set('network', name, 'path', path);
-										else
-											uci.set('network', name, 'device', dev);
+										/* stage the section in the save CALLBACK:
+										   Map.save() parses first, and parse()
+										   strips staged options of sections without
+										   a rendered row (isActive is a DOM check) —
+										   an uci.add/set done before m.save() loses
+										   the path/device binding */
 										ev.target.disabled = true;
 										ev.target.textContent = _('added — Save & Apply');
-										return m.save(null, true);
+										return m.save(function() {
+											var name = nextName();
+											uci.add('network', 'wwand_modem', name);
+											/* bind by stable sysfs path (survives
+											   USB enumeration order); device name
+											   only as last resort */
+											if (path)
+												uci.set('network', name, 'path', path);
+											else
+												uci.set('network', name, 'device', dev);
+										}, true);
 									} }, _('Configure'))),
 						]);
 					}))),
