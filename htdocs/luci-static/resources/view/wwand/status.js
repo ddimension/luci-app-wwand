@@ -6,6 +6,7 @@
 'require wwand.bands as bands';
 'require wwand.rpc as wrpc';
 'require wwand.format as fmt';
+'require wwand.mccmnc as mccmnc';
 
 /* ubus declarations live in the shared wwand.rpc module */
 var callStatus = wrpc.status;
@@ -36,11 +37,22 @@ var renderWarnings = fmt.renderWarnings;
    same columns in the same positions, so CA cells and neighbours can be compared
    at a glance. Each source fills the fields it has; the rest show "—". */
 /* translatable headers are marked with literal _() so the i18n scanner picks
-   them up (a runtime _(h) on a variable is invisible to it); acronyms stay as-is */
-var CELL_HEAD = [ _('Type'), _('Band'), 'EARFCN', _('Frequency'), _('Bandwidth'), 'PCI', 'RSRP', 'RSRQ', _('Lock') ];
+   them up (a runtime _(h) on a variable is invisible to it); acronyms stay as-is
+   and carry a mouse-over explanation instead */
+var CELL_HEAD = [
+	[ _('Type'), null ],
+	[ _('Band'), _('3GPP frequency band of the cell (B… = LTE, n… = 5G NR)') ],
+	[ 'EARFCN', _('E-UTRA Absolute Radio Frequency Channel Number — the LTE (or, in the 5G tables, NR-ARFCN) channel number of the carrier') ],
+	[ _('Frequency'), _('Downlink centre frequency derived from the channel number') ],
+	[ _('Bandwidth'), _('Channel bandwidth of the carrier') ],
+	[ 'PCI', _('Physical Cell ID — identifies the cell on this frequency; EARFCN:PCI addresses one specific cell') ],
+	[ 'RSRP', _('Reference Signal Received Power — signal strength of this cell in dBm (closer to 0 = stronger; -80 excellent, -110 weak)') ],
+	[ 'RSRQ', _('Reference Signal Received Quality in dB (higher = better; -10 good, -15 poor)') ],
+	[ _('Lock'), _('EARFCN:PCI value to copy into the cell-lock field of the modem settings') ],
+];
 function cellHead() {
 	return E('tr', { 'class': 'tr table-titles' }, CELL_HEAD.map(function(h) {
-		return E('th', { 'class': 'th' }, h);
+		return E('th', { 'class': 'th' }, h[1] ? fmt.term(h[0], h[1]) : h[0]);
 	}));
 }
 function cd(v) { return E('td', { 'class': 'td' }, (v == null || v === '') ? '—' : ('' + v)); }
@@ -179,6 +191,7 @@ function renderNasList(nas) {
 		return E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td', 'style': 'color:#888;width:2em' }, '' + (i + 1)),
 			E('td', { 'class': 'td', 'style': 'font-weight:600' }, e.mcc + '/' + fmt.fmtMnc(e.mnc)),
+			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, fmt.fmtMnc(e.mnc)) || '—'),
 			E('td', { 'class': 'td' }, ratBadges(e)),
 		]);
 	});
@@ -187,7 +200,8 @@ function renderNasList(nas) {
 		E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr table-titles' }, [
 				E('th', { 'class': 'th', 'style': 'width:2em' }, '#'),
-				E('th', { 'class': 'th' }, _('PLMN')),
+				E('th', { 'class': 'th' }, fmt.term(_('PLMN'), _('Public Land Mobile Network code: MCC (country) / MNC (network)'))),
+				E('th', { 'class': 'th' }, _('Operator')),
 				E('th', { 'class': 'th' }, _('Access technologies')) ]),
 		].concat(rows)),
 	]);
@@ -270,14 +284,34 @@ function renderDatapath(dp) {
 	]);
 }
 
+/* Heavy RPCs (SIM-EF reads, UIM slot status, cell scans) don't belong in the
+   1 s poll: cache each per modem and refresh it in the background at its own
+   cadence. A tick always resolves immediately with the latest known value — a
+   modem op that blocks (eSIM management, UIM busy, init phases) can delay ONE
+   background refresh but can no longer stall the page. */
+var slowCache = {};
+function cachedCall(name, key, ttl_s, fn) {
+	var c = slowCache[name] = slowCache[name] || {};
+	var e = c[key] = c[key] || { t: 0, v: null, busy: false };
+	if (!e.busy && (Date.now() - e.t) >= ttl_s * 1000) {
+		e.busy = true;
+		var p = L.resolveDefault(fn(), {}).then(function(v) {
+			e.v = v; e.t = Date.now(); e.busy = false; return v;
+		});
+		if (e.v == null)
+			return p;   /* nothing cached yet: the first paint waits */
+	}
+	return Promise.resolve(e.v || {});
+}
+
 function renderLive(name, modem) {
 	return Promise.all([
-		L.resolveDefault(callSignal(name), {}),
-		L.resolveDefault(callCells(name), {}),
+		L.resolveDefault(callSignal(name), {}),   /* every tick: antenna aiming */
+		cachedCall(name, 'cells', 3, function() { return callCells(name); }),
 		L.resolveDefault(callContexts(), {}),
-		L.resolveDefault(callSlots(name), {}),
-		L.resolveDefault(callDatapath(name), {}),
-		L.resolveDefault(callPlmn(name), {})
+		cachedCall(name, 'slots', 15, function() { return callSlots(name); }),
+		cachedCall(name, 'datapath', 5, function() { return callDatapath(name); }),
+		cachedCall(name, 'plmn', 60, function() { return callPlmn(name); })
 	]).then(function(res) {
 		var sig = res[0] || {}, cells = (res[1] || {}).cells || {};
 		var allCtx = res[2] || {};
@@ -297,11 +331,14 @@ function renderLive(name, modem) {
 		var cols = [];
 
 		/* --- signal panel (alignment) --- */
+		var RSRP_DESC = _('Reference Signal Received Power — signal strength in dBm; closer to 0 is better (-80 excellent, -100 fair, -110 weak)');
+		var RSRQ_DESC = _('Reference Signal Received Quality in dB — how clean the signal is (-10 good, -15 poor)');
+		var SINR_DESC = _('Signal-to-Interference-plus-Noise Ratio in dB — higher is better (20 excellent, 13 good, 0 marginal)');
 		var sigRows = [];
 		if (fmt.hasSignal(lte.rsrp)) {
-			sigRows.push(bar(_('LTE RSRP'), lte.rsrp, 'dBm', -120, -70, -90, -105));
-			sigRows.push(bar(_('LTE RSRQ'), lte.rsrq, 'dB', -20, -3, -10, -15));
-			sigRows.push(bar(_('LTE SINR'), (lte.snr/10), 'dB', -5, 30, 13, 0));
+			sigRows.push(bar(fmt.term('LTE RSRP', RSRP_DESC), lte.rsrp, 'dBm', -120, -70, -90, -105));
+			sigRows.push(bar(fmt.term('LTE RSRQ', RSRQ_DESC), lte.rsrq, 'dB', -20, -3, -10, -15));
+			sigRows.push(bar(fmt.term('LTE SINR', SINR_DESC), (lte.snr/10), 'dB', -5, 30, 13, 0));
 			var pk = trackPeak(name, 'rsrp', lte.rsrp);
 			var pkq = trackPeak(name, 'sinr', lte.snr/10);
 			sigRows.push(E('div', { 'style': 'margin-top:6px;color:#666;font-size:90%' },
@@ -309,8 +346,8 @@ function renderLive(name, modem) {
 		}
 		if (fmt.hasSignal(nr.rsrp)) {
 			sigRows.push(E('hr'));
-			sigRows.push(bar(_('5G RSRP'), nr.rsrp, 'dBm', -120, -70, -90, -105));
-			sigRows.push(bar(_('5G SINR'), (nr.snr/10), 'dB', -5, 30, 13, 0));
+			sigRows.push(bar(fmt.term('5G RSRP', RSRP_DESC), nr.rsrp, 'dBm', -120, -70, -90, -105));
+			sigRows.push(bar(fmt.term('5G SINR', SINR_DESC), (nr.snr/10), 'dB', -5, 30, 13, 0));
 		}
 		if (!sigRows.length)
 			sigRows.push(E('em', {}, _('no signal (modem not registered)')));
@@ -320,26 +357,56 @@ function renderLive(name, modem) {
 			E('div', {}, sigRows)
 		]));
 
-		/* --- serving/registration panel --- */
+		var term = fmt.term;
+
+		/* --- modem & SIM panel: device identity + the active SIM --- */
+		var mdmRows = [
+			[ term(_('State'), _('wwand state for this modem: READY = usable, REGISTERING = searching for a network, WAITING_MODEM/ABSENT = control device not present, SIM_BLOCKED = PIN/PUK required')),
+				modem.state || '?' ],
+			[ term(_('Mode'), _('Control protocol wwand uses to drive this modem: QMI (Qualcomm native), MBIM (the USB standard) or NCM (AT commands with an ethernet-style data port)')),
+				(modem.protocol || '?').toUpperCase() ],
+		];
+		/* modem identity read via the backend's native path (QMI DMS, MBIM
+		   device caps, AT CGMI/CGMR) — absent fields are hidden */
+		if (modem.manufacturer) mdmRows.push([ _('Manufacturer'), modem.manufacturer ]);
+		if (modem.model)        mdmRows.push([ _('Model'), modem.model ]);
+		if (modem.firmware)
+			mdmRows.push([ term(_('Firmware'), _('Firmware version reported by the modem — relevant when comparing behaviour or looking for carrier-specific builds')), modem.firmware ]);
+		if (modem.revision && modem.revision != modem.firmware)
+			mdmRows.push([ _('Revision'), modem.revision ]);
+		/* which RATs the modem supports (best-effort) — incl. IoT/RedCap/NTN */
+		if (modem.caps && modem.caps.rats && modem.caps.rats.length)
+			mdmRows.push([ term(_('Capabilities'), _('Radio access technologies this modem hardware reports to support')),
+				E('span', {}, capsBadges(modem.caps)) ]);
+		if (cells.temperature && cells.temperature.celsius != null)
+			mdmRows.push([ term(_('Temperature'), _('Modem baseband temperature — sustained values above ~70 °C usually mean the module is throttling')),
+				'%d °C'.format(cells.temperature.celsius) ]);
+		if (modem.iccid)
+			mdmRows.push([ term('ICCID', _('Integrated Circuit Card ID — serial number of the active SIM card or eSIM profile')), modem.iccid ]);
+		if (modem.imsi) {
+			/* home network of the subscription: MCC = digits 1-3, MNC = 2 or 3
+			   digits after it — show the resolved operator name when known */
+			var iM = '' + modem.imsi;
+			var iName = mccmnc.name(iM.substr(0, 3), iM.substr(3, 2)) ||
+			            mccmnc.name(iM.substr(0, 3), iM.substr(3, 3));
+			mdmRows.push([ term('IMSI', _('International Mobile Subscriber Identity — identifies the subscription on the network; the first digits are the home network (MCC + MNC)')),
+				modem.imsi + (iName ? ' · ' + iName : '') ]);
+		}
+		if (modem.msisdn)
+			mdmRows.push([ term('MSISDN', _('The phone number stored on the SIM (often empty on data SIMs)')), modem.msisdn ]);
+
+		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
+			E('h3', {}, _('Modem')), tbl(mdmRows)
+		]));
+
+		/* --- serving cell / registration panel (radio side) --- */
 		var lc = cells.lte_intra;
 		var ef = lc ? bands.lteEarfcn(lc.earfcn) : null;
 		var plmn = reg.plmn;
 		var srvRows = [
-			[ _('State'), modem.state || '?' ],
-			[ _('Registration'), fmt.regShort(reg) ]
+			[ term(_('Registration'), _('Network registration state: home / roaming / searching / denied')),
+				fmt.regShort(reg) ]
 		];
-		/* modem identity: control mode (QMI/MBIM/NCM) + manufacturer / model /
-		   firmware, read via the backend's native path (QMI DMS, MBIM device
-		   caps, AT CGMI/CGMR) — absent fields are hidden */
-		srvRows.push([ _('Mode'), (modem.protocol || '?').toUpperCase() ]);
-		if (modem.manufacturer) srvRows.push([ _('Manufacturer'), modem.manufacturer ]);
-		if (modem.model)        srvRows.push([ _('Model'), modem.model ]);
-		if (modem.firmware)     srvRows.push([ _('Firmware'), modem.firmware ]);
-		if (modem.revision && modem.revision != modem.firmware)
-			srvRows.push([ _('Revision'), modem.revision ]);
-		/* which RATs the modem supports (best-effort) — incl. IoT/RedCap/NTN */
-		if (modem.caps && modem.caps.rats && modem.caps.rats.length)
-			srvRows.push([ _('Capabilities'), E('span', {}, capsBadges(modem.caps)) ]);
 		/* why registration is stuck: EMM reject cause / limited service */
 		var rd = modem.registration_detail;
 		if (rd && (rd.reject_text || rd.reject_cause != null || rd.limited)) {
@@ -347,29 +414,37 @@ function renderLive(name, modem) {
 				(rd.reject_cause != null ? _('reject cause %d').format(rd.reject_cause) : _('limited service'));
 			if (rd.limited && (rd.reject_text || rd.reject_cause != null))
 				msg += ' · ' + _('limited service');
-			srvRows.push([ _('Problem'), E('span', { 'style': 'color:#c00;font-weight:bold' }, msg) ]);
+			srvRows.push([ term(_('Problem'), _('Registration problem reported by the network — the 3GPP reject cause explains why the attach was refused')),
+				E('span', { 'style': 'color:#c00;font-weight:bold' }, msg) ]);
 		}
 		var opLine = fmt.fmtOperator(reg);
-		if (opLine) srvRows.push([ _('Operator'), opLine ]);
-		if (modem.iccid)  srvRows.push([ _('ICCID'), modem.iccid ]);
-		if (modem.imsi)   srvRows.push([ _('IMSI'), modem.imsi ]);
-		if (modem.msisdn) srvRows.push([ _('MSISDN'), modem.msisdn ]);
-		if (cells.temperature && cells.temperature.celsius != null)
-			srvRows.push([ _('Temperature'), '%d °C'.format(cells.temperature.celsius) ]);
+		if (opLine) {
+			/* resolve the PLMN against the bundled MCC/MNC table; append the
+			   name only when the network-provided description doesn't carry it */
+			var opName = plmn ? mccmnc.name(plmn.mcc, plmn.mnc) : null;
+			if (opName && opLine.toLowerCase().indexOf(opName.substr(0, 4).toLowerCase()) < 0)
+				opLine += ' — ' + opName;
+			srvRows.push([ term(_('Operator'), _('The network currently serving the modem, as name (MCC/MNC). MCC = country, MNC = network within it')), opLine ]);
+		}
 		/* the daemon-identified fine access technology (NB-IoT/LTE-M/5G-SA/…, from
 		   AT where QMI/MBIM can't name it) wins; else the LTE/5G block derives it */
+		var techTerm = term(_('Technology'), _('Radio access technology of the current connection (LTE, 5G NSA = 5G carrier on an LTE anchor, 5G SA = standalone 5G, NB-IoT/LTE-M = IoT modes)'));
 		if (modem.rat)
-			srvRows.push([ _('Technology'), modem.rat ]);
+			srvRows.push([ techTerm, modem.rat ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
 			var tech = 'LTE' + ((fmt.hasSignal(nr.rsrp) || (cells.serving||{}).nr) ? ' + 5G NR' : '');
 			if (dsd && dsd.mode && dsd.mode != 'LTE') tech += ' · ' + dsd.mode;
-			if (!modem.rat) srvRows.push([ _('Technology'), tech ]);
-			srvRows.push([ _('Band'), (svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);
-			srvRows.push([ _('Frequency'), (ef ? ef.mhz.toFixed(1)+' MHz' : '—') +
+			if (!modem.rat) srvRows.push([ techTerm, tech ]);
+			srvRows.push([ term(_('Band'), _('3GPP frequency band of the serving cell (B… = LTE, n… = 5G NR) — lower bands travel further, higher bands carry more bandwidth')),
+				(svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);
+			srvRows.push([ term(_('Frequency'), _('Downlink centre frequency of the serving cell · channel bandwidth')),
+				(ef ? ef.mhz.toFixed(1)+' MHz' : '—') +
 				((svl && svl.bandwidth_mhz) ? ' · ' + svl.bandwidth_mhz + ' MHz' : '') ]);
-			srvRows.push([ _('EARFCN / PCI'), '%d / %d'.format(lc.earfcn, lc.serving_cell_id) ]);
-			srvRows.push([ _('TAC / Cell ID'), '%d / %d'.format(lc.tac, lc.global_cell_id) ]);
+			srvRows.push([ term('EARFCN / PCI', _('EARFCN = LTE channel number of the carrier; PCI = Physical Cell ID. EARFCN:PCI identifies the exact cell (usable for the cell lock)')),
+				'%d / %d'.format(lc.earfcn, lc.serving_cell_id) ]);
+			srvRows.push([ term(_('TAC / Cell ID'), _('TAC = Tracking Area Code (paging area); Cell ID = the network-wide unique identifier of this cell')),
+				'%d / %d'.format(lc.tac, lc.global_cell_id) ]);
 		}
 		var nc = cells.nr5g_cell, sn = (cells.serving||{}).nr;
 		var narfcn = (sn && sn.arfcn) || cells.nr5g_arfcn;
@@ -378,7 +453,8 @@ function renderLive(name, modem) {
 			var nband = (sn && sn.band != null) ? ('n'+sn.band) : (nf && nf.band ? nf.band : '?');
 			var npci = (sn && sn.pci != null) ? sn.pci : (nc ? nc.pci : '?');
 			var nbw = (sn && sn.bandwidth_mhz) ? ' · ' + sn.bandwidth_mhz + ' MHz' : '';
-			srvRows.push([ _('5G cell'), '%s · %s MHz%s · PCI %s'.format(
+			srvRows.push([ term(_('5G cell'), _('The 5G NR serving cell: band · centre frequency · bandwidth · Physical Cell ID')),
+				'%s · %s MHz%s · PCI %s'.format(
 				nband, nf ? nf.mhz.toFixed(1) : '?', nbw, npci) ]);
 		}
 
@@ -543,7 +619,13 @@ return view.extend({
 			dom.content(selWrap, [ _('Modem') + ': ', sel ]);
 		}
 
+		/* the poll must never die or pile up: skip a tick while the previous one
+		   is still in flight, and swallow (but log) render errors — one bad
+		   payload may skip a repaint but must not freeze the page for good */
 		function refresh() {
+			if (refresh._busy) return;
+			refresh._busy = true;
+			var done = function() { refresh._busy = false; };
 			return callStatus().then(function(ms) {
 				ms = ms || {};
 				var names = Object.keys(ms);
@@ -563,6 +645,10 @@ return view.extend({
 					var e2 = document.getElementById('wwand-live');
 					if (e2) dom.content(e2, node);
 				});
+			}).then(done, function(e) {
+				done();
+				if (window.console && console.error)
+					console.error('wwand status render failed:', e);
 			});
 		}
 

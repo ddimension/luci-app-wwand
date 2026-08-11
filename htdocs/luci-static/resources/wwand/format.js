@@ -10,6 +10,14 @@
 return baseclass.extend({
 	fmtList: function(a) { return (a && a.length) ? a.join(', ') : '—'; },
 
+	/* a technical term with a mouse-over explanation: dotted underline +
+	   help cursor signal that hovering reveals the description (title attr) */
+	term: function(label, desc) {
+		return E('span', { 'title': desc,
+			'style': 'cursor:help;text-decoration:underline dotted;text-underline-offset:2px' },
+			label);
+	},
+
 	/* MNC as a zero-padded code: the leading zero is significant (260/06 is not
 	   260/6). QMI hands us a bare integer (digit count lost), so pad to 2 digits
 	   minimum; genuine 3-digit MNCs (>=100) keep all three. */
