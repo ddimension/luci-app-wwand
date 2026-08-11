@@ -414,6 +414,9 @@ function renderLive(name, modem) {
 				(rd.reject_cause != null ? _('reject cause %d').format(rd.reject_cause) : _('limited service'));
 			if (rd.limited && (rd.reject_text || rd.reject_cause != null))
 				msg += ' · ' + _('limited service');
+			/* carried over from the previous registration attempt */
+			if (rd.stale)
+				msg += ' · ' + _('(last attempt)');
 			srvRows.push([ term(_('Problem'), _('Registration problem reported by the network — the 3GPP reject cause explains why the attach was refused')),
 				E('span', { 'style': 'color:#c00;font-weight:bold' }, msg) ]);
 		}
