@@ -248,12 +248,71 @@ return view.extend({
 				}),
 			}, _('Save SIM')) : null;
 
+			/* Unlock SIM: shown only while the daemon reports a SIM block.
+			   PUK-class blocks (puk_required / retries_exhausted) get a PUK +
+			   new-PIN dialog (ubus modem_sim_puk — a wrong PUK consumes one of
+			   ~10 attempts, 0 left destroys the SIM, hence the loud warning);
+			   PIN-class blocks get the manual PIN release (modem_sim_pin_verify,
+			   entering past the low-retry safety guard). */
+			var unlockSim = mi.sim_block ? E('button', {
+				'class': 'btn cbi-button cbi-button-apply',
+				'title': _('Unlock the blocked SIM (%s)').format(mi.sim_block.reason || '?'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					var reason = mi.sim_block.reason || '';
+					var isPuk = (reason == 'puk_required' || reason == 'retries_exhausted');
+
+					var fields = isPuk ? [
+						E('p', { 'class': 'alert-message warning' },
+							_('This SIM is PUK-locked (%s). A WRONG PUK consumes one of ~10 attempts — after the last one the SIM is permanently destroyed. The PUK is printed on the SIM carrier or available from the provider.').format(reason)),
+						E('p', {}, [ _('PUK (8 digits)'), E('br'), E('input', { 'id': 'wwand-puk', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
+						E('p', {}, [ _('New PIN (4-8 digits)'), E('br'), E('input', { 'id': 'wwand-newpin', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
+					] : [
+						E('p', {}, _('The daemon refuses to auto-enter the PIN (%s) to protect the last attempts. Enter the PIN to release it manually.').format(reason)),
+						E('p', {}, [ _('PIN'), E('br'), E('input', { 'id': 'wwand-pin', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
+					];
+
+					ui.showModal(isPuk ? _('Enter PUK — SIM %s').format(mi.iccid || section_id)
+					                   : _('Release PIN — SIM %s').format(mi.iccid || section_id),
+						fields.concat([ E('div', { 'class': 'right' }, [
+							E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')),
+							' ',
+							E('button', { 'class': 'btn cbi-button cbi-button-negative',
+								'click': ui.createHandlerFn(this, function() {
+									var done = function(res, okText) {
+										ui.hideModal();
+										if (res && res.ok)
+											ui.addNotification(null, E('p', {}, okText), 'info');
+										else
+											ui.addNotification(null, E('p', {},
+												_('Unlock failed: %s').format((res && (res.error + (res.detail ? ' (' + JSON.stringify(res.detail) + ')' : ''))) || '?')), 'error');
+									};
+									if (isPuk) {
+										var puk = (document.getElementById('wwand-puk').value || '').trim();
+										var npin = (document.getElementById('wwand-newpin').value || '').trim();
+										if (!/^[0-9]{8}$/.test(puk)) { ui.addNotification(null, E('p', {}, _('The PUK must be exactly 8 digits.')), 'error'); return; }
+										if (!/^[0-9]{4,8}$/.test(npin)) { ui.addNotification(null, E('p', {}, _('The new PIN must be 4-8 digits.')), 'error'); return; }
+										return wrpc.simPuk(section_id, puk, npin).then(function(res) {
+											done(res, _('SIM unblocked, new PIN set. Update the configured PIN in the modem settings!'));
+										});
+									}
+									var pin = (document.getElementById('wwand-pin').value || '').trim();
+									return wrpc.pinVerify(section_id, pin).then(function(res) {
+										done(res, _('PIN release requested — the modem restarts its bring-up.'));
+									});
+								}),
+							}, isPuk ? _('Unblock SIM') : _('Enter PIN')),
+						]) ]));
+				}),
+			}, _('Unlock SIM')) : null;
+
 			var extra = [
 				jump(_('Status'), _('Live status page (signal, cells, connection) for this modem'),
 					L.url('admin/status/wwand')),
 				jump(_('Tools'), _('Band, operator, SIM, eSIM and SMS tools for this modem'),
 					L.url('admin/network/wwand-tools')),
 			];
+			if (unlockSim) extra.push(unlockSim);
 			if (saveSim) extra.push(saveSim);
 			extra.push(reattach);
 			extra.push(reboot);

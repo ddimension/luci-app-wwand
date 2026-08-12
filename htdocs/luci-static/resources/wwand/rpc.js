@@ -38,6 +38,7 @@ return baseclass.extend({
 	slots:      rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} }),
 	switchSlot: rpc.declare({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} }),
 	pinVerify:  rpc.declare({ object: 'wwand', method: 'modem_sim_pin_verify', params: [ 'modem', 'pin' ], expect: {} }),
+	simPuk:     rpc.declare({ object: 'wwand', method: 'modem_sim_puk', params: [ 'modem', 'puk', 'new_pin' ], expect: {} }),
 	pinLock:    rpc.declare({ object: 'wwand', method: 'modem_sim_pin_lock', params: [ 'modem', 'pin', 'enable' ], expect: {} }),
 	esim:       rpc.declare({ object: 'wwand', method: 'modem_esim',
 		params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify' ], expect: {} }),
