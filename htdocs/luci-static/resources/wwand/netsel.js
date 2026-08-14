@@ -3,7 +3,6 @@
 'require dom';
 'require ui';
 'require wwand.rpc as wrpc';
-'require wwand.esim as esim';
 'require wwand.format as fmt';
 
 /* Network selection (operator scan + manual/automatic), extracted from
@@ -207,7 +206,6 @@ return baseclass.extend({
 			}) }, _('Set automatic'));
 
 		return E('div', {}, [
-			E('style', {}, esim.CSS),
 			E('h3', {}, _('Network selection')),
 			E('div', { 'class': 'cbi-section' }, [
 				E('div', {}, infoRows),

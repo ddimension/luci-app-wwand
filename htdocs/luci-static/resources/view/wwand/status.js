@@ -316,7 +316,7 @@ function renderLive(name, modem) {
 		var sig = res[0] || {}, cells = (res[1] || {}).cells || {};
 		var allCtx = res[2] || {};
 		var dpath = res[4] || {};
-		var plmn = res[5] || {};
+		var plmnLists = res[5] || {};
 		var myCtx = Object.keys(allCtx)
 			.filter(function(k){ return allCtx[k].modem == name; })
 			.map(function(k){ return { name: k, cfg: allCtx[k] }; });
@@ -496,7 +496,7 @@ function renderLive(name, modem) {
 		if (dpanel) out.push(dpanel);
 
 		/* --- preferred networks (NAS list only) --- */
-		var naspanel = renderNasList(plmn.nas);
+		var naspanel = renderNasList(plmnLists.nas);
 		if (naspanel) out.push(naspanel);
 
 		/* --- carrier aggregation (active carriers) --- unified cell columns --- */

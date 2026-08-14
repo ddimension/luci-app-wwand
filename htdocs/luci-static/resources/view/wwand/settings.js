@@ -227,68 +227,6 @@ function plmnEditRow(e, noRat) {
 		'click': function(ev) { var tr = ev.target.parentNode.parentNode; tr.parentNode.removeChild(tr); } }, '✕')));
 	return E('tr', { 'class': 'tr' }, cells);
 }
-function plmnEditor(modem, list) {
-	/* an empty or not-yet-provisioned list still gets one blank input row so the
-	   user can create entries right away (the write only fails if the SIM's
-	   access conditions forbid it) */
-	var seedRows = (list && list.length) ? list.map(plmnEditRow) : [ plmnEditRow({}) ];
-	var body = E('table', { 'class': 'table' }, [
-		E('tr', { 'class': 'tr table-titles' }, [
-			E('th', { 'class': 'th' }, 'MCC'), E('th', { 'class': 'th' }, 'MNC'),
-			E('th', { 'class': 'th' }, _('Operator')),
-			E('th', { 'class': 'th' }, _('Access technologies')), E('th', { 'class': 'th' }, '') ]),
-	].concat(seedRows));
-
-	var note = E('span', { 'style': 'margin-left:8px' });
-
-	var collect = function() {
-		var out = [], trs = body.getElementsByTagName('tr');
-		for (var i = 0; i < trs.length; i++) {
-			var mccI = trs[i].querySelector('[data-f="mcc"]');
-			if (!mccI) continue;
-			var mcc = (mccI.value || '').replace(/\D/g, '');
-			var mnc = (trs[i].querySelector('[data-f="mnc"]').value || '').replace(/\D/g, '');
-			if (!mcc && !mnc) continue;
-			var rec = { mcc: mcc, mnc: mnc }, cbs = trs[i].querySelectorAll('[data-rat]');
-			for (var j = 0; j < cbs.length; j++) rec[cbs[j].getAttribute('data-rat')] = cbs[j].checked;
-			out.push(rec);
-		}
-		return out;
-	};
-
-	return E('div', {}, [
-		E('h4', {}, _('User-controlled (EF PLMNwAcT, 6F60)') + (list ? ' (' + list.length + ')' : '')),
-		(list == null) ? E('p', {}, E('em', {},
-			_('Not provisioned on this SIM — Apply will try to create it (fails if the SIM is write-protected).'))) : '',
-		body,
-		E('div', { 'style': 'margin-top:6px' }, [
-			E('button', { 'class': 'btn cbi-button',
-				'click': function() { body.appendChild(plmnEditRow({})); } }, _('Add entry')),
-			' ',
-			E('button', { 'class': 'btn cbi-button cbi-button-apply',
-				'click': ui.createHandlerFn({}, function() {
-					var entries = collect();
-					if (!confirm(_('Write %d preferred-PLMN record(s) to the SIM (EF 6F60)? This replaces the current user list.').format(entries.length)))
-						return;
-					dom.content(note, E('em', {}, _('writing…')));
-					return callPlmnSet(modem, 'user', entries).then(function(r) {
-						if (r && r.ok) {
-							ui.addNotification(null, E('p', {},
-								_('Preferred PLMN list written (%d record(s)) and verified.').format(r.written != null ? r.written : entries.length)), 'info');
-							window.location.reload();
-						} else {
-							var why = (r && (r.note || r.error)) || _('unknown error');
-							dom.content(note, E('span', { 'style': 'color:#c00' }, _('failed: %s').format(why)));
-							ui.addNotification(null, E('p', {},
-								_('Could not write the preferred PLMN list: %s. The SIM may be write-protected (ADM).').format(why)), 'warning');
-						}
-					});
-				}) }, _('Apply preferred list')),
-			note,
-		]),
-	]);
-}
-
 function plmnTable(title, list, absentHint) {
 	if (list == null)
 		return E('p', {}, [ E('em', {}, title + ': ' + _('not present on this SIM') +
@@ -835,6 +773,7 @@ return view.extend({
 		]);
 
 		return E('div', {}, [
+			fmt.injectStyle(),
 			nav,
 			E('h2', {}, head),
 			modemSel,

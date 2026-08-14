@@ -7,7 +7,36 @@
    so the value formatters and the small table/warning renderers are not
    copy-pasted across resources. */
 
+/* Shared panel/banner/spinner/progress CSS for the wwand panels (eSIM steps,
+   scan banners). Kept here — the single cross-panel rendering home — so the
+   esim and netsel modules do not each emit their own <style> (which the
+   settings page, rendering both, injected twice) and netsel need not depend on
+   esim for a string. The owning view injects it once via injectStyle(). */
+var WWE_CSS = '' +
+'.wwe-panel{margin-top:.6em;border:1px solid rgba(128,128,128,.28);border-radius:7px;padding:14px 16px;background:rgba(128,128,128,.06)}' +
+'.wwe-steps{list-style:none;margin:.2em 0 0;padding:0}' +
+'.wwe-step{display:flex;align-items:center;gap:9px;padding:3px 0;color:#8a8a8a;font-size:.95em}' +
+'.wwe-step .ic{width:1.35em;text-align:center;font-weight:700}' +
+'.wwe-step.done{color:#2c8a2c}.wwe-step.cur{color:#0b6fc2;font-weight:600}' +
+'.wwe-bar{height:8px;border-radius:5px;background:rgba(128,128,128,.25);overflow:hidden;margin:11px 0 4px}' +
+'.wwe-bar>span{display:block;height:100%;background:#0b6fc2;transition:width .45s ease}' +
+'.wwe-bar.ok>span{background:#2c8a2c}.wwe-bar.err>span{background:#c0392b}' +
+'.wwe-banner{display:flex;align-items:center;gap:9px;padding:9px 13px;border-radius:6px;margin-top:11px;font-weight:600}' +
+'.wwe-banner.run{background:rgba(11,111,194,.12);color:#0b6fc2}' +
+'.wwe-banner.ok{background:rgba(44,138,44,.14);color:#1e6b1e}' +
+'.wwe-banner.err{background:rgba(192,57,43,.13);color:#b3271a}' +
+'.wwe-log{max-height:15em;overflow:auto;background:#1e1e1e;color:#dcdcdc;padding:9px 11px;margin-top:9px;' +
+'font:12px/1.55 ui-monospace,Menlo,Consolas,monospace;border-radius:5px;white-space:pre-wrap;word-break:break-all}' +
+'.wwe-det{margin-top:9px;font-size:.9em}.wwe-det>summary{cursor:pointer;color:#0b6fc2}' +
+'.wwe-spin{display:inline-block;width:1.05em;height:1.05em;border:2px solid rgba(11,111,194,.3);' +
+'border-top-color:#0b6fc2;border-radius:50%;animation:wwe-rot .9s linear infinite;flex:none}' +
+'@keyframes wwe-rot{to{transform:rotate(360deg)}}';
+
 return baseclass.extend({
+	/* the shared .wwe-* stylesheet as a <style> node; the page that hosts the
+	   wwand panels renders this once (see view/wwand/settings.js). */
+	injectStyle: function() { return E('style', {}, WWE_CSS); },
+
 	fmtList: function(a) { return (a && a.length) ? a.join(', ') : '—'; },
 
 	/* a technical term with a mouse-over explanation: dotted underline +
