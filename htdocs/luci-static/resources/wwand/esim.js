@@ -53,7 +53,6 @@ function parseActivity(log) {
    view); this panel and wwand.netsel just use the classes. */
 
 return baseclass.extend({
-
 	render: function(ctx, data) {
 		var self = this;
 		var esimOk = data.esim && data.esim.ok !== false && data.esim.profiles;
