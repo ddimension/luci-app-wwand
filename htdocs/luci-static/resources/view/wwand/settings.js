@@ -588,6 +588,18 @@ return view.extend({
 			row(_('Persist in modem'),
 				E('label', { 'style': 'font-weight:normal' }, [ persistChk, ' ' + _('Store the lock in modem non-volatile memory') ]),
 				null),
+			/* the daemon's live read-back: what the modem ACTUALLY has locked */
+			(function() {
+				var liveLocks = (data.info || {}).locks;
+				if (!liveLocks) return null;
+				var parts = [];
+				for (var lk in liveLocks)
+					if (liveLocks[lk] != null && liveLocks[lk] !== false)
+						parts.push('%s: %s'.format(lk, JSON.stringify(liveLocks[lk])));
+				if (!parts.length) return null;
+				return E('div', { 'class': 'cbi-value-description', 'style': 'margin:4px 0' },
+					_('Modem currently locked: %s — the live read-back of the lock editor.').format(parts.join(' · ')));
+			})(),
 			E('div', { 'class': 'cbi-page-actions', 'style': 'margin-top:6px' }, [
 				E('button', { 'class': 'btn cbi-button cbi-button-apply',
 					'click': ui.createHandlerFn(self, save) }, _('Save cell lock')),
@@ -803,6 +815,35 @@ return view.extend({
 						});
 					}) }, _('Reset to defaults')),
 			]),
+			/* control-protocol switch (qmi <-> mbim): a full modem reset — only
+			   offered for modems that support both */
+			(function() {
+				var p = proto && String(proto).toLowerCase();
+				if (p != 'qmi' && p != 'mbim') return '';
+				var target = (p == 'qmi') ? 'mbim' : 'qmi';
+				return E('div', { 'class': 'cbi-section' }, [
+					E('h3', {}, _('Control protocol')),
+					E('div', { 'class': 'cbi-value' }, [
+						E('label', { 'class': 'cbi-value-title' }, _('Switch to %s').format(target.toUpperCase())),
+						E('div', { 'class': 'cbi-value-field' }, [
+							E('button', { 'class': 'btn cbi-button cbi-button-reset',
+								click: ui.createHandlerFn(self, function() {
+									if (!confirm(_('Switch the control protocol to %s? The modem resets and re-enumerates — its connections come back on their own.').format(target.toUpperCase())))
+										return;
+									return wrpc.setProtocol(data.modem, target).then(function(res) {
+										ui.addNotification(null, E('p',
+											res && res.ok
+												? _('Protocol switch to %s issued — the modem resets.').format(target.toUpperCase())
+												: _('Protocol switch failed: %s.').format((res && res.error) || '?')),
+											res && res.ok ? 'info' : 'warning');
+									});
+								}) }, _('Switch protocol')),
+							E('div', { 'class': 'cbi-value-description' },
+								_('Flips the control protocol (QMI ↔ MBIM). The modem resets; use only when the other protocol is known to work on this module.')),
+						]),
+					]),
+				]);
+			})(),
 			netsel.render(panelCtx, data),
 		].concat(this.renderCellLock(data)).concat(esim.render(panelCtx, data)).concat([
 			E('h3', {}, _('Preferred PLMN lists')),

@@ -76,7 +76,13 @@ return baseclass.extend({
 			E('strong', {}, _('Slot %d').format(sl.physical) +
 				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '')),
 			' \u2014 ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
-				(sl.eid ? (', EID ' + sl.eid) : '')
+				(sl.eid ? (', EID ' + sl.eid) : '') +
+				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) \u2014
+				   the inactive slot's PIN and service state matter when deciding
+				   to switch to it */
+				(sl.cpin ? (', ' + sl.cpin) : '') +
+				(sl.service ? (', ' + sl.service) : '') +
+				(sl.atr ? (', ATR ' + sl.atr) : '')
 		];
 		(extras || []).forEach(function(b) { line.push(b); });
 		if (!sl.active && sl.card == 'present' && onSwitch)

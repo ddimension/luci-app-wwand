@@ -196,6 +196,26 @@ return view.extend({
 				}),
 			}, _('Reboot'));
 
+			/* Repower: the HARDWARE rung — reset-GPIO pulse or board power-cycle
+			   (ubus modem_repower). Recovers a hung or vanished modem where the
+			   soft reset can't reach it. Multi-modem boxes need a per-modem
+			   reset_gpio; the daemon surfaces that error here. */
+			var repower = E('button', {
+				'class': 'btn cbi-button cbi-button-negative',
+				'title': _('Hardware repower: pulse the reset GPIO (or power-cycle the modem) — recovers a hung or vanished modem. Needs a reset_gpio on multi-modem boxes.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!confirm(_('Hard-repower modem "%s" now? This cuts and restores the modem\'s power/reset line.').format(section_id)))
+						return;
+					return wrpc.modemRepower(section_id).then(function(res) {
+						if (res && res.ok)
+							ui.addNotification(null, E('p', {}, _('Modem repowered (%s).').format(res.action || '?')), 'info');
+						else
+							ui.addNotification(null, E('p', {}, _('Repower unavailable: %s.').format((res && res.error) || _('no power/reset control'))), 'warning');
+					});
+				}),
+			}, _('Repower'));
+
 			/* Reattach: force a network deregister + re-register (QMI opmode
 			   bounce, else AT+COPS) so automatic selection re-scans — for a
 			   modem stuck on a previously-selected PLMN. Lighter than Reboot:
@@ -316,6 +336,7 @@ return view.extend({
 			if (saveSim) extra.push(saveSim);
 			extra.push(reattach);
 			extra.push(reboot);
+			extra.push(repower);
 
 			/* between Config and the trailing Delete button when present */
 			extra.forEach(function(b) {
