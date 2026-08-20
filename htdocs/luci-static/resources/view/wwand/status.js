@@ -116,9 +116,18 @@ function renderConnections(details) {
 			rows.push([ _('IPv4 DNS'), fmtList(v4.dns) ]);
 		}
 		if (v6) {
-			rows.push([ _('IPv6'), '%s/%d'.format(v6.addr, v6.plen) ]);
-			rows.push([ _('IPv6 gateway'), v6.gateway || '—' ]);
-			rows.push([ _('IPv6 DNS'), fmtList(v6.dns) ]);
+			if (v6.unmanaged) {
+				/* RNDIS v6 model: the host address is RA/SLAAC on the netdev,
+				   managed by the dhcpv6 subinterface — nothing null/0 here */
+				rows.push([ _('IPv6'), E('em', {}, _('unmanaged — RA/SLAAC on the netdev (dhcpv6 subinterface)')) ]);
+				if (v6.dns && v6.dns.length)
+					rows.push([ _('IPv6 DNS'), fmtList(v6.dns) ]);
+			}
+			else {
+				rows.push([ _('IPv6'), '%s/%d'.format(v6.addr, v6.plen) ]);
+				rows.push([ _('IPv6 gateway'), v6.gateway || '—' ]);
+				rows.push([ _('IPv6 DNS'), fmtList(v6.dns) ]);
+			}
 		}
 		if (!v4 && !v6)
 			rows.push([ _('IP'), E('em', {}, _('not connected')) ]);
