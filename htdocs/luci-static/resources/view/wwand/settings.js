@@ -83,12 +83,35 @@ function notifyEsimApply(modem, res) {
 	window.setTimeout(function() { window.location.reload() }, 4000);
 }
 
+/* A failing daemon call answers { ok:false, error:'qmi', detail:{ result, code } }.
+   The bare `error` alone ("qmi") is useless for diagnosis, so append whatever
+   detail the daemon passed on — a QMI protocol error number is the difference
+   between "it does not work" and a fixable answer. */
+function describeError(res) {
+	var r = res || {}, d = r.detail, txt = r.error || '?';
+	if (d && typeof d == 'object') {
+		var bits = [];
+		if (d.result != null) bits.push(_('result %d').format(d.result));
+		if (d.code != null)   bits.push(_('code %d').format(d.code));
+		if (d.key != null)    bits.push(String(d.key));
+		if (bits.length) txt += ' (' + bits.join(', ') + ')';
+	}
+	return txt;
+}
+
 var MODE_BITS = [
 	[ 0x04, 'GSM' ],
 	[ 0x08, 'UMTS' ],
 	[ 0x10, 'LTE' ],
 	[ 0x40, 'NR5G' ],
 ];
+
+/* Bits this picker actually renders. QmiNasRatModePreference also carries CDMA
+   (0x01), HDR/EVDO (0x02) and TD-SCDMA (0x20), which no European modem UI needs
+   to show — but rebuilding the mask from the checkboxes alone silently CLEARED
+   them on every save (seen on an RG650E: 0x7F -> 0x5C). Whatever we do not
+   render is preserved from the value the modem reported. */
+var MODE_BITS_MASK = MODE_BITS.reduce(function(a, m) { return a | m[0] }, 0);
 
 // reset-to-defaults preset: everything the modem supports (it clamps unknown
 // band bits itself), data-centric, roaming allowed
@@ -515,7 +538,7 @@ return view.extend({
 			else if (res && res.ok)
 				ui.addNotification(null, E('p', _('Modem settings applied.')), 'info');
 			else
-				ui.addNotification(null, E('p', _('Failed: ') + ((res || {}).error || '?')), 'error');
+				ui.addNotification(null, E('p', _('Failed: ') + describeError(res)), 'error');
 		});
 	},
 
@@ -723,7 +746,8 @@ return view.extend({
 		var nsaPicker = bandPicker(nrKnownBands(), s.nr5g_nsa_bands || []);
 
 		var collect = function() {
-			var mode = 0;
+			// start from the bits we do not render, so they survive the save
+			var mode = (+s.mode_preference || 0) & ~MODE_BITS_MASK;
 			modeBoxes.forEach(function(l) {
 				var cb = l.firstElementChild;
 				if (cb.checked)
