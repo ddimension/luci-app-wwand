@@ -613,15 +613,12 @@ return view.extend({
 				null),
 			/* the daemon's live read-back: what the modem ACTUALLY has locked */
 			(function() {
-				var liveLocks = (data.info || {}).locks;
-				if (!liveLocks) return null;
-				var parts = [];
-				for (var lk in liveLocks)
-					if (liveLocks[lk] != null && liveLocks[lk] !== false)
-						parts.push('%s: %s'.format(lk, JSON.stringify(liveLocks[lk])));
-				if (!parts.length) return null;
+				var lockTxt = fmt.fmtLocks((data.info || {}).locks);
+
+				if (!lockTxt) return null;
+
 				return E('div', { 'class': 'cbi-value-description', 'style': 'margin:4px 0' },
-					_('Modem currently locked: %s — the live read-back of the lock editor.').format(parts.join(' · ')));
+					_('Modem currently locked: %s — the live read-back of the lock editor.').format(lockTxt));
 			})(),
 			E('div', { 'class': 'cbi-page-actions', 'style': 'margin-top:6px' }, [
 				E('button', { 'class': 'btn cbi-button cbi-button-apply',
@@ -834,15 +831,30 @@ return view.extend({
 					click: ui.createHandlerFn(self, function() {
 						if (!confirm(_('Reset radio/band/usage/roaming settings to defaults?')))
 							return;
-						return self.apply(data.modem, DEFAULTS).then(function() {
+						/* keep the RAT bits this picker cannot show (CDMA/EVDO/
+						   TD-SCDMA): a reset means "defaults for what is on
+						   screen", not "drop what the UI never rendered" —
+						   otherwise this button re-clobbers exactly what
+						   collect() preserves. */
+						var defs = Object.assign({}, DEFAULTS);
+						defs.mode_preference = ((+s.mode_preference || 0) & ~MODE_BITS_MASK) |
+							DEFAULTS.mode_preference;
+
+						return self.apply(data.modem, defs).then(function() {
 							window.location.reload();
 						});
 					}) }, _('Reset to defaults')),
 			]),
-			/* control-protocol switch (qmi <-> mbim): a full modem reset — only
-			   offered for modems that support both */
+			/* Control-protocol switch (QMI <-> MBIM): a full modem reset.
+			   Gated on the daemon's `proto_switch` capability, which is a
+			   property of the MODEL — the AT recipe is per-vendor and the
+			   hardware-unverified ones are deliberately not offered. Gating on
+			   "the modem currently speaks QMI or MBIM" would be no gate at all:
+			   that is true of nearly every modem this app manages and says
+			   nothing about whether the switch exists for it. */
 			(function() {
 				var p = proto && String(proto).toLowerCase();
+				if (!(data.info && data.info.proto_switch)) return '';
 				if (p != 'qmi' && p != 'mbim') return '';
 				var target = (p == 'qmi') ? 'mbim' : 'qmi';
 				return E('div', { 'class': 'cbi-section' }, [
@@ -852,13 +864,19 @@ return view.extend({
 						E('div', { 'class': 'cbi-value-field' }, [
 							E('button', { 'class': 'btn cbi-button cbi-button-reset',
 								click: ui.createHandlerFn(self, function() {
-									if (!confirm(_('Switch the control protocol to %s? The modem resets and re-enumerates — its connections come back on their own.').format(target.toUpperCase())))
+									/* a supported recipe does not promise the target
+									   protocol actually works: some firmwares reject
+									   MBIM_OPEN and the modem comes back unusable on
+									   MBIM until switched back (field-seen). */
+									if (!confirm((target == 'mbim'
+											? _('Switch the control protocol to MBIM? The modem resets and re-enumerates. Some firmwares reject MBIM even though the switch itself succeeds — if the modem does not come back, switch it to QMI again.')
+											: _('Switch the control protocol to %s? The modem resets and re-enumerates — its connections come back on their own.').format(target.toUpperCase()))))
 										return;
 									return wrpc.setProtocol(data.modem, target).then(function(res) {
 										ui.addNotification(null, E('p',
 											res && res.ok
 												? _('Protocol switch to %s issued — the modem resets.').format(target.toUpperCase())
-												: _('Protocol switch failed: %s.').format((res && res.error) || '?')),
+												: _('Protocol switch failed: %s.').format(describeError(res))),
 											res && res.ok ? 'info' : 'warning');
 									});
 								}) }, _('Switch protocol')),

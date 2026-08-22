@@ -406,16 +406,10 @@ function renderLive(name, modem) {
 		if (modem.fcc_lock != null && modem.fcc_lock != 0)
 			mdmRows.push([ term(_('FCC lock'), _('This module boots radio-locked (laptop-SKU) and the modem will not register while the lock is armed — set fcc_auth on the modem configuration to unlock at boot')),
 				_('active (mode %d)').format(modem.fcc_lock) ]);
-		if (modem.locks) {
-			var lockRows = [];
+		var lockTxt = fmt.fmtLocks(modem.locks);
 
-			for (var k in modem.locks)
-				if (modem.locks[k] != null && modem.locks[k] !== false)
-					lockRows.push('%s: %s'.format(k, JSON.stringify(modem.locks[k])));
-
-			if (lockRows.length)
-				mdmRows.push([ term(_('Locked to'), _('Cell/frequency locks the modem currently has armed — the read-back of the cell-lock editor, showing what the modem ACTUALLY locked')), lockRows.join(' · ') ]);
-		}
+		if (lockTxt)
+			mdmRows.push([ term(_('Locked to'), _('Cell/frequency locks the modem currently has armed — the read-back of the cell-lock editor, showing what the modem ACTUALLY locked')), lockTxt ]);
 
 		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
 			E('h3', {}, _('Modem')), tbl(mdmRows)

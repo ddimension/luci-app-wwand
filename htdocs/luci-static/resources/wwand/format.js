@@ -77,7 +77,7 @@ return baseclass.extend({
 				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '')),
 			' \u2014 ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
 				(sl.eid ? (', EID ' + sl.eid) : '') +
-				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) \u2014
+				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) —
 				   the inactive slot's PIN and service state matter when deciding
 				   to switch to it */
 				(sl.cpin ? (', ' + sl.cpin) : '') +
@@ -204,5 +204,48 @@ return baseclass.extend({
 			return mi.pin1.enabled ? _('ready, PIN enabled') : _('ready');
 
 		return '-';
+	},
+
+	/* Cell/frequency lock read-back, shared by the status page and the cell-lock
+	   editor so the two cannot drift. `locks` is the daemon's shape:
+	     { lte: { enabled, values: [earfcn, pci, ...] },
+	       nr5g: { enabled, values: [pci, arfcn, scs, band, ...] } }
+	   Rendered in the same colon spelling the lock editor accepts, instead of
+	   the raw JSON both call sites used to print at the user. A lock that is
+	   present but DISARMED is omitted — "locked to" should not list something
+	   the modem is not locked to. Returns null when nothing is armed. */
+	fmtLocks: function(locks) {
+		if (!locks)
+			return null;
+
+		var out = [];
+
+		var group = function(l, width, label) {
+			if (!l || l.enabled === false)
+				return;
+
+			var v = l.values || [];
+			var items = [];
+
+			if (width && v.length && v.length % width == 0)
+				for (var i = 0; i < v.length; i += width)
+					items.push(v.slice(i, i + width).join(':'));
+			else if (v.length)
+				items.push(v.join(', '));
+
+			out.push(items.length ? '%s %s'.format(label, items.join(', '))
+			                      : '%s %s'.format(label, _('armed')));
+		};
+
+		group(locks.lte, 2, _('LTE'));
+		group(locks.nr5g, 4, _('NR5G'));
+
+		/* anything the daemon grows later is shown rather than silently
+		   dropped, just without a specific spelling */
+		for (var k in locks)
+			if (k != 'lte' && k != 'nr5g' && locks[k] != null && locks[k] !== false)
+				out.push('%s: %s'.format(k, JSON.stringify(locks[k])));
+
+		return out.length ? out.join(' \u00b7 ') : null;
 	}
 });
