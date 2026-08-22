@@ -552,7 +552,7 @@ return view.extend({
 		var sid = this.targetIface(data.modem);
 		if (!sid) {
 			out.push(E('p', {}, E('em', {},
-				_('No qmi interface found — the cell lock is stored on the modem.'))));
+				_('No wwand interface found — the cell lock is stored on the modem.'))));
 			return out;
 		}
 

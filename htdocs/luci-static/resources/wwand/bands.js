@@ -29,12 +29,15 @@ var LTE_BANDS = [
 /* NR (5G) downlink band table: ['n<band>', fdl_low_mhz, fdl_high_mhz] from
    3GPP TS 38.101-1 (FR1) / -2 (FR2). Ordered narrower-before-broader where
    ranges overlap, since nrArfcn() returns the first match (e.g. n78 before
-   n77, n1 before n65/n66). Covers the common FR1 bands + FR2 mmWave. */
+   n77, n1 before n65/n66). Covers the common FR1 bands + FR2 mmWave.
+   Where two bands span the IDENTICAL range (n76/n51, n50/n75, n65/n66,
+   n41/n90) the order is a deliberate tie-break, not a violation: the more
+   commonly deployed band is listed first. */
 var NR_BANDS = [
 	/* sub-1 GHz */
 	['n71',617,652],['n29',717,728],['n12',729,746],['n85',728,746],
-	['n28',758,803],['n14',758,768],['n20',791,821],['n26',859,894],
-	['n5',869,894],['n18',860,875],['n8',925,960],
+	['n14',758,768],['n28',758,803],['n20',791,821],
+	['n18',860,875],['n5',869,894],['n26',859,894],['n8',925,960],
 	/* L-band / 1.4-1.5 GHz (SDL; n76 & n51 share 1427-1432, n50 & n75 share 1432-1517) */
 	['n76',1427,1432],['n51',1427,1432],['n50',1432,1517],['n75',1432,1517],
 	['n74',1475,1518],
@@ -48,7 +51,7 @@ var NR_BANDS = [
 	/* 3.3-5 GHz */
 	['n48',3550,3700],['n78',3300,3800],['n77',3300,4200],['n79',4400,5000],
 	/* FR2 (mmWave) */
-	['n258',24250,27500],['n257',26500,29500],['n261',27500,28350],
+	['n258',24250,27500],['n261',27500,28350],['n257',26500,29500],
 	['n260',37000,40000],['n259',39500,43500]
 ];
 
