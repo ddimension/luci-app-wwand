@@ -43,7 +43,10 @@ var NR_BANDS = [
 	['n74',1475,1518],
 	/* 1.8-2.2 GHz */
 	['n3',1805,1880],['n2',1930,1990],['n25',1930,1995],['n70',1995,2020],
-	['n1',2110,2170],['n65',2110,2200],['n66',2110,2200],
+	/* n66 before n65: n1 already covers 2110-2170, so the only band this pair
+	   ever decides is 2170-2200 — AWS-3 downlink, which is n66. n65 (extended
+	   IMT-2100) is essentially undeployed there. */
+	['n1',2110,2170],['n66',2110,2200],['n65',2110,2200],
 	/* 2.3-2.7 GHz (n7 FDD DL 2620-2690 before the broader TDD n41/n90 2496-2690
 	   so an ARFCN in the overlap resolves to the narrower band first) */
 	['n30',2350,2360],['n40',2300,2400],['n53',2483.5,2495],['n38',2570,2620],

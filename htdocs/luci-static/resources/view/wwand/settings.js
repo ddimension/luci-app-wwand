@@ -114,9 +114,15 @@ var MODE_BITS = [
 var MODE_BITS_MASK = MODE_BITS.reduce(function(a, m) { return a | m[0] }, 0);
 
 // reset-to-defaults preset: everything the modem supports (it clamps unknown
-// band bits itself), data-centric, roaming allowed
+// band bits itself), data-centric, roaming allowed.
+//
+// mode_preference is MODE_BITS_MASK, i.e. every RAT this picker renders — it
+// used to be a hardcoded 0x50 (LTE|NR5G), which contradicted "everything the
+// modem supports" and made a reset silently drop the 2G/3G fallback on a modem
+// that had it. Deriving it from the mask also keeps the two from drifting when
+// a RAT is added to MODE_BITS.
 var DEFAULTS = {
-	mode_preference: 0x50,
+	mode_preference: MODE_BITS_MASK,
 	usage_preference: 2,
 	roaming_preference: 255,
 	lte_bands: [], nr5g_sa_bands: [], nr5g_nsa_bands: [],
