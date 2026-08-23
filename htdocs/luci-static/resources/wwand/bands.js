@@ -32,15 +32,22 @@ var LTE_BANDS = [
    n77, n1 before n65/n66). Covers the common FR1 bands + FR2 mmWave.
    Where two bands span the IDENTICAL range (n76/n51, n50/n75, n65/n66,
    n41/n90) the order is a deliberate tie-break, not a violation: the more
-   commonly deployed band is listed first. */
+   commonly deployed band is listed first.
+
+   Checking this table means computing REACHABILITY, not pairwise containment:
+   a band is dead when everything before it already covers its range, which
+   happens through partial overlaps too (n74 sat behind n50/n75 with a 1 MHz
+   sliver left). A pairwise-subset check misses exactly that case. */
 var NR_BANDS = [
 	/* sub-1 GHz */
 	['n71',617,652],['n29',717,728],['n12',729,746],['n85',728,746],
 	['n14',758,768],['n28',758,803],['n20',791,821],
 	['n18',860,875],['n5',869,894],['n26',859,894],['n8',925,960],
 	/* L-band / 1.4-1.5 GHz (SDL; n76 & n51 share 1427-1432, n50 & n75 share 1432-1517) */
-	['n76',1427,1432],['n51',1427,1432],['n50',1432,1517],['n75',1432,1517],
-	['n74',1475,1518],
+	['n76',1427,1432],['n51',1427,1432],
+	/* n74 (1475-1518) before n50/n75 (1432-1517): same narrower-before-broader
+	   rule — behind them only the 1 MHz sliver above 1517 would ever reach it. */
+	['n74',1475,1518],['n50',1432,1517],['n75',1432,1517],
 	/* 1.8-2.2 GHz */
 	['n3',1805,1880],['n2',1930,1990],['n25',1930,1995],['n70',1995,2020],
 	/* n66 before n65: n1 already covers 2110-2170, so the only band this pair

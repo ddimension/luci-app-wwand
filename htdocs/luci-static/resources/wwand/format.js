@@ -221,7 +221,11 @@ return baseclass.extend({
 		var out = [];
 
 		var group = function(l, width, label) {
-			if (!l || l.enabled === false)
+			/* loose on purpose: the daemon emits a real boolean today, but an
+			   `enabled: 0` from a future producer must skip too. A lock with no
+			   `enabled` key at all still renders — that is the `{ lte: true }`
+			   shape the fallback loop below tolerates. */
+			if (!l || (l.enabled != null && !l.enabled))
 				return;
 
 			var v = l.values || [];
@@ -237,8 +241,10 @@ return baseclass.extend({
 			                      : '%s %s'.format(label, _('armed')));
 		};
 
-		group(locks.lte, 2, _('LTE'));
-		group(locks.nr5g, 4, _('NR5G'));
+		/* RAT acronyms are literals everywhere else in this package (settings.js
+		   MODE_BITS, netsel.js, status.js) — keep them out of the .pot */
+		group(locks.lte, 2, 'LTE');
+		group(locks.nr5g, 4, 'NR5G');
 
 		/* anything the daemon grows later is shown rather than silently
 		   dropped, just without a specific spelling */
