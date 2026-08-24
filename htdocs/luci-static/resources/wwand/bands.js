@@ -34,20 +34,36 @@ var LTE_BANDS = [
    n41/n90) the order is a deliberate tie-break, not a violation: the more
    commonly deployed band is listed first.
 
+   That rule outranks reachability, and it costs some. n51, n75, n65 and n90
+   are unreachable because they duplicate a range exactly; n18 is unreachable
+   because n5 and n26 cover 860-875 between them, and relabelling ordinary n5
+   spectrum as a Japan-only band to rescue it would be the worse trade. n74
+   keeps only the sliver above 1517 for the same reason (see the L-band note).
+   A regional table cannot be right everywhere at once with first-match
+   lookup; where it must choose, it chooses what is deployed.
+
    Checking this table means computing REACHABILITY, not pairwise containment:
    a band is dead when everything before it already covers its range, which
-   happens through partial overlaps too (n74 sat behind n50/n75 with a 1 MHz
-   sliver left). A pairwise-subset check misses exactly that case. */
+   happens through partial overlaps too. A pairwise-subset check misses
+   exactly that case. */
 var NR_BANDS = [
 	/* sub-1 GHz */
 	['n71',617,652],['n29',717,728],['n12',729,746],['n85',728,746],
 	['n14',758,768],['n28',758,803],['n20',791,821],
-	['n18',860,875],['n5',869,894],['n26',859,894],['n8',925,960],
+	/* n5 (global 850) ahead of the regional pair, same deployment rule: behind
+	   it n26 keeps 859-869 and n18 (Japan, 860-875) is unreachable. Ordering
+	   n18 first would relabel 869-875 MHz — ordinary n5 territory nearly
+	   everywhere — as a Japan-only band. */
+	['n5',869,894],['n26',859,894],['n18',860,875],['n8',925,960],
 	/* L-band / 1.4-1.5 GHz (SDL; n76 & n51 share 1427-1432, n50 & n75 share 1432-1517) */
 	['n76',1427,1432],['n51',1427,1432],
-	/* n74 (1475-1518) before n50/n75 (1432-1517): same narrower-before-broader
-	   rule — behind them only the 1 MHz sliver above 1517 would ever reach it. */
-	['n74',1475,1518],['n50',1432,1517],['n75',1432,1517],
+	/* n50/n75 keep 1432-1517 and n74 follows them, which leaves n74 only the
+	   sliver above 1517. Deliberate, and the DEPLOYMENT rule above decides it
+	   rather than reachability: 1475-1517 is where the European L-band SDL
+	   carriers sit (n50/n75), while n74 is a Japanese FDD band. Putting n74
+	   first would buy its reachability by mislabelling 1477/1490/1510 MHz —
+	   the same trade the n66-before-n65 note below refuses to make. */
+	['n50',1432,1517],['n75',1432,1517],['n74',1475,1518],
 	/* 1.8-2.2 GHz */
 	['n3',1805,1880],['n2',1930,1990],['n25',1930,1995],['n70',1995,2020],
 	/* n66 before n65: n1 already covers 2110-2170, so the only band this pair

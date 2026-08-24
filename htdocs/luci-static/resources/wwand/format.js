@@ -247,10 +247,14 @@ return baseclass.extend({
 		group(locks.nr5g, 4, 'NR5G');
 
 		/* anything the daemon grows later is shown rather than silently
-		   dropped, just without a specific spelling */
+		   dropped, just without a specific spelling. Routed through group()
+		   like the two known keys: a bare `locks[k] !== false` test would
+		   catch only a literal false and let { enabled: false, values: [] } —
+		   the exact shape the daemon already uses for lte/nr5g — through as
+		   raw JSON, disarmed and all, contradicting the rule stated above. */
 		for (var k in locks)
-			if (k != 'lte' && k != 'nr5g' && locks[k] != null && locks[k] !== false)
-				out.push('%s: %s'.format(k, JSON.stringify(locks[k])));
+			if (k != 'lte' && k != 'nr5g')
+				group(locks[k], 0, k);
 
 		return out.length ? out.join(' \u00b7 ') : null;
 	}
