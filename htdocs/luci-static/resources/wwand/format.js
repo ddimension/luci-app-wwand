@@ -228,7 +228,25 @@ return baseclass.extend({
 			if (!l || (l.enabled != null && !l.enabled))
 				return;
 
-			var v = l.values || [];
+			/* The payload can arrive in more shapes than { values: [...] }.
+			   Reading only `l.values` would render every other shape as a bare
+			   "armed" and silently drop what the lock actually holds — the
+			   opposite of what the fallback loop below promises. `true` stays
+			   payload-free on purpose: it IS the "armed, no detail" spelling. */
+			var v;
+
+			if (l === true)
+				v = [];
+			else if (typeof l != 'object')
+				v = [ l ];                       /* scalar: the value itself */
+			else if (Array.isArray(l.values))
+				v = l.values;                    /* lte/nr5g and anything like them */
+			else if (l.values != null)
+				v = [ l.values ];                /* a lone non-array value */
+			else
+				v = Object.keys(l).filter(function(kk) { return kk != 'enabled'; })
+				          .map(function(kk) { return '%s=%s'.format(kk, l[kk]); });
+
 			var items = [];
 
 			if (width && v.length && v.length % width == 0)
