@@ -167,6 +167,19 @@ return view.extend({
 			var td = form.GridSection.prototype.renderRowActions.call(this, section_id, _('Config'));
 			var box = td.firstElementChild || td;
 
+			/* Up to nine buttons can end up in this one cell — Config, Status,
+			   Tools, Unlock SIM, Save SIM, Reattach, Reboot, Repower and the
+			   trailing Delete. LuCI's actions column does not wrap, so on a
+			   modem that offers them all the row simply ran off the right edge
+			   of the table (field report with a screenshot, RUTM11). Make the
+			   cell a wrapping flex row instead; the buttons keep their theme
+			   styling and stay right-aligned, they just fold onto a second
+			   line when the column is too narrow for them. */
+			box.style.display = 'flex';
+			box.style.flexWrap = 'wrap';
+			box.style.justifyContent = 'flex-end';
+			box.style.gap = '.25em';
+
 			var jump = function(label, title, url) {
 				return E('button', {
 					'class': 'btn cbi-button cbi-button-neutral',
