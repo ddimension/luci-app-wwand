@@ -203,10 +203,14 @@ return baseclass.extend({
 			if (!port)
 				return node;
 
-			return E([], [ node, E('div', {
+			/* plain text, not markup: E()'s children become TEXT nodes, so the
+			   <code> the description used to carry would render literally here.
+			   A wrapper div rather than a bare fragment — every other node in
+			   this app is built that way. */
+			return E('div', {}, [ node, E('div', {
 				'style': 'font-size:90%;margin-top:4px',
 			}, _('wwand leaves %s untouched and polls telemetry over the control channel.')
-				.format('<code>' + port.replace(/[<>&]/g, '') + '</code>')) ]);
+				.format(port)) ]);
 		};
 
 		/* Not a ListValue: `option mux` also takes the name of an add-on datapath
