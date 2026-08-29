@@ -203,14 +203,17 @@ return baseclass.extend({
 			if (!port)
 				return node;
 
-			/* plain text, not markup: E()'s children become TEXT nodes, so the
-			   <code> the description used to carry would render literally here.
-			   A wrapper div rather than a bare fragment — every other node in
-			   this app is built that way. */
+			/* The hint text goes in as a one-element ARRAY, not a bare string:
+			   dom.append() assigns a bare string via innerHTML (luci.js:1394-96)
+			   and only an array element becomes a createTextNode (:1382-83). The
+			   port comes from the daemon, so the escaped path is the right one.
+			   Wrapping the widget is safe — getUIElement() finds it by DOM id
+			   through map.findElement (form.js:1897-1901), not by what this
+			   returns. */
 			return E('div', {}, [ node, E('div', {
 				'style': 'font-size:90%;margin-top:4px',
-			}, _('wwand leaves %s untouched and polls telemetry over the control channel.')
-				.format(port)) ]);
+			}, [ _('wwand leaves %s untouched and polls telemetry over the control channel.')
+				.format(port) ]) ]);
 		};
 
 		/* Not a ListValue: `option mux` also takes the name of an add-on datapath
