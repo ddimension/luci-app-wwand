@@ -182,15 +182,31 @@ return baseclass.extend({
 			_('Reserve the modem\'s second AT port for external tools (gpsd, own scripts): wwand never opens it and runs telemetry over the control channel instead. The modem status shows which port was released.'));
 		o.default = '0';
 		bind(o);
+		/* Which port a modem released is a PER-ROW fact, and `description` is a
+		   per-column field — writing it from load() made the last modem in the
+		   status reply speak for every row, including modems that released
+		   nothing. Remember it per section and show it beside that row's own
+		   widget instead. */
 		o.load = function(section_id) {
 			var self = this;
 			return L.resolveDefault(callStatus(), {}).then(function(res) {
-				var mods = (res || {}).modems || {};
-				for (var k in mods)
-					if (mods[k].at2_released)
-						self.description = _('Reserved for external tools: wwand leaves <code>%s</code> untouched and polls telemetry over the control channel.').format(mods[k].at2_released);
+				var m = ((res || {}).modems || {})[section_id];
+				self.at2Port = self.at2Port || {};
+				self.at2Port[section_id] = (m && m.at2_released) || null;
 				return self.super('load', [section_id]);
 			});
+		};
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var node = this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+			var port = (this.at2Port || {})[section_id];
+
+			if (!port)
+				return node;
+
+			return E([], [ node, E('div', {
+				'style': 'font-size:90%;margin-top:4px',
+			}, _('wwand leaves %s untouched and polls telemetry over the control channel.')
+				.format('<code>' + port.replace(/[<>&]/g, '') + '</code>')) ]);
 		};
 
 		/* Not a ListValue: `option mux` also takes the name of an add-on datapath
@@ -298,19 +314,27 @@ return baseclass.extend({
 		   Best-effort: talks to live modems; on any failure the plain field stays. */
 		o.load = function(section_id) {
 			var self = this;
-			/* callStatus is statusRaw ({'':{}}) — unwrap the modem map, else
-			   Object.keys() yields 'modems'/'contexts'/'board' and modem_sim_slots
-			   gets called with those as modem names. Slot number is `physical`
-			   (what format.js/esim.js and modem_sim_switch_slot use), not `slot`. */
+			/* THIS modem's slots, not every modem's. The section id is the modem
+			   name, so there is no need to sweep the status reply — and sweeping
+			   it was wrong twice over: the choices land on the shared column, so
+			   one modem was offered another's slot numbers AND its ICCIDs, and
+			   picking one saved a sim_slot that modem does not have. Slot number
+			   is `physical` (what format.js/esim.js and modem_sim_switch_slot
+			   use), not `slot`. */
 			return L.resolveDefault(callStatus(), {}).then(function(reply) {
-				return Promise.all(Object.keys((reply && reply.modems) || {}).map(function(n) {
-					return L.resolveDefault(callSlots(n), {});
-				})).then(function(results) {
+				if (!((reply && reply.modems) || {})[section_id])
+					return self.super('load', [section_id]);
+
+				return Promise.all([ L.resolveDefault(callSlots(section_id), {}) ])
+					.then(function(results) {
 					var seen = {};
+					self.slotsOf = self.slotsOf || {};
+					self.slotsOf[section_id] = { '0': true };
 					results.forEach(function(r) {
 						((r && r.slots) || []).forEach(function(sl) {
 							if (sl.physical == null || seen[sl.physical]) return;
 							seen[sl.physical] = true;
+							self.slotsOf[section_id][String(sl.physical)] = true;
 							var lbl = _('Slot %d').format(sl.physical);
 							if (sl.iccid)
 								lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
@@ -322,6 +346,36 @@ return baseclass.extend({
 					return self.super('load', [section_id]);
 				});
 			});
+		};
+		/* ...and offer each row only its own modem's slots: the choices above
+		   land on the shared column, so without this every modem still sees
+		   every other modem's slot numbers and ICCIDs. Unknown modem (not
+		   running, or the status call failed) shows the full list rather than
+		   an empty one, and the configured value is always kept. */
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var allKeys = this.keylist || [], allVals = this.vallist || [];
+			var mine = (this.slotsOf || {})[section_id];
+			var keys = [], vals = [];
+
+			if (!mine)
+				return this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+
+			for (var i = 0; i < allKeys.length; i++)
+				if (mine[allKeys[i]] || allKeys[i] === cfgvalue) {
+					keys.push(allKeys[i]);
+					vals.push(allVals[i]);
+				}
+
+			this.keylist = keys;
+			this.vallist = vals;
+
+			try {
+				return this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+			}
+			finally {
+				this.keylist = allKeys;
+				this.vallist = allVals;
+			}
 		};
 
 		o = s.taboption(tab, form.Value, 'pincode', _('SIM PIN'),
