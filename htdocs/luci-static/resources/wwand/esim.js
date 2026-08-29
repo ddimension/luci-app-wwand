@@ -157,9 +157,13 @@ return baseclass.extend({
 					return callEsim(data.modem, 'delete', 0, p.iccid, '', '').then(function() { window.location.reload() });
 				}) }, _('Delete')));
 			return E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td' }, p.iccid),
-				E('td', { 'class': 'td' }, p.provider || p.name || p.nickname || ''),
-				E('td', { 'class': 'td' }, p.state),
+				/* arrays, not bare strings: the provider/name/nickname of a
+				   profile is free text the CARRIER put on the eUICC when it was
+				   downloaded, and dom.append() routes a bare string through
+				   innerHTML (luci.js:1394-96) */
+				E('td', { 'class': 'td' }, [ p.iccid ]),
+				E('td', { 'class': 'td' }, [ p.provider || p.name || p.nickname || '' ]),
+				E('td', { 'class': 'td' }, [ p.state ]),
 				E('td', { 'class': 'td' }, acts),
 			]);
 		});

@@ -135,12 +135,20 @@ return baseclass.extend({
 
 	/* two-column label/value table; widthPercent = width of the label column
 	   (default 30 — the proto handler uses 33). */
+	/* Values go in as one-element ARRAYS, and that is load-bearing rather than
+	   style: dom.append() assigns a bare string through innerHTML
+	   (luci.js:1394-1396) and only turns an array element into a createTextNode
+	   (:1382-1383). Half the rows this renders are strings the MODEM supplied —
+	   manufacturer, model, firmware, revision (QMI DMS / AT CGMI/CGMM/CGMR) —
+	   or the network did, and none of that is ours to trust with markup. An
+	   element passed as a value still appends as itself (:1380-1381), so the
+	   rows that build their own nodes are unaffected. */
 	tbl: function(rows, widthPercent) {
 		var w = (widthPercent || 30) + '%';
 		return E('table', { 'class': 'table' }, rows.map(function(r) {
 			return E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td left', 'width': w }, r[0]),
-				E('td', { 'class': 'td left' }, r[1]) ]);
+				E('td', { 'class': 'td left', 'width': w }, [ r[0] ]),
+				E('td', { 'class': 'td left' }, [ r[1] ]) ]);
 		}));
 	},
 

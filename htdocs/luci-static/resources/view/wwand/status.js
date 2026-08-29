@@ -55,7 +55,10 @@ function cellHead() {
 		return E('th', { 'class': 'th' }, h[1] ? fmt.term(h[0], h[1]) : h[0]);
 	}));
 }
-function cd(v) { return E('td', { 'class': 'td' }, (v == null || v === '') ? '—' : ('' + v)); }
+/* array, not a bare string: dom.append() would otherwise route it through
+   innerHTML (luci.js:1394-96). These cells carry cell-scan output — operator
+   names come off the air. */
+function cd(v) { return E('td', { 'class': 'td' }, [ (v == null || v === '') ? '—' : ('' + v) ]); }
 function cellRow(o) {
 	return E('tr', { 'class': 'tr' }, [ cd(o.type), cd(o.band), cd(o.earfcn),
 		cd(o.freq), cd(o.bw), cd(o.pci), cd(o.rsrp), cd(o.rsrq), cd(o.lock) ]);

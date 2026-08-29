@@ -110,7 +110,10 @@ return baseclass.extend({
 						}) }, current ? _('Reselect') : _('Select'));
 				return E('tr', { 'class': 'tr',
 					'style': forbidden ? 'opacity:.5' : (current ? 'font-weight:600' : '') }, [
-					E('td', { 'class': 'td' }, op.name || _('(unnamed)')),
+					/* array, not a bare string: this name arrives OVER THE AIR in
+					   the scan result, and dom.append() would put a bare string
+					   through innerHTML (luci.js:1394-96) */
+					E('td', { 'class': 'td' }, [ op.name || _('(unnamed)') ]),
 					E('td', { 'class': 'td' }, op.mcc + '/' + fmt.fmtMnc(op.mnc)),
 					E('td', { 'class': 'td' }, rats.length ? rats.join(', ') : '—'),
 					E('td', { 'class': 'td' }, [
