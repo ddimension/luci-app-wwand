@@ -34,6 +34,27 @@ function uniqVal(o, k, label) {
 	o.value(k, label);
 }
 
+/* Label for one entry of the daemon's datapath catalog (status globals.datapaths:
+   { name, kind: mode|builtin|plugin, proto: [...] | null, description }).
+
+   Only the two protocol-independent modes get a translated name — everything
+   else is called what `option mux` must literally say, since a datapath name is
+   also the module name of its add-on package. The protocol tag stays on the
+   label even though the list is filtered per row: it is what explains WHY a
+   given modem is offered these three and not those five. */
+function dpLabel(e) {
+	var names = { auto: _('Automatic'), raw_ip: _('No multiplexing (plain raw IP)') };
+	var tags = [];
+
+	if (e.kind == 'plugin')
+		tags.push(_('add-on'));
+
+	if (e.proto && e.proto.length)
+		tags.push(e.proto.map(function(p) { return p.toUpperCase(); }).join('/'));
+
+	return (names[e.name] || e.name) + (tags.length ? ' — ' + tags.join(', ') : '');
+}
+
 return baseclass.extend({
 	/* Modem & SIM — hardware identity + SIM. The primary "device" itself is set
 	   elsewhere (the modem dropdown on the interface; the section name / a device
@@ -172,12 +193,88 @@ return baseclass.extend({
 			});
 		};
 
-		o = s.taboption(tab, form.ListValue, 'mux', _('Data multiplexing'),
-			_('Kernel datapath backend for QMAP multiplexing. Leave on auto unless a modem misbehaves.'));
+		/* Not a ListValue: `option mux` also takes the name of an add-on datapath
+		   package (wwand.datapath_<name>), so the field must accept a value that
+		   is not in the list — a fixed dropdown made those unreachable from LuCI
+		   although the daemon supports them. The list is filled from what the
+		   daemon reports as selectable ON THIS BOX (modes + built-ins + installed
+		   plugins, each carrying the control protocols it serves), so an
+		   installed rmnet_nss shows up as a normal choice and a list hardcoded
+		   here cannot go stale behind the daemon. */
+		o = s.taboption(tab, form.Value, 'mux', _('Data multiplexing'),
+			_('Kernel datapath that carries this modem\'s data sessions. Leave on automatic unless a modem misbehaves — under automatic an installed vendor datapath that recognises this hardware is used on its own. Naming one pins it. Only datapaths this modem\'s control protocol can use are offered.'));
 		o.default = 'auto';
+		/* seed: the field must offer something even if the daemon is not
+		   answering (stopped, no modem yet) — the load() below adds the rest */
 		o.value('auto', _('Automatic'));
-		o.value('rmnet', 'rmnet');
-		o.value('qmimux', 'qmimux');
+		o.validate = function(section_id, value) {
+			/* a hyphen is accepted although a datapath name carries none: it is
+			   how 'raw-ip' gets written, and the daemon canonicalises it */
+			if (value == null || value === '' || /^[a-z][a-z0-9_-]*$/.test(value))
+				return true;
+			return _('A datapath name: lowercase letters, digits and underscore.');
+		};
+		o.load = function(section_id) {
+			var self = this;
+			return L.resolveDefault(callStatus(), {}).then(function(reply) {
+				var list = ((reply || {}).globals || {}).datapaths || [];
+
+				/* name -> the protocols it serves, and section -> this modem's
+				   control protocol; renderWidget below needs both to decide what
+				   a given ROW may be offered. */
+				self.dpServes = self.dpServes || {};
+				self.dpProto = self.dpProto || {};
+				self.dpProto[section_id] = ((reply || {}).modems || {})[section_id]
+					? ((reply || {}).modems || {})[section_id].protocol : null;
+
+				list.forEach(function(e) {
+					/* tolerate the pre-1.6 shape (a plain array of names) */
+					if (typeof e == 'string') e = { name: e };
+					if (!e || !e.name) return;
+					self.dpServes[e.name] = e.proto || null;
+					uniqVal(self, e.name, dpLabel(e));
+				});
+				return self.super('load', [section_id]);
+			});
+		};
+		/* Filter the choices PER ROW. A LuCI option object is shared by every
+		   section of a GridSection, so o.value() is per column and the plain
+		   list would be the union across a QMI and an MBIM modem — offering each
+		   of them datapaths the daemon now refuses outright. The rendering hook
+		   is the one place that knows which section it is drawing, so the
+		   keylist is narrowed there and restored afterwards. */
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var allKeys = this.keylist || [], allVals = this.vallist || [];
+			var proto = (this.dpProto || {})[section_id];
+			var serves = this.dpServes || {};
+			var keys = [], vals = [];
+
+			for (var i = 0; i < allKeys.length; i++) {
+				var p = serves[allKeys[i]];
+
+				/* unknown protocol (modem not running, or a daemon that does not
+				   report it) shows everything — narrowing on a guess would hide
+				   the very option someone came to set. A mode (proto null) fits
+				   every modem, and the value already configured is always kept
+				   so an existing config is never silently dropped from its own
+				   dropdown. */
+				if (!proto || !p || p.indexOf(proto) >= 0 || allKeys[i] === cfgvalue) {
+					keys.push(allKeys[i]);
+					vals.push(allVals[i]);
+				}
+			}
+
+			this.keylist = keys;
+			this.vallist = vals;
+
+			try {
+				return this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+			}
+			finally {
+				this.keylist = allKeys;
+				this.vallist = allVals;
+			}
+		};
 		bind(o);
 
 		o = s.taboption(tab, form.Value, 'dl_datagram_max_size', _('Aggregation DL datagram size'),

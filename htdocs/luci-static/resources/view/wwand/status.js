@@ -258,6 +258,21 @@ function renderDatapath(dp) {
 			rows.push([ _('Uplink coalescing timer'), ntb.tx_timer_usecs + ' µs' ]);
 	}
 
+	/* rows the datapath itself contributed (a vendor datapath's own view of the
+	   link — e.g. the NSS one reports the driver's channel count, its RX buffer
+	   and whether the NSS shim was loaded). Keys arrive as the datapath named
+	   them; render them readably rather than inventing a schema per datapath. */
+	var extra = dp.extra || {};
+	Object.keys(extra).forEach(function(k) {
+		var v = extra[k];
+		if (v == null || v === '')
+			return;
+		if (/_size$/.test(k) && typeof v == 'number')
+			v = fmtBytes(v);
+		rows.push([ k.replace(/_/g, ' ').replace(/^./, function(c){ return c.toUpperCase(); }),
+			'' + v ]);
+	});
+
 	/* mux channels */
 	(dp.channels || []).forEach(function(c) {
 		rows.push([ _('Mux channel %d').format(c.mux_id),
