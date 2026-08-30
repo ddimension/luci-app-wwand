@@ -168,6 +168,38 @@ return baseclass.extend({
 			_('Override the auto-detected AT serial port (e.g. /dev/ttyUSB2).'));
 		bind(o);
 
+		/* The remedy the daemon names in its own error message when it cannot
+		   classify a control device. Leave it on "detect" unless wwand has told
+		   you it could not tell — a pin that contradicts a driver wwand DOES
+		   recognise is honoured, but hardware recovery then stays disarmed for
+		   that modem, because an AT port answers on QMI and MBIM modems too and
+		   so proves nothing about the pin. */
+		o = s.taboption(tab, form.ListValue, 'protocol', _('Control protocol'),
+			_('Which protocol wwand uses to drive this modem. Leave on "detect" — this exists for a control device whose driver wwand cannot classify, and it will say so in the log. Pinning a protocol that contradicts a driver wwand does recognise disables hardware recovery for this modem, because an answering AT port would then prove nothing.'));
+		o.value('', _('detect (recommended)'));
+		o.value('qmi', 'QMI');
+		o.value('mbim', 'MBIM');
+		o.value('ncm', _('NCM (AT + ethernet data port)'));
+		o.value('ppp', 'PPP');
+		o.optional = true;
+		bind(o);
+
+		/* A headless box has no UI to render a SETUP MENU, so advertising a
+		   phone's terminal profile invites an operator campaign to send one and
+		   then wait for an answer that never comes. */
+		o = s.taboption(tab, form.ListValue, 'cat_mode', _('SIM toolkit'),
+			_('How SIM Application Toolkit is routed. A router has no screen to display operator menus or texts on, so a modem advertising a phone-like profile can leave the card waiting for a response nothing here will send. "disabled" stops routing toolkit to a control point. Unset leaves the modem exactly as the vendor configured it.'));
+		o.value('', _('modem default (do not change)'));
+		o.value('disabled', _('disabled'));
+		o.value('gobi', 'Gobi');
+		o.value('android', 'Android');
+		o.value('decoded', _('decoded'));
+		o.value('decoded_pullonly', _('decoded, pull-only'));
+		o.value('custom_raw', _('custom (raw)'));
+		o.value('custom_decoded', _('custom (decoded)'));
+		o.optional = true;
+		bind(o);
+
 		o = s.taboption(tab, form.ListValue, 'fcc_auth', _('FCC unlock'),
 			_('RF unlock for laptop-SKU modems that boot radio-locked (Lenovo/Dell/HP variants of Quectel EM1xx, Foxconn SDX55/SDX62). Default "auto" tries the known QMI unlock messages when the modem stays in low-power after going online; MBIM modems need the explicit "quectel" method. "off" disables the unlock entirely.'));
 		o.value('', _('auto (QMI only)'));

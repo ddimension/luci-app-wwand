@@ -414,9 +414,51 @@ function renderLive(name, modem) {
 		if (modem.caps && modem.caps.rats && modem.caps.rats.length)
 			mdmRows.push([ term(_('Capabilities'), _('Radio access technologies this modem hardware reports to support')),
 				E('span', {}, capsBadges(modem.caps)) ]);
-		if (cells.temperature && cells.temperature.celsius != null)
-			mdmRows.push([ term(_('Temperature'), _('Modem baseband temperature — sustained values above ~70 °C usually mean the module is throttling')),
-				'%d °C'.format(cells.temperature.celsius) ]);
+		/* Temperature: read from the STATUS object. It used to be read as
+		   `cells.temperature`, but the daemon puts it at the top level of the
+		   modem_cells reply, not inside its `cells` — so this row never rendered
+		   once. It now lives on the status object, beside the mitigation state
+		   it wants to be read with. */
+		if (modem.temperature && modem.temperature.celsius != null)
+			mdmRows.push([ term(_('Temperature'), _('Modem baseband temperature. Whether the module is actually throttling is reported separately below — the modem itself says so, no guessing from the number needed.')),
+				'%d °C'.format(modem.temperature.celsius) ]);
+
+		/* What the modem DECIDED about its own thermal state (QMI TMD). The
+		   headline comes from `mitigated`, never from active.length: the daemon
+		   already excluded environmental devices there, and a healthy NR7101
+		   carries `cpr_cold` at level 1 forever simply because it is cold. */
+		if (modem.thermal) {
+			var th = modem.thermal;
+			var rfAct = (th.active || []).filter(function(d) { return d.rf; });
+			var envAct = (th.active || []).filter(function(d) { return !d.rf; });
+
+			if (th.mitigated)
+				mdmRows.push([ term(_('Thermal'), _('The modem is holding its own radio back — usually reduced transmit power. This is the explanation for throughput that drops while the signal stays good.')),
+					E('span', { 'style': 'color:#c00;font-weight:bold' },
+						[ _('throttling, level %d').format(th.level || 0) +
+						  (rfAct.length ? ' · ' + rfAct.map(function(d) {
+						      return '%s %d/%d'.format(d.label || d.id, d.level, d.max);
+						  }).join(', ') : '') ]) ]);
+			else if (envAct.length)
+				/* worth showing — "this modem is cold" explains a slow start on
+				   a winter rooftop — but it is NOT an alarm */
+				mdmRows.push([ term(_('Thermal'), _('An environmental limit the modem reports (temperature, voltage or charge state). It is not throttling the radio.')),
+					E('span', { 'style': 'color:#666' },
+						[ envAct.map(function(d) {
+						      return '%s %d/%d'.format(d.label || d.id, d.level, d.max);
+						  }).join(', ') + ' · ' + _('not throttling') ]) ]);
+		}
+
+		/* The card's own last word about itself, from the UIM indications. A
+		   removed or busy card used to leave these rows simply absent, which
+		   read as "nothing to report" rather than "the card is gone". */
+		if (modem.sim_busy)
+			mdmRows.push([ term(_('SIM card'), _('The card reports itself busy. Reads of ICCID, IMSI and the PIN state will fail until it clears, which is why those rows may be missing.')),
+				E('span', { 'style': 'color:#c00;font-weight:bold' }, [ _('busy — reads failing') ]) ]);
+
+		if (modem.sim_note)
+			mdmRows.push([ term(_('SIM event'), _('The last thing the card said about itself: a session it closed and why, an internal recovery, or an activation that did not complete.')),
+				E('span', { 'style': 'color:#c00' }, [ modem.sim_note ]) ]);
 		if (modem.iccid)
 			mdmRows.push([ term('ICCID', _('Integrated Circuit Card ID — serial number of the active SIM card or eSIM profile')), modem.iccid ]);
 		if (modem.imsi) {
@@ -517,9 +559,39 @@ function renderLive(name, modem) {
 					return callSwitchSlot(name, physical);
 				});
 			});
-			cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
-				E('h3', {}, _('SIM slots')), E('div', {}, slotRows)
-			]));
+			/* Two slots is not two usable SIMs, and the slot list alone does not
+			   say which it is. `mode` is stated ONLY when the counts are exact,
+			   which today means MBIM SYS_CAPS; over QMI the executor count is a
+			   lower bound inferred from logical slots in use, so the most that
+			   can be said is a floor. Rendered with "at least" so an inference
+			   can never be read as a fact. */
+			var ms = (res[3] || {}).multisim, msNode = null;
+
+			if (ms) {
+				var msTxt;
+
+				if (ms.mode)
+					msTxt = ({
+						dssa: _('one SIM active at a time (switching)'),
+						dsds: _('both registered, one carries data'),
+						dsda: _('both usable at once'),
+					})[ms.mode] || ms.mode.toUpperCase();
+				else if (ms.mode_min)
+					msTxt = _('at least %s').format(ms.mode_min.toUpperCase());
+				else
+					msTxt = _('not determinable over %s').format(
+						ms.source == 'qmi-logical-slots' ? 'QMI' : ms.source);
+
+				msNode = E('div', { 'style': 'margin-top:6px;font-size:90%;color:#666' }, [
+					E('span', { 'title': ms.exact
+						? _('Reported by the modem (MBIM SYS_CAPS).')
+						: _('Inferred from how many logical slots are in use. That is a lower bound: a modem with a second radio stack whose other slot is empty looks exactly like a single-stack one, so no definite mode can be stated.') },
+						[ msTxt + (ms.exact ? '' : ' · ' + _('inferred')) ]) ]);
+			}
+
+			cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' },
+				[ E('h3', {}, _('SIM slots')), E('div', {}, slotRows) ]
+					.concat(msNode ? [ msNode ] : [])));
 		}
 
 		var out = [];

@@ -211,6 +211,17 @@ return baseclass.extend({
 		if (mi.state == 'WAITING_MODEM' || mi.state == 'UNRESOLVED')
 			return '-';
 
+		/* What the CARD last said about itself, ahead of the PIN state. The
+		   daemon learns these from the UIM indications (session closed and why,
+		   an internal recovery, an activation that failed); before it did, a
+		   card that had been REMOVED still read "ready" here, because pin1 was
+		   the last thing we knew and nothing had contradicted it. */
+		if (mi.sim_busy)
+			return _('busy (reads failing)');
+
+		if (mi.sim_note)
+			return mi.sim_note;
+
 		if (mi.pin1)
 			return mi.pin1.enabled ? _('ready, PIN enabled') : _('ready');
 

@@ -77,9 +77,14 @@ return baseclass.extend({
 
 		/* --- SIM PIN lock: enable / disable the PIN query, with the current PIN --- */
 		var minfo = data.info || {};
+		/* a busy or departed card is now a KNOWN state rather than falling
+		   through to "unknown" — the daemon learns it from the UIM indications,
+		   and it also explains why the PIN state cannot be read right now */
 		var pinState = (minfo.state == 'SIM_BLOCKED') ? _('blocked — PUK required')
+			: minfo.sim_busy ? _('card busy — cannot be read right now')
 			: (minfo.pin1 && minfo.pin1.enabled === false) ? _('disabled (SIM boots without PIN)')
 			: (minfo.pin1 && minfo.pin1.enabled === true) ? _('enabled')
+			: minfo.sim_note ? minfo.sim_note
 			: _('unknown');
 		var pinIn = E('input', { 'type': 'password', 'class': 'cbi-input-password',
 			'style': 'width:12em', 'placeholder': _('current PIN') });
