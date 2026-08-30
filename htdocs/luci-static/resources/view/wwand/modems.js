@@ -395,10 +395,12 @@ return view.extend({
 						var dev = p.device || p.netdev || '?';
 						var path = p.path || p.usb_path;
 						return E('tr', { 'class': 'tr' }, [
-							E('td', { 'class': 'td' }, (p.protocol || p.kind || '?').toUpperCase()),
-							E('td', { 'class': 'td' }, dev),
-							E('td', { 'class': 'td' }, path || '-'),
-							E('td', { 'class': 'td' }, p.serial || '-'),
+							/* arrays: device, path and serial come from the probe,
+							   i.e. from sysfs and the modem's USB descriptors */
+							E('td', { 'class': 'td' }, [ (p.protocol || p.kind || '?').toUpperCase() ]),
+							E('td', { 'class': 'td' }, [ dev ]),
+							E('td', { 'class': 'td' }, [ path || '-' ]),
+							E('td', { 'class': 'td' }, [ p.serial || '-' ]),
 							E('td', { 'class': 'td' },
 								E('button', { 'class': 'btn cbi-button cbi-button-apply',
 									'click': function(ev) {

@@ -167,8 +167,11 @@ return baseclass.extend({
 				(warn ? 'background:rgba(192,57,43,.12);color:#b3271a' : 'background:rgba(11,111,194,.11);color:#0b6fc2') }, [
 				E('span', { 'style': 'font-size:1.15em;flex:none' }, warn ? '⚠' : 'ℹ'),
 				E('div', {}, [
-					E('div', {}, [ w.check ? E('strong', {}, w.check + ': ') : '', w.message || '' ]),
-					det.length ? E('div', { 'style': 'opacity:.85;font-size:.9em;margin-top:2px' }, det.join(' · ')) : '' ]) ]);
+					/* arrays throughout: check/message/details are daemon strings
+					   and carry expected/actual values read off the modem */
+					E('div', {}, [ w.check ? E('strong', {}, [ w.check + ': ' ]) : '', w.message || '' ]),
+					det.length ? E('div', { 'style': 'opacity:.85;font-size:.9em;margin-top:2px' },
+						[ det.join(' · ') ]) : '' ]) ]);
 		});
 		return E('div', { 'class': 'cbi-section' },
 			[ E('h3', {}, _('Configuration warnings')) ].concat(items));

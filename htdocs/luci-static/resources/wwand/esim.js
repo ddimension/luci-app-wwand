@@ -185,7 +185,8 @@ return baseclass.extend({
 		var mkBanner = function(kind, icon, text) {
 			return E('div', { 'class': 'wwe-banner ' + kind }, [
 				(kind == 'run') ? E('span', { 'class': 'wwe-spin' }) : E('span', {}, icon),
-				E('span', {}, text),
+				/* array: callers pass lpac/daemon-derived text here */
+				E('span', {}, [ text ]),
 			]);
 		};
 
@@ -237,7 +238,8 @@ return baseclass.extend({
 			if (st.log)
 				kids.push(E('details', { 'class': 'wwe-det' }, [
 					E('summary', {}, _('Show raw lpac log')),
-					E('pre', { 'class': 'wwe-log' }, st.log),
+					/* array: this is the raw lpac log, verbatim */
+					E('pre', { 'class': 'wwe-log' }, [ st.log ]),
 				]));
 
 			dom.content(panel, kids);
