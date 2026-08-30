@@ -86,6 +86,12 @@ function qcolor(v, good, fair) {
 
 /* a labelled bar: value mapped from [min,max] to 0..100% */
 function bar(label, val, unit, min, max, good, fair) {
+	// snr arrives as 0.1 dB int and is divided by 10 at the call site —
+	// JS float arithmetic then renders artefacts (26.299999999999997);
+	// round to one decimal for display (an int passes through unchanged)
+	if (val != null)
+		val = Math.round(val * 10) / 10;
+
 	var pct = (val == null) ? 0 : Math.max(0, Math.min(100, (val - min) / (max - min) * 100));
 	var col = qcolor(val, good, fair);
 	return E('div', { 'style': 'margin:4px 0' }, [
