@@ -155,10 +155,10 @@ function renderConnections(details) {
 		var le = d.st.last_error;
 		if (le && le.text && st != 'CONNECTED')
 			rows.push([ _('Last error'), E('span', { 'style': 'color:#e33' },
-				'%s%s'.format(le.text, (le.code != null) ? ' (%s %s)'.format(le.type || _('code'), le.code) : '')) ]);
+				[ '%s%s'.format(le.text, (le.code != null) ? ' (%s %s)'.format(le.type || _('code'), le.code) : '') ]) ]);
 
 		return E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
-			E('h4', { 'style': 'margin:0 0 4px' }, d.cfg.interface), tbl(rows)
+			E('h4', { 'style': 'margin:0 0 4px' }, [ d.cfg.interface ]), tbl(rows)
 		]);
 	});
 
@@ -192,7 +192,7 @@ function capsBadges(caps) {
 		return E('span', { 'style':
 			'display:inline-block;padding:0 5px;margin-right:3px;border-radius:3px;font-size:85%;' +
 			(iot[s] ? 'background:#f7e6ee;color:#524;font-weight:600' : 'background:#e6eef7;color:#245') },
-			labels[s] || s);
+			[ labels[s] || s ]);
 	});
 }
 function renderNasList(nas) {
@@ -300,13 +300,16 @@ function renderDatapath(dp) {
 		if (st.rx_aggregation != null) {
 			rows.push([ E('strong', {}, _('Downlink packets / frame')),
 				E('strong', { 'style': 'color:%s'.format(st.rx_aggregation >= 2 ? '#3c3' : '#da3') },
-					st.rx_aggregation.toFixed(2) + '×') ]);
+					[ st.rx_aggregation.toFixed(2) + '×' ]) ]);
 			rows.push([ _('… based on'),
 				_('%d demuxed packets over %d USB frames').format(kidRx, p.rx_packets || 0) ]);
-			if (st.tx_aggregation != null)
-				rows.push([ _('Uplink packets / frame'),
-					'%s× (%d / %d)'.format(st.tx_aggregation.toFixed(2), kidTx, p.tx_packets || 0) ]);
 		}
+		/* independent of the downlink one: the daemon suppresses each direction
+		   on its own when its counters are not comparable, so nesting this
+		   inside the check above would hide a perfectly good uplink figure */
+		if (st.tx_aggregation != null)
+			rows.push([ _('Uplink packets / frame'),
+				'%s× (%d / %d)'.format(st.tx_aggregation.toFixed(2), kidTx, p.tx_packets || 0) ]);
 
 		rows.push([ _('Datapath counters (parent)'),
 			'↓ %s · ↑ %s'.format(fmtBytes(p.rx_bytes), fmtBytes(p.tx_bytes)) ]);
@@ -458,7 +461,7 @@ function renderLive(name, modem) {
 			if (rd.stale)
 				msg += ' · ' + _('(last attempt)');
 			srvRows.push([ term(_('Problem'), _('Registration problem reported by the network — the 3GPP reject cause explains why the attach was refused')),
-				E('span', { 'style': 'color:#c00;font-weight:bold' }, msg) ]);
+				E('span', { 'style': 'color:#c00;font-weight:bold' }, [ msg ]) ]);
 		}
 		var opLine = fmt.fmtOperator(reg);
 		if (opLine) {
@@ -657,7 +660,7 @@ return view.extend({
 					var m = ms[n];
 					return E('option', { 'value': n,
 						'selected': (n == current) ? 'selected' : null },
-						'%s (%s)'.format(m.netdev || n, m.model || '?'));
+						[ '%s (%s)'.format(m.netdev || n, m.model || '?') ]);
 				}));
 			dom.content(selWrap, [ _('Modem') + ': ', sel ]);
 		}

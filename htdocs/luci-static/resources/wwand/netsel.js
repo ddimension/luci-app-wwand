@@ -114,8 +114,8 @@ return baseclass.extend({
 					   the scan result, and dom.append() would put a bare string
 					   through innerHTML (luci.js:1394-96) */
 					E('td', { 'class': 'td' }, [ op.name || _('(unnamed)') ]),
-					E('td', { 'class': 'td' }, op.mcc + '/' + fmt.fmtMnc(op.mnc)),
-					E('td', { 'class': 'td' }, rats.length ? rats.join(', ') : '—'),
+					E('td', { 'class': 'td' }, [ op.mcc + '/' + fmt.fmtMnc(op.mnc) ]),
+					E('td', { 'class': 'td' }, [ rats.length ? rats.join(', ') : '—' ]),
 					E('td', { 'class': 'td' }, [
 						STATUS_LABEL[op.status] || op.status || '',
 						op.roaming ? E('span', { 'style': 'color:#da3;margin-left:4px', 'title': _('roaming') }, '✈') : '',
@@ -144,7 +144,7 @@ return baseclass.extend({
 		var scanFail = function(msg) {
 			scanBtn.disabled = false;
 			dom.content(results, E('div', { 'class': 'wwe-banner err' },
-				[ E('span', {}, '✕'), E('span', {}, _('Scan failed: ') + msg) ]));
+				[ E('span', {}, '✕'), E('span', {}, [ _('Scan failed: ') + msg ]) ]));
 		};
 
 		var scanSpinner = function(secs) {

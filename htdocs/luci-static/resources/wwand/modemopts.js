@@ -158,9 +158,9 @@ return baseclass.extend({
 			var modem = modemsid.modemSid(section_id) || section_id;
 			return callModemReset(modem).then(function(res) {
 				if (res && (res.ok || res.resetting))
-					ui.addNotification(null, E('p', {}, _('Modem reset triggered (%s).').format(res.action || '?')), 'info');
+					ui.addNotification(null, E('p', {}, [ _('Modem reset triggered (%s).').format(res.action || '?') ]), 'info');
 				else
-					ui.addNotification(null, E('p', {}, _('Reset unavailable: %s.').format((res && res.error) || _('no reset control'))), 'warning');
+					ui.addNotification(null, E('p', {}, [ _('Reset unavailable: %s.').format((res && res.error) || _('no reset control')) ]), 'warning');
 			});
 		};
 

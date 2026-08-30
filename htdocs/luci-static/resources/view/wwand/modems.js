@@ -202,9 +202,9 @@ return view.extend({
 						return;
 					return wrpc.modemReset(section_id).then(function(res) {
 						if (res && (res.ok || res.resetting))
-							ui.addNotification(null, E('p', {}, _('Modem reset triggered (%s).').format(res.action || '?')), 'info');
+							ui.addNotification(null, E('p', {}, [ _('Modem reset triggered (%s).').format(res.action || '?') ]), 'info');
 						else
-							ui.addNotification(null, E('p', {}, _('Reset unavailable: %s.').format((res && res.error) || _('no reset control'))), 'warning');
+							ui.addNotification(null, E('p', {}, [ _('Reset unavailable: %s.').format((res && res.error) || _('no reset control')) ]), 'warning');
 					});
 				}),
 			}, _('Reboot'));
@@ -222,9 +222,9 @@ return view.extend({
 						return;
 					return wrpc.modemRepower(section_id).then(function(res) {
 						if (res && res.ok)
-							ui.addNotification(null, E('p', {}, _('Modem repowered (%s).').format(res.action || '?')), 'info');
+							ui.addNotification(null, E('p', {}, [ _('Modem repowered (%s).').format(res.action || '?') ]), 'info');
 						else
-							ui.addNotification(null, E('p', {}, _('Repower unavailable: %s.').format((res && res.error) || _('no power/reset control'))), 'warning');
+							ui.addNotification(null, E('p', {}, [ _('Repower unavailable: %s.').format((res && res.error) || _('no power/reset control')) ]), 'warning');
 					});
 				}),
 			}, _('Repower'));
@@ -242,9 +242,9 @@ return view.extend({
 						return;
 					return wrpc.modemReattach(section_id).then(function(res) {
 						if (res && res.ok)
-							ui.addNotification(null, E('p', {}, _('Network re-attach triggered (%s).').format(res.via || '?')), 'info');
+							ui.addNotification(null, E('p', {}, [ _('Network re-attach triggered (%s).').format(res.via || '?') ]), 'info');
 						else
-							ui.addNotification(null, E('p', {}, _('Re-attach unavailable: %s.').format((res && res.error) || '?')), 'warning');
+							ui.addNotification(null, E('p', {}, [ _('Re-attach unavailable: %s.').format((res && res.error) || '?') ]), 'warning');
 					});
 				}),
 			}, _('Reattach'));
@@ -266,11 +266,11 @@ return view.extend({
 						if (ic && ic == liveIccid) dup = sc['.name'];
 					});
 					if (dup) {
-						ui.addNotification(null, E('p', {}, _('A SIM override for ICCID %s already exists (section %s) — edit it in the SIMs list below.').format(liveIccid, dup)), 'warning');
+						ui.addNotification(null, E('p', {}, [ _('A SIM override for ICCID %s already exists (section %s) — edit it in the SIMs list below.').format(liveIccid, dup) ]), 'warning');
 						return;
 					}
 					var p = simParamsFrom(section_id);
-					ui.addNotification(null, E('p', {}, _('Created SIM override for ICCID %s — review it in the SIMs list below, then Save & Apply.').format(liveIccid)), 'info');
+					ui.addNotification(null, E('p', {}, [ _('Created SIM override for ICCID %s — review it in the SIMs list below, then Save & Apply.').format(liveIccid) ]), 'info');
 					/* stage in the save callback — see the Configure button:
 					   parse() would strip options of a not-yet-rendered row */
 					return m.save(function() {
@@ -301,7 +301,7 @@ return view.extend({
 						E('p', {}, [ _('PUK (8 digits)'), E('br'), E('input', { 'id': 'wwand-puk', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
 						E('p', {}, [ _('New PIN (4-8 digits)'), E('br'), E('input', { 'id': 'wwand-newpin', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
 					] : [
-						E('p', {}, _('The daemon refuses to auto-enter the PIN (%s) to protect the last attempts. Enter the PIN to release it manually.').format(reason)),
+						E('p', {}, [ _('The daemon refuses to auto-enter the PIN (%s) to protect the last attempts. Enter the PIN to release it manually.').format(reason) ]),
 						E('p', {}, [ _('PIN'), E('br'), E('input', { 'id': 'wwand-pin', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
 					];
 
@@ -315,7 +315,7 @@ return view.extend({
 									var done = function(res, okText) {
 										ui.hideModal();
 										if (res && res.ok)
-											ui.addNotification(null, E('p', {}, okText), 'info');
+											ui.addNotification(null, E('p', {}, [ okText ]), 'info');
 										else
 											ui.addNotification(null, E('p', {},
 												_('Unlock failed: %s').format((res && (res.error + (res.detail ? ' (' + JSON.stringify(res.detail) + ')' : ''))) || '?')), 'error');
