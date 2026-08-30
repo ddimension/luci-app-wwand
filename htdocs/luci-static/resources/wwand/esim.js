@@ -104,7 +104,9 @@ return baseclass.extend({
 
 		out.push(E('h4', {}, _('SIM PIN')));
 		out.push(E('div', { 'class': 'cbi-section' }, [
-			E('p', {}, [ _('PIN query: '), E('strong', {}, pinState) ]),
+			/* array child: pinState can now carry daemon text (sim_note), and a
+			   bare string goes in through innerHTML (luci.js:1394-96) */
+			E('p', {}, [ _('PIN query: '), E('strong', {}, [ pinState ]) ]),
 			E('div', { 'style': 'margin-bottom:4px' }, [
 				pinIn, ' ',
 				E('button', { 'class': 'btn cbi-button cbi-button-apply', 'style': 'margin-left:8px',
