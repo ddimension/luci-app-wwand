@@ -232,7 +232,13 @@ function renderDatapath(dp) {
 		return null;
 
 	var rows = [
-		[ _('Backend'), dp.backend + (dp.v5 ? ' · QMAPv5' : '') ],
+		/* name the QMAP version, do not leave v1 and v4 looking identical: the
+		   old form appended "· QMAPv5" only for v5, so everything else read as
+		   plain "rmnet" whether it was v1 or v4. `v5` is the fallback for a
+		   daemon older than qmap_version. */
+		[ _('Backend'), dp.backend + (dp.qmap_version != null
+			? ' · QMAP v' + dp.qmap_version
+			: (dp.v5 ? ' · QMAP v5' : '')) ],
 		[ _('Parent device'), dp.parent || '—' ]
 	];
 	if (dp.urb_size)
