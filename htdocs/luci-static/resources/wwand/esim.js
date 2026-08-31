@@ -111,7 +111,7 @@ return baseclass.extend({
 			var primaryBtn = E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
 				'click': ui.createHandlerFn(self, function() {
 					return ctx.simSlotUci(sl.physical).then(function() {
-						ui.addNotification(null, E('p', _('Primary SIM set to slot %d (persisted).').format(sl.physical)), 'info');
+						ui.addNotification(null, E('p', [ _('Primary SIM set to slot %d (persisted).').format(sl.physical) ]), 'info');
 					});
 				}) }, _('Set as primary'));
 			return fmt.simSlotRow(sl, function(physical) {
@@ -143,7 +143,7 @@ return baseclass.extend({
 			}
 			return callPinLock(data.modem, pin, enable).then(function(r) {
 				if (r && r.ok === false)
-					ui.addNotification(null, E('p', _('PIN change failed: %s').format(r.error || '?')), 'error');
+					ui.addNotification(null, E('p', [ _('PIN change failed: %s').format(r.error || '?') ]), 'error');
 				else
 					ui.addNotification(null, E('p', enable ? _('SIM PIN query enabled.') : _('SIM PIN query disabled.')), 'info');
 			});
@@ -181,8 +181,8 @@ return baseclass.extend({
 			else if (data.esim && data.esim.detail && data.esim.detail.error == 'es10_refused') {
 				out.push(E('h4', {}, _('eSIM')));
 				out.push(E('div', { 'class': 'wwe-banner run' },
-					_('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
-						.format(data.esim.detail.sw || '6985')));
+					[ _('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
+						.format(data.esim.detail.sw || '6985') ]));
 				out.push(E('p', {}, _('This is the normal behaviour of M2M eUICCs (SGP.02) and of vendor-locked cards: profiles are managed over-the-air by the SIM provider (SM-SR), so downloading or switching profiles from this router is not possible. Use the provider’s portal to manage the card — the router only needs to keep the active profile registered and online.')));
 
 				/* The one path left when the CARD refuses local management: ask
@@ -307,13 +307,33 @@ return baseclass.extend({
 			dom.content(panel, kids);
 		};
 
+		/* A profile download runs for minutes over rpcd, so a single reply that
+		   is missing or a promise that rejects (rpcd restarted, request timed
+		   out) is normal enough to plan for. Without that, one such reply left
+		   the panel spinning forever with nothing said -- the operation may well
+		   have finished on the modem, and the page would never show it. Retry a
+		   few times, then say so and stop. */
+		var pollMisses = 0;
 		var pollStatus = function(mode) {
 			callEsim(data.modem, 'download_status', 0, '', '', '').then(function(st) {
+				if (!st || st.state == null) {
+					if (++pollMisses < 5)
+						return window.setTimeout(function() { pollStatus(mode) }, 1200);
+					return dom.content(panel, mkBanner('err', '',
+						_('Lost contact with the download — reload to see its result.')));
+				}
+
+				pollMisses = 0;
 				renderPanel(st, mode);
 				if (st.state == 'running')
 					window.setTimeout(function() { pollStatus(mode) }, 1200);
 				else if (mode == 'download' && parseActivity(st.log).code === 0)
 					window.setTimeout(function() { window.location.reload() }, 3000);
+			}).catch(function(e) {
+				if (++pollMisses < 5)
+					return window.setTimeout(function() { pollStatus(mode) }, 1200);
+				dom.content(panel, mkBanner('err', '',
+					_('Lost contact with the download: %s').format(e && e.message || e)));
 			});
 		};
 
@@ -375,7 +395,8 @@ return baseclass.extend({
 							mkBanner((r && r.ok) ? 'ok' : 'err', (r && r.ok) ? '✓' : '✕',
 								(r && r.log && r.log.trim()) ? _('Pending notifications:') : _('No pending notifications.')),
 							(r && r.log && r.log.trim())
-								? E('pre', { 'class': 'wwe-log' }, r.log) : '',
+								/* array: raw lpac output, same as the log above */
+								? E('pre', { 'class': 'wwe-log' }, [ r.log ]) : '',
 						]);
 					});
 				}) }, _('List pending')),

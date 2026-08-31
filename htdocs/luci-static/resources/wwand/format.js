@@ -73,8 +73,8 @@ return baseclass.extend({
 	   `onSwitch(physical)` runs after the shared confirm. */
 	simSlotRow: function(sl, onSwitch, extras) {
 		var line = [
-			E('strong', {}, _('Slot %d').format(sl.physical) +
-				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '')),
+			E('strong', {}, [ _('Slot %d').format(sl.physical) +
+				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '') ]),
 			' \u2014 ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
 				(sl.eid ? (', EID ' + sl.eid) : '') +
 				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) —

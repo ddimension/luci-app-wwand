@@ -98,7 +98,7 @@ function bar(label, val, unit, min, max, good, fair) {
 		E('div', { 'style': 'display:flex;justify-content:space-between' }, [
 			E('span', {}, label),
 			E('strong', { 'style': 'color:%s'.format(col) },
-				(val == null) ? '—' : '%s %s'.format(val, unit))
+				[ (val == null) ? '—' : '%s %s'.format(val, unit) ])
 		]),
 		E('div', { 'style': 'background:#eee;border-radius:3px;height:10px;overflow:hidden' },
 			E('div', { 'style': 'width:%d%%;height:100%%;background:%s'.format(pct, col) }))
@@ -207,14 +207,14 @@ function renderNasList(nas) {
 
 	var rows = nas.map(function(e, i) {
 		return E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td', 'style': 'color:#888;width:2em' }, '' + (i + 1)),
-			E('td', { 'class': 'td', 'style': 'font-weight:600' }, e.mcc + '/' + fmt.fmtMnc(e.mnc)),
+			E('td', { 'class': 'td', 'style': 'color:#888;width:2em' }, [ '' + (i + 1) ]),
+			E('td', { 'class': 'td', 'style': 'font-weight:600' }, [ e.mcc + '/' + fmt.fmtMnc(e.mnc) ]),
 			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, fmt.fmtMnc(e.mnc)) || '—'),
 			E('td', { 'class': 'td' }, ratBadges(e)),
 		]);
 	});
 	return E('div', { 'class': 'cbi-section' }, [
-		E('h3', {}, _('Preferred networks (NAS) — %d').format(nas.length)),
+		E('h3', {}, [ _('Preferred networks (NAS) — %d').format(nas.length) ]),
 		E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr table-titles' }, [
 				E('th', { 'class': 'th', 'style': 'width:2em' }, '#'),
@@ -384,7 +384,7 @@ function renderLive(name, modem) {
 			var pk = trackPeak(name, 'rsrp', lte.rsrp);
 			var pkq = trackPeak(name, 'sinr', lte.snr/10);
 			sigRows.push(E('div', { 'style': 'margin-top:6px;color:#666;font-size:90%' },
-				_('Peak: RSRP %s dBm · SINR %s dB').format(pk, (pkq != null) ? pkq.toFixed(1) : '—')));
+				[ _('Peak: RSRP %s dBm · SINR %s dB').format(pk, (pkq != null) ? pkq.toFixed(1) : '—') ]));
 		}
 		if (fmt.hasSignal(nr.rsrp)) {
 			sigRows.push(E('hr'));

@@ -44,7 +44,7 @@ function notifyDeferred(modem) {
 				ev.target.disabled = true;
 				callModemReset(modem).then(function(r) {
 					if (r && r.ok === false)
-						ui.addNotification(null, E('p', _('Modem reset failed: %s').format(r.error || '?')), 'error');
+						ui.addNotification(null, E('p', [ _('Modem reset failed: %s').format(r.error || '?') ]), 'error');
 					else
 						ui.addNotification(null, E('p',
 							_('Modem is restarting — the connection resumes automatically once it re-registers.')), 'info');
@@ -73,7 +73,7 @@ function notifyEsimApply(modem, res) {
 			return;
 		}
 		ui.addNotification(null, E('p',
-			_('Profile switch failed: %s').format((res.detail && res.detail.error) || res.error)), 'error');
+			[ _('Profile switch failed: %s').format((res.detail && res.detail.error) || res.error) ]), 'error');
 		return;
 	}
 	if (res && res.apply == 'modem_reset')
@@ -258,22 +258,22 @@ function plmnEditRow(e, noRat) {
 }
 function plmnTable(title, list, absentHint) {
 	if (list == null)
-		return E('p', {}, [ E('em', {}, title + ': ' + _('not present on this SIM') +
-			(absentHint ? ' — ' + absentHint : '')) ]);
+		return E('p', {}, [ E('em', {}, [ title + ': ' + _('not present on this SIM') +
+			(absentHint ? ' — ' + absentHint : '') ]) ]);
 
 	var rows = list.map(function(e) {
 		var rats = [ 'gsm', 'utran', 'eutran', 'ngran' ]
 			.filter(function(k) { return e[k] })
 			.map(function(k) { return k.toUpperCase() }).join(' ');
 		return E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td' }, e.mcc + '/' + e.mnc),
+			E('td', { 'class': 'td' }, [ e.mcc + '/' + e.mnc ]),
 			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, e.mnc) || '—'),
 			E('td', { 'class': 'td' }, rats),
 		]);
 	});
 
 	return E('div', {}, [
-		E('h4', {}, title + ' (' + list.length + ')'),
+		E('h4', {}, [ title + ' (' + list.length + ')' ]),
 		E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr table-titles' }, [
 				E('th', { 'class': 'th' }, 'PLMN'),
@@ -477,7 +477,7 @@ return view.extend({
 				seedRows(lists[typeSel.value]);
 			}).catch(function(e) {
 				busy('');
-				ui.addNotification(null, E('p', {}, _('Could not read the %s list: %s').format(typeSel.value == 'nas' ? 'NAS' : typeSel.value == 'fplmn' ? 'FPLMN' : 'user', (e && e.message) || e)), 'warning');
+				ui.addNotification(null, E('p', {}, [ _('Could not read the %s list: %s').format(typeSel.value == 'nas' ? 'NAS' : typeSel.value == 'fplmn' ? 'FPLMN' : 'user', (e && e.message) || e) ]), 'warning');
 			});
 		};
 		seedRows(lists[typeSel.value]);
@@ -500,13 +500,13 @@ return view.extend({
 			return callPlmnSet(modem, t, entries).then(function(r) {
 				busy('');
 				if (r && r.ok) {
-					ui.addNotification(null, E('p', {}, _('Written to the modem (%d record(s)).').format(r.written != null ? r.written : entries.length)), 'info');
+					ui.addNotification(null, E('p', {}, [ _('Written to the modem (%d record(s)).').format(r.written != null ? r.written : entries.length) ]), 'info');
 					return loadFromModem();   // reflect what the modem now actually holds
 				}
-				ui.addNotification(null, E('p', {}, _('Write failed: %s. The SIM/modem may reject it.').format((r && (r.note || r.error)) || '?')), 'warning');
+				ui.addNotification(null, E('p', {}, [ _('Write failed: %s. The SIM/modem may reject it.').format((r && (r.note || r.error)) || '?') ]), 'warning');
 			}).catch(function(e) {
 				busy('');
-				ui.addNotification(null, E('p', {}, _('Write failed: %s').format((e && e.message) || e)), 'warning');
+				ui.addNotification(null, E('p', {}, [ _('Write failed: %s').format((e && e.message) || e) ]), 'warning');
 			});
 		});
 
@@ -521,7 +521,7 @@ return view.extend({
 			var sid = self.ensureModemSid(modem);
 			if (sid) uci.set('network', sid, 'plmn_list', name);
 			return uci.save().then(function() { return uci.apply(); }).then(function() {
-				ui.addNotification(null, E('p', {}, _('Saved list "%s" (%d record(s)) and attached it to this modem.').format(name, entries.length)), 'info');
+				ui.addNotification(null, E('p', {}, [ _('Saved list "%s" (%d record(s)) and attached it to this modem.').format(name, entries.length) ]), 'info');
 				window.location.reload();
 			});
 		});
@@ -538,8 +538,8 @@ return view.extend({
 			var n = s['.name'], cnt = (L.toArray(s.plmn)).length, t = s.type || 'nas';
 			savedRows.push(E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td', 'style': (n == curListName ? 'font-weight:600' : '') },
-					n + (n == curListName ? ' ✓' : '')),
-				E('td', { 'class': 'td' }, (t == 'nas' ? _('NAS') : t == 'fplmn' ? _('Forbidden') : _('User')) + ' · ' + cnt),
+					[ n + (n == curListName ? ' ✓' : '') ]),
+				E('td', { 'class': 'td' }, [ (t == 'nas' ? _('NAS') : t == 'fplmn' ? _('Forbidden') : _('User')) + ' · ' + cnt ]),
 				E('td', { 'class': 'td', 'style': 'width:1%;white-space:nowrap' }, [
 					btn(_('Load'), '', function() {
 						typeSel.value = t;
@@ -562,14 +562,14 @@ return view.extend({
 		});
 
 		var restoreBtn = curListName ? E('div', { 'style': 'margin-top:6px' }, [
-			E('span', {}, _('This modem restores "%s" before every radio-on. ').format(curListName)),
+			E('span', {}, [ _('This modem restores "%s" before every radio-on. ').format(curListName) ]),
 			btn(_('Restore now'), 'cbi-button-action', ui.createHandlerFn(self, function() {
 				busy(_('restoring…'));
 				return callPlmnRestore(modem).then(function(r) {
 					busy('');
-					ui.addNotification(null, E('p', {}, (r && r.ok)
+					ui.addNotification(null, E('p', {}, [ (r && r.ok)
 						? _('Configured list restored to the modem.')
-						: _('Restore failed: %s').format((r && (r.note || r.error)) || '?')), (r && r.ok) ? 'info' : 'warning');
+						: _('Restore failed: %s').format((r && (r.note || r.error)) || '?') ]), (r && r.ok) ? 'info' : 'warning');
 				});
 			})),
 		]) : E('p', {}, E('em', {}, _('No saved list is attached to this modem yet — edit above and "Save as list & attach".')));
@@ -608,7 +608,7 @@ return view.extend({
 			else if (res && res.ok)
 				ui.addNotification(null, E('p', _('Modem settings applied.')), 'info');
 			else
-				ui.addNotification(null, E('p', _('Failed: ') + describeError(res)), 'error');
+				ui.addNotification(null, E('p', [ _('Failed: ') + describeError(res) ]), 'error');
 		});
 	},
 
@@ -688,7 +688,7 @@ return view.extend({
 				if (!lockTxt) return null;
 
 				return E('div', { 'class': 'cbi-value-description', 'style': 'margin:4px 0' },
-					_('Modem currently locked: %s — the live read-back of the lock editor.').format(lockTxt));
+					[ _('Modem currently locked: %s — the live read-back of the lock editor.').format(lockTxt) ]);
 			})(),
 			E('div', { 'class': 'cbi-page-actions', 'style': 'margin-top:6px' }, [
 				E('button', { 'class': 'btn cbi-button cbi-button-apply',
@@ -730,10 +730,12 @@ return view.extend({
 				var idxs = (m.indexes && m.indexes.length) ? m.indexes
 					: (m.index != null ? [ m.index ] : []);
 				return E('tr', { 'class': 'tr' }, [
-					E('td', { 'class': 'td' }, m.sender || '—'),
-					E('td', { 'class': 'td', 'style': 'white-space:nowrap' }, m.timestamp || ''),
+					/* arrays: an SMS is written by whoever knows the number, so
+					   sender, timestamp and body are all outside text */
+					E('td', { 'class': 'td' }, [ m.sender || '—' ]),
+					E('td', { 'class': 'td', 'style': 'white-space:nowrap' }, [ m.timestamp || '' ]),
 					E('td', { 'class': 'td', 'style': 'white-space:pre-wrap' },
-						(m.text || '') + (m.incomplete ? ' ' + _('(incomplete)') : '')),
+						[ (m.text || '') + (m.incomplete ? ' ' + _('(incomplete)') : '') ]),
 					E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
 						'class': 'btn cbi-button cbi-button-remove',
 						click: ui.createHandlerFn(self, function() {
@@ -761,9 +763,9 @@ return view.extend({
 			return callSmsList(modem, storageSel.value).then(function(res) {
 				if (!res || res.ok === false) {
 					var e = res && res.error;
-					set(E('em', {}, e == 'unsupported_on_backend'
+					set(E('em', {}, [ e == 'unsupported_on_backend'
 						? _('This modem does not expose SMS access.')
-						: _('Could not read messages: %s').format(e || '?')));
+						: _('Could not read messages: %s').format(e || '?') ]));
 					return;
 				}
 				set(rows(res.messages));
@@ -853,7 +855,7 @@ return view.extend({
 					var m = data.mods[n] || {};
 					return E('li', { 'class': (n == data.modem) ? 'cbi-tab' : 'cbi-tab-disabled' },
 						E('a', { 'href': window.location.pathname + '?modem=' + encodeURIComponent(n) },
-							'%s (%s)'.format(m.netdev || n, m.model || n)));
+							[ '%s (%s)'.format(m.netdev || n, m.model || n) ]));
 				}));
 
 		/* callbacks the shared SIM/eSIM + network-selection panels need from
@@ -868,7 +870,7 @@ return view.extend({
 		   offer the way back plus the modem's status/config, so users are never
 		   stranded on the tools page. */
 		var nav = E('div', { 'style': 'margin:0 0 10px;font-size:95%' }, [
-			E('a', { 'href': L.url('admin/network/wwand') }, '← ' + _('Modems')),
+			E('a', { 'href': L.url('admin/network/wwand') }, [ '← ' + _('Modems') ]),
 			' · ',
 			E('a', { 'href': L.url('admin/status/wwand') }, _('Status')),
 			' · ',
@@ -930,7 +932,7 @@ return view.extend({
 				return E('div', { 'class': 'cbi-section' }, [
 					E('h3', {}, _('Control protocol')),
 					E('div', { 'class': 'cbi-value' }, [
-						E('label', { 'class': 'cbi-value-title' }, _('Switch to %s').format(target.toUpperCase())),
+						E('label', { 'class': 'cbi-value-title' }, [ _('Switch to %s').format(target.toUpperCase()) ]),
 						E('div', { 'class': 'cbi-value-field' }, [
 							E('button', { 'class': 'btn cbi-button cbi-button-reset',
 								click: ui.createHandlerFn(self, function() {
@@ -944,9 +946,9 @@ return view.extend({
 										return;
 									return wrpc.setProtocol(data.modem, target).then(function(res) {
 										ui.addNotification(null, E('p',
-											res && res.ok
+											[ res && res.ok
 												? _('Protocol switch to %s issued — the modem resets.').format(target.toUpperCase())
-												: _('Protocol switch failed: %s.').format(describeError(res))),
+												: _('Protocol switch failed: %s.').format(describeError(res)) ]),
 											res && res.ok ? 'info' : 'warning');
 									});
 								}) }, _('Switch protocol')),

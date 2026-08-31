@@ -29,11 +29,11 @@ return baseclass.extend({
 
 		var infoRows = [
 			E('div', { 'style': 'margin-bottom:3px' }, [
-				E('strong', {}, _('Current mode') + ': '),
+				E('strong', {}, [ _('Current mode') + ': ' ]),
 				(mode == 'manual') ? _('manual') : _('automatic') ]),
 		];
 		if (reg && (reg.mcc != null || reg.name))
-			infoRows.push(E('div', {}, [ E('strong', {}, _('Registered operator') + ': '),
+			infoRows.push(E('div', {}, [ E('strong', {}, [ _('Registered operator') + ': ' ]),
 				(reg.name || _('unknown')) + ' (' + (reg.mcc != null ? reg.mcc : '?') +
 				'/' + fmt.fmtMnc(reg.mnc) + ')' ]));
 
@@ -43,7 +43,7 @@ return baseclass.extend({
 			return callSetSelection(data.modem, smode, (mcc != null ? +mcc : 0), (mnc != null ? +mnc : 0))
 				.then(function(res) {
 					if (res && res.ok === false)
-						ui.addNotification(null, E('p', _('Failed: ') + (res.error || '?')), 'error');
+						ui.addNotification(null, E('p', [ _('Failed: ') + (res.error || '?') ]), 'error');
 					else if (res && res.unchanged)
 						ui.addNotification(null, E('p',
 							_('No change — the modem already runs this selection.')), 'info');
@@ -151,8 +151,8 @@ return baseclass.extend({
 			dom.content(results, E('div', { 'class': 'wwe-banner run',
 				'style': 'display:flex;align-items:center;gap:9px' }, [
 				E('span', { 'class': 'wwe-spin' }),
-				E('span', {}, _('Scanning for operators — this can take several minutes…')
-					+ (secs ? ' (' + secs + 's)' : '')),
+				E('span', {}, [ _('Scanning for operators — this can take several minutes…')
+					+ (secs ? ' (' + secs + 's)' : '') ]),
 			]));
 		};
 

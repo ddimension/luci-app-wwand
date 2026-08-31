@@ -297,7 +297,7 @@ return view.extend({
 
 					var fields = isPuk ? [
 						E('p', { 'class': 'alert-message warning' },
-							_('This SIM is PUK-locked (%s). A WRONG PUK consumes one of ~10 attempts — after the last one the SIM is permanently destroyed. The PUK is printed on the SIM carrier or available from the provider.').format(reason)),
+							[ _('This SIM is PUK-locked (%s). A WRONG PUK consumes one of ~10 attempts — after the last one the SIM is permanently destroyed. The PUK is printed on the SIM carrier or available from the provider.').format(reason) ]),
 						E('p', {}, [ _('PUK (8 digits)'), E('br'), E('input', { 'id': 'wwand-puk', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
 						E('p', {}, [ _('New PIN (4-8 digits)'), E('br'), E('input', { 'id': 'wwand-newpin', 'type': 'text', 'maxlength': 8, 'class': 'cbi-input-text' }) ]),
 					] : [
@@ -318,7 +318,7 @@ return view.extend({
 											ui.addNotification(null, E('p', {}, [ okText ]), 'info');
 										else
 											ui.addNotification(null, E('p', {},
-												_('Unlock failed: %s').format((res && (res.error + (res.detail ? ' (' + JSON.stringify(res.detail) + ')' : ''))) || '?')), 'error');
+												[ _('Unlock failed: %s').format((res && (res.error + (res.detail ? ' (' + JSON.stringify(res.detail) + ')' : ''))) || '?') ]), 'error');
 									};
 									if (isPuk) {
 										var puk = (document.getElementById('wwand-puk').value || '').trim();
@@ -433,7 +433,7 @@ return view.extend({
 											btn.disabled = false;
 											btn.textContent = _('Configure');
 											ui.addNotification(null, E('p', {},
-												_('Could not configure modem: %s').format(e)));
+												[ _('Could not configure modem: %s').format(e) ]));
 										});
 									} }, _('Configure'))),
 						]);
@@ -463,10 +463,12 @@ return view.extend({
 					E('td', { 'class': 'td' },
 						E('input', { 'type': 'checkbox', 'checked': 'checked',
 							'change': function(ev) { checked[name] = ev.target.checked; } })),
-					E('td', { 'class': 'td' }, name),
-					E('td', { 'class': 'td' }, (s.proto || '?').toUpperCase()),
-					E('td', { 'class': 'td' }, s.device || '-'),
-					E('td', { 'class': 'td' }, s.apn || '-'),
+					/* arrays: an APN or device name reaches uci from a config
+					   import or a provisioning tool, not only from this page */
+					E('td', { 'class': 'td' }, [ name ]),
+					E('td', { 'class': 'td' }, [ (s.proto || '?').toUpperCase() ]),
+					E('td', { 'class': 'td' }, [ s.device || '-' ]),
+					E('td', { 'class': 'td' }, [ s.apn || '-' ]),
 				]);
 			});
 
@@ -483,11 +485,11 @@ return view.extend({
 
 					return wrpc.migrate(true, sel).then(function(res) {
 						if (res && (res.ok || res.applied != null)) {
-							ui.addNotification(null, E('p', {}, _('Migrated %d interface(s); reloading…').format(sel.length)), 'info');
+							ui.addNotification(null, E('p', {}, [ _('Migrated %d interface(s); reloading…').format(sel.length) ]), 'info');
 							window.setTimeout(function() { location.reload(); }, 1500);
 						}
 						else {
-							ui.addNotification(null, E('p', {}, _('Migration failed: %s').format((res && res.error) || _('unknown'))), 'error');
+							ui.addNotification(null, E('p', {}, [ _('Migration failed: %s').format((res && res.error) || _('unknown')) ]), 'error');
 						}
 					});
 				}) }, _('Migrate selected'));
