@@ -53,6 +53,53 @@ function parseActivity(log) {
    view); this panel and wwand.netsel just use the classes. */
 
 return baseclass.extend({
+	/* The modem's own eUICC profile read (QMI UIM), for a card whose ES10 lpac
+	   cannot use. Rendered lazily into its own container: it is a second round
+	   trip and only interesting once the lpac path has already failed. */
+	renderNativeProfiles: function(data) {
+		var box = E('div', {}, [ E('em', {}, [ _('Asking the modem directly…') ]) ]);
+
+		/* the eUICC is not necessarily the ACTIVE slot — ask about the slot
+		   that actually holds it, or neither path can reach the card */
+		var slot = 1;
+		(data.slots || []).forEach(function(sl) { if (sl.is_euicc) slot = sl.physical; });
+
+		L.resolveDefault(wrpc.euiccProfiles(data.modem, slot), {}).then(function(r) {
+			if (!r || r.ok === false || !(r.profiles || []).length) {
+				var why = (r && r.detail && r.detail.error) || '';
+
+				dom.content(box, E('p', {}, [ E('em', {}, [
+					why == 'no_native_euicc'
+						? _('This modem has no native eUICC interface either, so the card cannot be enumerated from the router at all.')
+						: _('The modem returned no profiles for this slot.') ]) ]));
+				return;
+			}
+
+			dom.content(box, [
+				E('p', {}, [ _('Read from the modem directly (slot %d), bypassing ES10:').format(slot) ]),
+				E('table', { 'class': 'table' }, [
+					E('tr', { 'class': 'tr table-titles' }, [
+						E('th', { 'class': 'th' }, [ _('Profile') ]),
+						E('th', { 'class': 'th' }, [ _('State') ]),
+						E('th', { 'class': 'th' }, [ 'ICCID' ]),
+						E('th', { 'class': 'th' }, [ _('Class') ]),
+					]),
+				].concat((r.profiles || []).map(function(p) {
+					return E('tr', { 'class': 'tr' }, [
+						E('td', { 'class': 'td' }, [ p.name || p.nickname || p.spn || _('(unnamed)') ]),
+						E('td', { 'class': 'td' }, [ p.active ? _('active') : (p.state || '') ]),
+						E('td', { 'class': 'td' }, [ p.iccid || '' ]),
+						E('td', { 'class': 'td' }, [
+							(p.class || '') + (p.policy && p.policy.delete_not_allowed
+								? ' · ' + _('delete not allowed') : '') ]),
+					]);
+				}))),
+			]);
+		});
+
+		return box;
+	},
+
 	render: function(ctx, data) {
 		var self = this;
 		var esimOk = data.esim && data.esim.ok !== false && data.esim.profiles;
@@ -137,6 +184,14 @@ return baseclass.extend({
 					_('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
 						.format(data.esim.detail.sw || '6985')));
 				out.push(E('p', {}, _('This is the normal behaviour of M2M eUICCs (SGP.02) and of vendor-locked cards: profiles are managed over-the-air by the SIM provider (SM-SR), so downloading or switching profiles from this router is not possible. Use the provider’s portal to manage the card — the router only needs to keep the active profile registered and online.')));
+
+				/* The one path left when the CARD refuses local management: ask
+				   the MODEM instead. lpac talks ES10 to the card over an APDU
+				   channel, which an SGP.02 eUICC declines by design; the modem's
+				   own interface does not go through ES10 at all. Not every
+				   firmware implements it — the answer says which case this is
+				   rather than leaving an empty panel. */
+				out.push(this.renderNativeProfiles(data));
 			}
 			return out;
 		}

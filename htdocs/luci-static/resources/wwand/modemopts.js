@@ -184,6 +184,40 @@ return baseclass.extend({
 		o.optional = true;
 		bind(o);
 
+		/* The INITIAL-ATTACH bearer. The attach happens before any data session
+		   and some networks want their own APN for it, while the data
+		   connection uses another. Unset = the same as the interface, which is
+		   what every deployment did before this existed. */
+		o = s.taboption(tab, form.Value, 'init_apn', _('Attach APN'),
+			_('APN for the initial network attach, when the network wants a different one from the data connection (an IMS or admin bearer). Leave empty to attach with the interface\'s own APN, which is the normal case.'));
+		o.placeholder = _('same as the interface');
+		o.optional = true;
+		bind(o);
+
+		o = s.taboption(tab, form.ListValue, 'init_auth', _('Attach authentication'),
+			_('Authentication for the attach bearer. Only used together with an attach APN.'));
+		o.value('', _('modem default'));
+		o.value('none', _('none'));
+		o.value('pap', 'PAP');
+		o.value('chap', 'CHAP');
+		o.value('both', _('PAP or CHAP'));
+		o.optional = true;
+		o.depends('init_apn', /.+/);
+		bind(o);
+
+		o = s.taboption(tab, form.Value, 'init_user', _('Attach username'),
+			_('Username for the attach bearer. Ignored without an attach APN — it would otherwise apply to whatever APN the modem\'s attach profile already held.'));
+		o.optional = true;
+		o.depends('init_apn', /.+/);
+		bind(o);
+
+		o = s.taboption(tab, form.Value, 'init_pass', _('Attach password'),
+			_('Password for the attach bearer.'));
+		o.password = true;
+		o.optional = true;
+		o.depends('init_apn', /.+/);
+		bind(o);
+
 		/* A headless box has no UI to render a SETUP MENU, so advertising a
 		   phone's terminal profile invites an operator campaign to send one and
 		   then wait for an answer that never comes. */
@@ -504,6 +538,13 @@ return baseclass.extend({
 			_('Reboot after this many consecutive control-protocol errors. Gated by the failure-reboot setting above — with reboot disabled it never fires.'));
 		o.placeholder = '25';
 		o.datatype = 'uinteger';
+		bind(o);
+
+		/* Off by default on purpose: a parked radio is not reachable, which is
+		   the opposite of what most routers want. */
+		o = s.taboption(tab, form.Flag, 'lowpower', _('Park the radio when idle'),
+			_('Put the modem\'s radio into low power once no interface on this modem is up — for battery and solar installs, where an idle modem still spends a couple of watts holding a registration nobody uses. Only on an administrative down, never on a brief connection loss. A parked modem is NOT reachable from the network until the interface is brought up again.'));
+		o.default = '0';
 		bind(o);
 
 		o = s.taboption(tab, form.Value, 'repower_time', _('Repower / reset duration'),

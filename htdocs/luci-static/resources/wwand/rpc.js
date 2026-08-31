@@ -36,6 +36,18 @@ return baseclass.extend({
 	modemReattach: rpc.declare({ object: 'wwand', method: 'modem_reattach', params: [ 'modem' ], expect: {} }),
 	setProtocol: rpc.declare({ object: 'wwand', method: 'modem_set_protocol', params: [ 'modem', 'protocol' ], expect: {} }),
 
+	/* --- carrier configuration (MBN, over QMI PDC) ------------------------
+	   op = list | get | set. A `set` only takes effect after a modem reset and
+	   is reported as `pending` until then, so the UI must not claim the switch
+	   already happened. */
+	carrierConfig: rpc.declare({ object: 'wwand', method: 'modem_carrier_config',
+		params: [ 'modem', 'op', 'id' ], expect: {} }),
+
+	/* the modem's own eUICC profile read, for cards lpac structurally cannot
+	   enumerate (an M2M eUICC has no local ES10) */
+	euiccProfiles: rpc.declare({ object: 'wwand', method: 'modem_euicc_profiles',
+		params: [ 'modem', 'slot' ], expect: {} }),
+
 	/* --- SIM / eSIM ------------------------------------------------------ */
 	slots:      rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} }),
 	switchSlot: rpc.declare({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} }),

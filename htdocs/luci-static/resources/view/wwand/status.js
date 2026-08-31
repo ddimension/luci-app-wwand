@@ -455,6 +455,18 @@ function renderLive(name, modem) {
 						  }).join(', ') + ' · ' + _('not throttling') ]) ]);
 		}
 
+		/* Only shown when it is FALSE, which is the whole point: `proven` says
+		   the modem has answered at least once in the protocol wwand chose for
+		   it, and until it has, every hardware recovery step — op-mode cycle,
+		   modem reset, power-cycle, reboot — is held back. A working modem is
+		   proven within seconds and the row never appears; one that is not is
+		   usually a wrong `option protocol` or an unrecognised driver, and the
+		   operator needs to know that recovery is disarmed rather than wonder
+		   why nothing is being retried. */
+		if (modem.proven === false)
+			mdmRows.push([ term(_('Recovery'), _('The modem has not yet answered in the control protocol wwand is using, so no hardware recovery step will run — repowering a modem that was never broken only adds outages. Check the control protocol setting and the bound driver.')),
+				E('span', { 'style': 'color:#b8860b' }, [ _('disarmed — the modem has not answered yet') ]) ]);
+
 		/* The card's own last word about itself, from the UIM indications. A
 		   removed or busy card used to leave these rows simply absent, which
 		   read as "nothing to report" rather than "the card is gone". */

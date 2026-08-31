@@ -307,14 +307,78 @@ return view.extend({
 				L.resolveDefault(callSlots(name), {}),
 				L.resolveDefault(callEsim(name, 'profiles', 0, '', '', ''), {}),
 				L.resolveDefault(callEsim(name, 'backend', 0, '', '', ''), {}),
+				/* carrier config: absent on modems without QMI PDC, which is
+				   normal — resolveDefault keeps the page working either way */
+				L.resolveDefault(wrpc.carrierConfig(name, 'get', ''), {}),
+				L.resolveDefault(wrpc.carrierConfig(name, 'list', ''), {}),
 			]).then(function(res) {
 				var esimData = res[3] || {};
 				esimData.backend = (res[4] || {}).backend;
 				return { modem: name, mods: r[0] || {}, info: (r[0] || {})[name] || {},
 				         settings: res[0], plmn: res[1],
-				         slots: (res[2] || {}).slots || [], esim: esimData };
+				         slots: (res[2] || {}).slots || [], esim: esimData,
+				         mbnSel: res[5] || {}, mbnList: (res[6] || {}).configs || [] };
 			});
 		});
+	},
+
+	/* Carrier configuration (MBN) over QMI PDC. Absent on modems that do not
+	   expose the service — then the section is simply not rendered, because an
+	   empty picker invites the question "why can I not choose".
+
+	   A selection only takes effect after a MODEM RESET, and PDC reports it as
+	   `pending` until then. The UI says exactly that rather than implying the
+	   radio changed underneath the operator. */
+	renderCarrierConfig: function(data) {
+		var list = data.mbnList || [], sel = data.mbnSel || {};
+
+		if (!list.length && !sel.active)
+			return [];
+
+		var rows = list.map(function(c) {
+			var isActive = (sel.active && c.id == sel.active);
+			var isPending = (sel.pending && c.id == sel.pending);
+
+			return E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td' }, [ c.description || c.id.substr(0, 12) ]),
+				E('td', { 'class': 'td' }, [ isActive ? _('active')
+					: isPending ? _('pending — takes effect after a modem reset')
+					: '' ]),
+				E('td', { 'class': 'td', 'style': 'font-family:monospace;font-size:85%' },
+					[ c.id.substr(0, 16) + '…' ]),
+				E('td', { 'class': 'td' }, [
+					(isActive || isPending) ? '' :
+					E('button', { 'class': 'btn cbi-button', 'click': ui.createHandlerFn(this,
+						function(id, ev) {
+							return wrpc.carrierConfig(data.modem, 'set', id).then(function(r) {
+								if (r && r.ok === false)
+									return ui.addNotification(null,
+										E('p', {}, [ _('Selecting the carrier configuration failed.') ]), 'error');
+
+								ui.addNotification(null, E('p', {},
+									[ _('Carrier configuration selected. It takes effect after a modem reset.') ]));
+							});
+						}, c.id) }, [ _('Select') ]),
+				]),
+			]);
+		}, this);
+
+		return [
+			E('h3', {}, _('Carrier configuration')),
+			E('div', { 'class': 'cbi-section' }, [
+				E('p', {}, [ _('The carrier profile (MBN) the modem applies: APN defaults, IMS settings, band and roaming policy for a given network. The wrong one leaves the modem technically working but subtly wrong on that network — a rejected attach, no IMS, a missing band.') ]),
+				sel.pending ? E('p', { 'style': 'color:#b8860b' },
+					[ _('A different configuration is selected and waiting for a modem reset — the radio is still running the previous one.') ]) : '',
+				E('table', { 'class': 'table' }, [
+					E('tr', { 'class': 'tr table-titles' }, [
+						E('th', { 'class': 'th' }, [ _('Configuration') ]),
+						E('th', { 'class': 'th' }, [ _('State') ]),
+						E('th', { 'class': 'th' }, [ _('Id') ]),
+						E('th', { 'class': 'th' }, [ '' ]),
+					]),
+				].concat(rows)),
+			]),
+		];
 	},
 
 	// the interface section carrying wwand's per-interface config for the
@@ -893,7 +957,7 @@ return view.extend({
 				]);
 			})(),
 			netsel.render(panelCtx, data),
-		].concat(this.renderCellLock(data)).concat(esim.render(panelCtx, data)).concat([
+		].concat(this.renderCarrierConfig(data)).concat(this.renderCellLock(data)).concat(esim.render(panelCtx, data)).concat([
 			E('h3', {}, _('Preferred PLMN lists')),
 			this.renderPlmnManager(data.modem, data),
 			plmnTable(_('Operator-controlled (6F61)'), (data.plmn || {}).operator),
