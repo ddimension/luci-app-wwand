@@ -167,14 +167,15 @@ return view.extend({
 			var td = form.GridSection.prototype.renderRowActions.call(this, section_id, _('Config'));
 			var box = td.firstElementChild || td;
 
-			/* Up to nine buttons can end up in this one cell — Config, Status,
-			   Tools, Unlock SIM, Save SIM, Reattach, Reboot, Repower and the
-			   trailing Delete. LuCI's actions column does not wrap, so on a
-			   modem that offers them all the row simply ran off the right edge
-			   of the table (field report with a screenshot, RUTM11). Make the
-			   cell a wrapping flex row instead; the buttons keep their theme
-			   styling and stay right-aligned, they just fold onto a second
-			   line when the column is too narrow for them. */
+			/* This cell used to hold up to nine buttons — Config, Status, Tools,
+			   Unlock SIM, Save SIM, Reattach, Reboot, Repower and the trailing
+			   Delete — and LuCI's actions column does not wrap, so on a modem
+			   that offered them all the row ran off the right edge of the table
+			   (field report with a screenshot, RUTM11). Everything from Tools on
+			   now lives in one dropdown (below), which leaves four. The wrapping
+			   flex row stays as the backstop for a narrow column: the buttons
+			   keep their theme styling and stay right-aligned, they just fold
+			   onto a second line rather than overflowing. */
 			box.style.display = 'flex';
 			box.style.flexWrap = 'wrap';
 			box.style.justifyContent = 'flex-end';
@@ -339,17 +340,76 @@ return view.extend({
 				}),
 			}, _('Unlock SIM')) : null;
 
+			/* Everything from Tools on goes into ONE dropdown, so the row shows
+			   Config, Status, the menu and Delete instead of up to nine buttons
+			   competing for a column that does not wrap. Config and Status stay
+			   outside because they are the two anyone reaches for daily; the
+			   rest are occasional, and three of them ask for confirmation
+			   anyway.
+
+			   The buttons themselves are unchanged and simply never inserted
+			   into the page — picking an entry clicks the corresponding one, so
+			   every confirm, spinner and notification keeps working exactly as
+			   it did when it had its own button. */
+			var menu = {}, acts = {};
+			var add = function(key, label, el) {
+				if (!el) return;
+				menu[key] = label;
+				acts[key] = el;
+			};
+
+			add('tools', _('Tools'),
+				jump(_('Tools'), _('Band, operator, SIM, eSIM and SMS tools for this modem'),
+					L.url('admin/network/wwand-tools')));
+			add('unlock', _('Unlock SIM'), unlockSim);
+			add('savesim', _('Save SIM'), saveSim);
+			add('reattach', _('Reattach'), reattach);
+			add('reboot', _('Reboot'), reboot);
+			add('repower', _('Repower'), repower);
+
+			var dd = new ui.Dropdown(null, menu, {
+				optional: true,
+				/* explicit order: the default sorts alphabetically, which would
+				   put Repower and Reboot above Tools */
+				sort: Object.keys(menu),
+				select_placeholder: _('Actions'),
+				display_items: 1,
+				dropdown_items: -1,
+			});
+
+			var ddNode = dd.render();
+			var acting = false;
+
+			ddNode.addEventListener('cbi-dropdown-change', function(ev) {
+				if (acting)
+					return;
+
+				/* detail.value is the selected ITEM ({text, value, element}),
+				   not the key. Note dd.getValue() is no use here: the base
+				   accessor only reads `select`/`input` nodes and a rendered
+				   dropdown is a div, so it always answers null. */
+				var sel = ev.detail && ev.detail.value;
+				var el = (sel && sel.value) ? acts[sel.value] : null;
+
+				/* This is a menu, not a stored setting, so put it back to the
+				   placeholder — otherwise the entry just used stays displayed
+				   and cannot be picked a second time. setValues() is LuCI
+				   internal (it is what clearChoices(true) uses); it re-selects
+				   the placeholder item, and re-fires this event, hence the
+				   guard. */
+				acting = true;
+				dd.setValues(dd.node, {});
+				acting = false;
+
+				if (el)
+					el.click();
+			});
+
 			var extra = [
 				jump(_('Status'), _('Live status page (signal, cells, connection) for this modem'),
 					L.url('admin/status/wwand')),
-				jump(_('Tools'), _('Band, operator, SIM, eSIM and SMS tools for this modem'),
-					L.url('admin/network/wwand-tools')),
+				ddNode,
 			];
-			if (unlockSim) extra.push(unlockSim);
-			if (saveSim) extra.push(saveSim);
-			extra.push(reattach);
-			extra.push(reboot);
-			extra.push(repower);
 
 			/* between Config and the trailing Delete button when present */
 			extra.forEach(function(b) {
@@ -360,6 +420,32 @@ return view.extend({
 			});
 
 			return td;
+		};
+
+		/* Deleting a modem is not like deleting a row in a list: every interface
+		   that names it stops having a modem, and the connection those carry
+		   goes with it on the next Save & Apply. The button sits next to
+		   Config, one position away from where the mouse already is, and LuCI
+		   removes without asking — so ask, and say what is attached. Overriding
+		   handleRemove rather than the button covers every path that removes a
+		   section, not just this one click. */
+		s.handleRemove = function(section_id /*, ev */) {
+			var used = [];
+
+			uci.sections('network', 'interface', function(sc) {
+				if (sc.proto == 'wwand' && sc.modem == section_id)
+					used.push(sc['.name']);
+			});
+
+			var msg = used.length
+				? _('Delete modem "%s"? It is still used by: %s. Those interfaces lose their modem and their connection when you Save & Apply.')
+					.format(section_id, used.join(', '))
+				: _('Delete modem "%s"?').format(section_id);
+
+			if (!confirm(msg))
+				return Promise.resolve();
+
+			return form.GridSection.prototype.handleRemove.apply(this, arguments);
 		};
 
 		/* per-ICCID/IMSI SIM overrides (PIN/APN), shared wwand.simlist */

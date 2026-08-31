@@ -24,6 +24,20 @@ return baseclass.extend({
 		s.nodescriptions = true;
 		s.addbtntitle = _('Add SIM');
 
+		/* An override row usually holds the card's PIN, and nothing else in the
+		   UI holds it — deleted, it is gone, and the card goes back to whatever
+		   the modem section carries (or to no PIN at all). Cheap to ask. */
+		s.handleRemove = function(section_id /*, ev */) {
+			var iccid = uci.get('network', section_id, 'iccid');
+
+			if (!confirm(iccid
+				? _('Delete the override for SIM %s? Its PIN and APN settings are lost.').format(iccid)
+				: _('Delete this SIM override? Its PIN and APN settings are lost.')))
+				return Promise.resolve();
+
+			return form.GridSection.prototype.handleRemove.apply(this, arguments);
+		};
+
 		var o;
 
 		o = s.option(form.Value, 'iccid', _('ICCID'),
