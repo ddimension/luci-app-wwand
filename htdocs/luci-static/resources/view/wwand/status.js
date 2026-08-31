@@ -479,6 +479,8 @@ function renderLive(name, modem) {
 				E('span', { 'style': 'color:#c00' }, [ modem.sim_note ]) ]);
 		if (modem.iccid)
 			mdmRows.push([ term('ICCID', _('Integrated Circuit Card ID — serial number of the active SIM card or eSIM profile')), modem.iccid ]);
+		if (modem.imei)
+			mdmRows.push([ term('IMEI', _('International Mobile Equipment Identity — the modem hardware serial')), modem.imei ]);
 		if (modem.imsi) {
 			/* home network of the subscription: MCC = digits 1-3, MNC = 2 or 3
 			   digits after it — show the resolved operator name when known */
@@ -537,6 +539,11 @@ function renderLive(name, modem) {
 		var techTerm = term(_('Technology'), _('Radio access technology of the current connection (LTE, 5G NSA = 5G carrier on an LTE anchor, 5G SA = standalone 5G, NB-IoT/LTE-M = IoT modes)'));
 		if (modem.rat)
 			srvRows.push([ techTerm, modem.rat ]);
+		/* the daemon-reported registration tech (reg.tech) covers modems
+		   without a cell environment — a cells-less huawei-cdc stack names
+		   its mode from ^HCSQ; only shown when neither source above applies */
+		if (!modem.rat && !lc && reg.tech)
+			srvRows.push([ techTerm, reg.tech.toUpperCase() ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
 			var tech = 'LTE' + ((fmt.hasSignal(nr.rsrp) || (cells.serving||{}).nr) ? ' + 5G NR' : '');
