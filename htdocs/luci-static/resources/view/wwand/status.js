@@ -284,6 +284,14 @@ function renderDatapath(dp) {
 			return;
 		if (/_size$/.test(k) && typeof v == 'number')
 			v = fmtBytes(v);
+		/* The contract says "keys are shown as given" and the datapaths in tree
+		   send strings and numbers, so this is for the ones that are not in
+		   tree (docs/extending.md invites them): a boolean would otherwise land
+		   as a bare, untranslated `true` beside translated labels. `false` is
+		   deliberately still rendered — the guard above lets it through, and
+		   "NSS shim: no" is the interesting answer. */
+		if (typeof v == 'boolean')
+			v = v ? _('yes') : _('no');
 		rows.push([ k.replace(/_/g, ' ').replace(/^./, function(c){ return c.toUpperCase(); }),
 			'' + v ]);
 	});

@@ -22,6 +22,17 @@ var callModemReset = wrpc.modemReset;
 var callSlots = wrpc.slots;
 var callProbe = wrpc.probe;
 
+/* This module is shared by two surfaces, and `section_id` does not mean the same
+   thing on both: on Network → Modems it IS the wwand_modem name, while on
+   Network → Interfaces → Modem & SIM it is the *interface* section, whose modem
+   is whatever `option modem` points at. Every lookup into a status reply goes
+   through here, because those replies are keyed by modem name — indexing one
+   with a raw section_id simply misses on the interface page, and misses
+   quietly: the code reads as if that modem has nothing to report. */
+function modemOf(section_id) {
+	return modemsid.modemSid(section_id) || section_id;
+}
+
 /* Add a Combobox choice ONCE. These option objects are shared across every
    wwand_modem section of the GridSection, so LuCI calls load() (and thus our
    self.value()) once PER section — a plain self.value() then appends the same
@@ -151,11 +162,7 @@ return baseclass.extend({
 		o.inputstyle = 'remove';
 		o.modelabel = false;
 		o.onclick = function(ev, section_id) {
-			// this module is shared: on the Modems page `section_id` IS the
-			// wwand_modem name, but on the interface page it's the interface
-			// section — resolve to the modem it references (falls back to
-			// section_id, which is already the modem name on the Modems page).
-			var modem = modemsid.modemSid(section_id) || section_id;
+			var modem = modemOf(section_id);
 			return callModemReset(modem).then(function(res) {
 				if (res && (res.ok || res.resetting))
 					ui.addNotification(null, E('p', {}, [ _('Modem reset triggered (%s).').format(res.action || '?') ]), 'info');
@@ -256,7 +263,7 @@ return baseclass.extend({
 		o.load = function(section_id) {
 			var self = this;
 			return L.resolveDefault(callStatus(), {}).then(function(res) {
-				var m = ((res || {}).modems || {})[section_id];
+				var m = ((res || {}).modems || {})[modemOf(section_id)];
 				self.at2Port = self.at2Port || {};
 				self.at2Port[section_id] = (m && m.at2_released) || null;
 				return self.super('load', [section_id]);
@@ -301,7 +308,7 @@ return baseclass.extend({
 			   how 'raw-ip' gets written, and the daemon canonicalises it */
 			if (value == null || value === '' || /^[a-z][a-z0-9_-]*$/.test(value))
 				return true;
-			return _('A datapath name: lowercase letters, digits and underscore.');
+			return _('A datapath name: lowercase letters, digits, underscore and hyphen.');
 		};
 		o.load = function(section_id) {
 			var self = this;
@@ -313,8 +320,8 @@ return baseclass.extend({
 				   a given ROW may be offered. */
 				self.dpServes = self.dpServes || {};
 				self.dpProto = self.dpProto || {};
-				self.dpProto[section_id] = ((reply || {}).modems || {})[section_id]
-					? ((reply || {}).modems || {})[section_id].protocol : null;
+				var mine = ((reply || {}).modems || {})[modemOf(section_id)];
+				self.dpProto[section_id] = mine ? mine.protocol : null;
 
 				list.forEach(function(e) {
 					/* tolerate the pre-1.6 shape (a plain array of names) */
@@ -395,26 +402,25 @@ return baseclass.extend({
 			   is `physical` (what format.js/esim.js and modem_sim_switch_slot
 			   use), not `slot`. */
 			return L.resolveDefault(callStatus(), {}).then(function(reply) {
-				if (!((reply && reply.modems) || {})[section_id])
+				var modem = modemOf(section_id);
+
+				if (!((reply && reply.modems) || {})[modem])
 					return self.super('load', [section_id]);
 
-				return Promise.all([ L.resolveDefault(callSlots(section_id), {}) ])
-					.then(function(results) {
+				return L.resolveDefault(callSlots(modem), {}).then(function(r) {
 					var seen = {};
 					self.slotsOf = self.slotsOf || {};
 					self.slotsOf[section_id] = { '0': true };
-					results.forEach(function(r) {
-						((r && r.slots) || []).forEach(function(sl) {
-							if (sl.physical == null || seen[sl.physical]) return;
-							seen[sl.physical] = true;
-							self.slotsOf[section_id][String(sl.physical)] = true;
-							var lbl = _('Slot %d').format(sl.physical);
-							if (sl.iccid)
-								lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
-							else
-								lbl += ' — ' + _('empty');
-							uniqVal(self, String(sl.physical), lbl);
-						});
+					((r && r.slots) || []).forEach(function(sl) {
+						if (sl.physical == null || seen[sl.physical]) return;
+						seen[sl.physical] = true;
+						self.slotsOf[section_id][String(sl.physical)] = true;
+						var lbl = _('Slot %d').format(sl.physical);
+						if (sl.iccid)
+							lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
+						else
+							lbl += ' — ' + _('empty');
+						uniqVal(self, String(sl.physical), lbl);
 					});
 					return self.super('load', [section_id]);
 				});
