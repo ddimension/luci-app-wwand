@@ -62,8 +62,29 @@ return baseclass.extend({
 		var plmn = reg && reg.plmn;
 		if (!plmn)
 			return null;
-		return '%s (%s/%s)%s'.format((plmn.description || '').trim(),
-			plmn.mcc, this.fmtMnc(plmn.mnc),
+
+		/* Two shapes reach this: QMI reports mcc/mnc separately, MBIM reports
+		   one concatenated ProviderId ("26006"). The daemon emits both from
+		   1.6.2 on, but an older one on a newer UI (or the reverse) is exactly
+		   the pairing users run, and reading only mcc/mnc printed
+		   "PLAY (undefined/undefined)" — reported as a missing operator.
+		   Fall back to the raw id, split the same way the daemon does. */
+		var mcc = plmn.mcc, mnc = plmn.mnc;
+
+		if ((mcc == null || mnc == null) && /^[0-9]{5,6}$/.test('' + (plmn.id || ''))) {
+			mcc = ('' + plmn.id).substr(0, 3);
+			mnc = ('' + plmn.id).substr(3);
+		}
+
+		var name = (plmn.description || '').trim();
+		var pair = (mcc != null && mnc != null)
+			? ' (%s/%s)'.format(mcc, this.fmtMnc(mnc)) : '';
+
+		/* neither a name nor an id would otherwise render as a bare "()" */
+		if (!name && !pair)
+			return null;
+
+		return '%s%s%s'.format(name, pair,
 			(reg && reg.roaming) ? ' \u00b7 ' + _('roaming') : '');
 	},
 
@@ -188,8 +209,11 @@ return baseclass.extend({
 			return '-';
 
 		if (reg.registration == 1) {
+			/* same two shapes as fmtOperator; prefer the name, then either
+			   spelling of the numeric id, and only then the generic word */
 			var op = (reg.plmn && (reg.plmn.description ||
-				('%d/%02d'.format(reg.plmn.mcc, reg.plmn.mnc)))) || _('registered');
+				(reg.plmn.mcc != null ? '%d/%02d'.format(reg.plmn.mcc, reg.plmn.mnc) : null) ||
+				reg.plmn.id)) || _('registered');
 			return op + (reg.roaming ? ' ' + _('(roaming)') : '');
 		}
 
