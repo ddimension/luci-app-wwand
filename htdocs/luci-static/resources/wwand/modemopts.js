@@ -276,17 +276,29 @@ return baseclass.extend({
 			if (!port)
 				return node;
 
-			/* The hint text goes in as a one-element ARRAY, not a bare string:
+			/* APPEND into the widget's own node — never wrap it in a parent.
+			   Wrapping looks harmless and is not: getUIElement() resolves with
+			   dom.findClassInstance(), which walks UPWARDS from the id-bearing
+			   node until it finds a bound class, and an extra parent changes
+			   what that walk reaches. Flag.formvalue() then calls isChecked()
+			   on something that is not a checkbox and the whole modal save
+			   throws — every other flag on the page worked, this one did not
+			   (ddimension/luci-app-wwand#3, measured in the browser: both
+			   `cbid.…at2_external` and `widget.cbid.…at2_external` resolved to
+			   an instance without isChecked, while lowpower/location/... were
+			   fine). A code-reading argument said the wrap was safe; the
+			   measurement said otherwise, and the measurement is right.
+
+			   The hint text goes in as a one-element ARRAY, not a bare string:
 			   dom.append() assigns a bare string via innerHTML (luci.js:1394-96)
 			   and only an array element becomes a createTextNode (:1382-83). The
-			   port comes from the daemon, so the escaped path is the right one.
-			   Wrapping the widget is safe — getUIElement() finds it by DOM id
-			   through map.findElement (form.js:1897-1901), not by what this
-			   returns. */
-			return E('div', {}, [ node, E('div', {
+			   port comes from the daemon, so the escaped path is the right one. */
+			node.appendChild(E('div', {
 				'style': 'font-size:90%;margin-top:4px',
 			}, [ _('wwand leaves %s untouched and polls telemetry over the control channel.')
-				.format(port) ]) ]);
+				.format(port) ]));
+
+			return node;
 		};
 
 		/* Not a ListValue: `option mux` also takes the name of an add-on datapath
