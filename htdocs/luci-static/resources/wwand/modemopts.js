@@ -270,7 +270,18 @@ return baseclass.extend({
 			});
 		};
 		o.renderWidget = function(section_id, option_index, cfgvalue) {
-			var node = this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+			/* NOT this.super('renderWidget', ...). These overrides sit on the
+			   INSTANCE, and LuCI's super() resolves from the class's PARENT
+			   prototype (luci.js:236): for a form.Flag that is CBIValue, whose
+			   renderWidget builds a text/select widget — so the checkbox was
+			   replaced by one, getUIElement() then found a widget without
+			   isChecked(), and every save on the form threw
+			   (ddimension/luci-app-wwand#3). Worse for a form.Value: its parent
+			   CBIAbstractValue has no renderWidget at all, so super() returns
+			   null. Two earlier fixes here blamed the wrapping and the appending;
+			   both were wrong, and the reporter's console output — this option
+			   MISMATCH, every unwrapped flag OK — is what finally placed it. */
+			var node = form.Flag.prototype.renderWidget.call(this, section_id, option_index, cfgvalue);
 			var port = (this.at2Port || {})[section_id];
 
 			if (!port)
@@ -376,7 +387,7 @@ return baseclass.extend({
 			this.vallist = vals;
 
 			try {
-				return this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+				return form.Value.prototype.renderWidget.call(this, section_id, option_index, cfgvalue);
 			}
 			finally {
 				this.keylist = allKeys;
@@ -449,7 +460,7 @@ return baseclass.extend({
 			var keys = [], vals = [];
 
 			if (!mine)
-				return this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+				return form.Value.prototype.renderWidget.call(this, section_id, option_index, cfgvalue);
 
 			for (var i = 0; i < allKeys.length; i++)
 				if (mine[allKeys[i]] || allKeys[i] === cfgvalue) {
@@ -461,7 +472,7 @@ return baseclass.extend({
 			this.vallist = vals;
 
 			try {
-				return this.super('renderWidget', [ section_id, option_index, cfgvalue ]);
+				return form.Value.prototype.renderWidget.call(this, section_id, option_index, cfgvalue);
 			}
 			finally {
 				this.keylist = allKeys;
