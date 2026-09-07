@@ -14,7 +14,6 @@ var callContexts = wrpc.contexts;
 var callSignal = wrpc.signal;
 var callCells = wrpc.cells;
 var callDatapath = wrpc.datapath;
-var callPlmn = wrpc.plmn;
 var callCtxStatus = wrpc.ctxStatus;
 var callSlots = wrpc.slots;
 var callSwitchSlot = wrpc.switchSlot;
@@ -174,17 +173,6 @@ function renderConnections(details) {
 	]);
 }
 
-/* The QMI NAS preferred-networks list (only this list is shown on status —
-   the editable EF-6F60/NAS management lives in the modem settings page). One
-   row per PLMN with its access-technology badges. */
-function ratBadges(e) {
-	var out = [];
-	[ [ 'ngran', '5G' ], [ 'eutran', '4G' ], [ 'utran', '3G' ], [ 'gsm', '2G' ] ].forEach(function(r) {
-		if (e[r[0]]) out.push(E('span', { 'style':
-			'display:inline-block;padding:0 5px;margin-right:3px;border-radius:3px;background:#e6eef7;color:#245;font-size:85%' }, r[1]));
-	});
-	return out.length ? out : E('span', { 'style': 'color:#999' }, '—');
-}
 /* capability chips: each supported RAT slug from the daemon's caps.rats; the
    IoT / RedCap / NTN variants (which QMI/MBIM cannot even name) are highlighted. */
 function capsBadges(caps) {
@@ -201,30 +189,6 @@ function capsBadges(caps) {
 			[ labels[s] || s ]);
 	});
 }
-function renderNasList(nas) {
-	if (!nas || !nas.length)
-		return null;
-
-	var rows = nas.map(function(e, i) {
-		return E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td', 'style': 'color:#888;width:2em' }, [ '' + (i + 1) ]),
-			E('td', { 'class': 'td', 'style': 'font-weight:600' }, [ fmt.fmtPlmn(e.mcc, e.mnc) ]),
-			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, fmt.fmtMnc(e.mnc)) || '—'),
-			E('td', { 'class': 'td' }, ratBadges(e)),
-		]);
-	});
-	return E('div', { 'class': 'cbi-section' }, [
-		E('h3', {}, [ _('Preferred networks (NAS) — %d').format(nas.length) ]),
-		E('table', { 'class': 'table' }, [
-			E('tr', { 'class': 'tr table-titles' }, [
-				E('th', { 'class': 'th', 'style': 'width:2em' }, '#'),
-				E('th', { 'class': 'th' }, fmt.term(_('PLMN'), _('Public Land Mobile Network code: MCC (country) / MNC (network)'))),
-				E('th', { 'class': 'th' }, _('Operator')),
-				E('th', { 'class': 'th' }, _('Access technologies')) ]),
-		].concat(rows)),
-	]);
-}
-
 /* Datapath / muxing: the link-layer config wwand applied at datapath setup
    (backend, QMAP aggregation the modem negotiated, endpoint) plus the live
    aggregation seen on the wire — the mean number of packets the modem packs
@@ -360,13 +324,11 @@ function renderLive(name, modem) {
 		cachedCall(name, 'cells', 3, function() { return callCells(name); }),
 		L.resolveDefault(callContexts(), {}),
 		cachedCall(name, 'slots', 15, function() { return callSlots(name); }),
-		cachedCall(name, 'datapath', 5, function() { return callDatapath(name); }),
-		cachedCall(name, 'plmn', 60, function() { return callPlmn(name); })
+		cachedCall(name, 'datapath', 5, function() { return callDatapath(name); })
 	]).then(function(res) {
 		var sig = res[0] || {}, cells = (res[1] || {}).cells || {};
 		var allCtx = res[2] || {};
 		var dpath = res[4] || {};
-		var plmnLists = res[5] || {};
 		var myCtx = Object.keys(allCtx)
 			.filter(function(k){ return allCtx[k].modem == name; })
 			.map(function(k){ return { name: k, cfg: allCtx[k] }; });
@@ -642,10 +604,6 @@ function renderLive(name, modem) {
 		/* --- datapath & muxing (aggregation) --- */
 		var dpanel = renderDatapath(dpath);
 		if (dpanel) out.push(dpanel);
-
-		/* --- preferred networks (NAS list only) --- */
-		var naspanel = renderNasList(plmnLists.nas);
-		if (naspanel) out.push(naspanel);
 
 		/* --- carrier aggregation (active carriers) --- unified cell columns --- */
 		if (cells.ca && cells.ca.length) {
