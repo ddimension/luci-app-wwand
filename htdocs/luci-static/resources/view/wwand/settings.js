@@ -266,7 +266,7 @@ function plmnTable(title, list, absentHint) {
 			.filter(function(k) { return e[k] })
 			.map(function(k) { return k.toUpperCase() }).join(' ');
 		return E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td' }, [ e.mcc + '/' + e.mnc ]),
+			E('td', { 'class': 'td' }, [ fmt.fmtPlmn(e.mcc, e.mnc) ]),
 			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, e.mnc) || '—'),
 			E('td', { 'class': 'td' }, rats),
 		]);

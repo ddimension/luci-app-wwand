@@ -102,8 +102,8 @@ return baseclass.extend({
 				else
 					act = E('button', { 'class': 'btn cbi-button cbi-button-apply',
 						'click': ui.createHandlerFn(self, function() {
-							if (!confirm(_('Register manually to %s (%s/%s)? The connection may briefly drop.')
-									.format(op.name || '?', op.mcc, fmt.fmtMnc(op.mnc))))
+							if (!confirm(_('Register manually to %s (%s)? The connection may briefly drop.')
+									.format(op.name || '?', fmt.fmtPlmn(op.mcc, op.mnc))))
 								return;
 							return setSelection('manual', op.mcc, op.mnc,
 								_('Manual network selection applied.'));
@@ -114,7 +114,7 @@ return baseclass.extend({
 					   the scan result, and dom.append() would put a bare string
 					   through innerHTML (luci.js:1394-96) */
 					E('td', { 'class': 'td' }, [ op.name || _('(unnamed)') ]),
-					E('td', { 'class': 'td' }, [ op.mcc + '/' + fmt.fmtMnc(op.mnc) ]),
+					E('td', { 'class': 'td' }, [ fmt.fmtPlmn(op.mcc, op.mnc) ]),
 					E('td', { 'class': 'td' }, [ rats.length ? rats.join(', ') : '—' ]),
 					E('td', { 'class': 'td' }, [
 						STATUS_LABEL[op.status] || op.status || '',

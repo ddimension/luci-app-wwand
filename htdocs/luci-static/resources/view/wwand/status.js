@@ -208,7 +208,7 @@ function renderNasList(nas) {
 	var rows = nas.map(function(e, i) {
 		return E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td', 'style': 'color:#888;width:2em' }, [ '' + (i + 1) ]),
-			E('td', { 'class': 'td', 'style': 'font-weight:600' }, [ e.mcc + '/' + fmt.fmtMnc(e.mnc) ]),
+			E('td', { 'class': 'td', 'style': 'font-weight:600' }, [ fmt.fmtPlmn(e.mcc, e.mnc) ]),
 			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, fmt.fmtMnc(e.mnc)) || '—'),
 			E('td', { 'class': 'td' }, ratBadges(e)),
 		]);

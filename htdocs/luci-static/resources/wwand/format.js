@@ -56,6 +56,18 @@ return baseclass.extend({
 		return '%02d'.format(+mnc);
 	},
 
+	/* "mcc/mnc", or '?' when the modem gave neither. JavaScript turns a missing
+	   half into the literal string "null" under concatenation, which is how the
+	   scan table came to show a mysterious "null" (#6) — and a plain guard at
+	   one call site would only have moved the problem to the next one, so the
+	   pair is formatted in exactly one place. */
+	fmtPlmn: function(mcc, mnc) {
+		if (mcc == null && mnc == null)
+			return '?';
+
+		return '%s/%s'.format(mcc != null ? mcc : '?', this.fmtMnc(mnc));
+	},
+
 	/* registered operator line — "Name (mcc/mnc) · roaming" — from the modem's
 	   `registration` block; shared by the status page and the proto handler */
 	fmtOperator: function(reg) {
