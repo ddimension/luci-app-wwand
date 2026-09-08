@@ -941,7 +941,14 @@ return view.extend({
 				if (p != 'qmi' && p != 'mbim') return '';
 				var target = (p == 'qmi') ? 'mbim' : 'qmi';
 				return E('div', { 'class': 'cbi-section' }, [
-					E('h3', {}, _('Control protocol')),
+					/* NOT "Control protocol": that is the name of the uci option
+					   on the modem page (modemopts.js), and this control does
+					   something else entirely — it rewrites the modem's FIRMWARE
+					   mode and resets the device. Two identically labelled
+					   controls with different consequences is how someone ends up
+					   pinning one protocol and switching to the other
+					   (openwrt/luci#8917). */
+					E('h3', {}, _('Firmware protocol mode')),
 					E('div', { 'class': 'cbi-value' }, [
 						E('label', { 'class': 'cbi-value-title' }, [ _('Switch to %s').format(target.toUpperCase()) ]),
 						E('div', { 'class': 'cbi-value-field' }, [
@@ -952,8 +959,8 @@ return view.extend({
 									   MBIM_OPEN and the modem comes back unusable on
 									   MBIM until switched back (field-seen). */
 									if (!confirm((target == 'mbim'
-											? _('Switch the control protocol to MBIM? The modem resets and re-enumerates. Some firmwares reject MBIM even though the switch itself succeeds — if the modem does not come back, switch it to QMI again.')
-											: _('Switch the control protocol to %s? The modem resets and re-enumerates — its connections come back on their own.').format(target.toUpperCase()))))
+											? _('Switch the modem firmware to MBIM? The modem resets and re-enumerates. Some firmwares reject MBIM even though the switch itself succeeds — if the modem does not come back, switch it to QMI again. A "Control protocol" pinned on the modem page is cleared back to "detect", because a pin the driver contradicts disables hardware recovery for this modem.')
+											: _('Switch the modem firmware to %s? The modem resets and re-enumerates — its connections come back on their own. A "Control protocol" pinned on the modem page is cleared back to "detect", because a pin the driver contradicts disables hardware recovery for this modem.').format(target.toUpperCase()))))
 										return;
 									return wrpc.setProtocol(data.modem, target).then(function(res) {
 										ui.addNotification(null, E('p',
