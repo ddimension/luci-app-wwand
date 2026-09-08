@@ -38,9 +38,15 @@ function ensureModemSid(ifaceSid) {
    Reads new-style (wwand_modem) or, until one exists, legacy inline; writes
    new-style and clears any legacy inline copy. */
 function bindModem(o) {
+	/* Which section this option's form ACTUALLY read for a given interface.
+	   Load and save do not always agree, and the difference destroys data —
+	   see remove(). */
+	o.boundTo = {};
+
 	o.cfgvalue = function(sid) {
 		var opt = this.ucioption || this.option;
 		var msid = modemSid(sid);
+		this.boundTo[sid] = msid;
 		return uci.get('network', msid || sid, opt);
 	};
 	o.write = function(sid, val) {
@@ -56,8 +62,32 @@ function bindModem(o) {
 	o.remove = function(sid) {
 		var opt = this.ucioption || this.option;
 		var msid = modemSid(sid);
-		if (msid)
+
+		/* An empty field clears the MODEM section only when the form read that
+		   same section when it loaded. Without this, adding a SECOND interface
+		   on an existing modem wiped that modem's hardware binding:
+		   `option modem` is declared before these options, so on save it is
+		   written first and modemSid() suddenly resolves — while at render time
+		   it did not, so every field here was blank and LuCI called remove()
+		   for each. The user never saw the value, never touched it, and it
+		   belonged to a section another interface depends on.
+
+		   Reported with the generated uci captured verbatim
+		   (openwrt/packages#30185, RUTC50 + RG520N, 2026-09-08):
+
+		       uci set network.wwan1.proto='wwand'
+		       uci del network.wwmodem_auto.path        <-- this
+		       uci set network.wwan1.modem='wwmodem_auto'
+
+		   after which the modem section named no hardware at all, wwand dropped
+		   it and every interface pointing at it, and the box came up with
+		   "0 modem(s), 0 context(s)".
+
+		   Deliberately clearing a value the form DID show still works: there
+		   cfgvalue resolved the same section, so the two agree. */
+		if (msid && this.boundTo[sid] === msid)
 			uci.unset('network', msid, opt);
+
 		if (opt != 'device')
 			uci.unset('network', sid, opt);
 	};
