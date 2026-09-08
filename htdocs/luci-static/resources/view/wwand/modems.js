@@ -349,8 +349,16 @@ return view.extend({
 
 			   The buttons themselves are unchanged and simply never inserted
 			   into the page — picking an entry clicks the corresponding one, so
-			   every confirm, spinner and notification keeps working exactly as
-			   it did when it had its own button. */
+			   every confirm and notification keeps working exactly as it did
+			   when it had its own button.
+
+			   The BUSY STATE is the exception, and it has to be re-hung here:
+			   ui.createHandlerFn puts `spinning` and `disabled` on the click's
+			   own currentTarget (ui.js:5683-5684), which for a programmatic
+			   click is the detached button nobody can see. So Reattach/Reboot/
+			   Repower ran with no feedback and the menu stayed selectable —
+			   a modem reboot could be fired twice by accident. The dropdown
+			   node carries it instead, for as long as the action runs. */
 			var menu = {}, acts = {};
 			var add = function(key, label, el) {
 				if (!el) return;
@@ -378,10 +386,10 @@ return view.extend({
 			});
 
 			var ddNode = dd.render();
-			var acting = false;
+			var acting = false, busy = false;
 
 			ddNode.addEventListener('cbi-dropdown-change', function(ev) {
-				if (acting)
+				if (acting || busy)
 					return;
 
 				/* detail.value is the selected ITEM ({text, value, element}),
@@ -401,8 +409,45 @@ return view.extend({
 				dd.setValues(dd.node, {});
 				acting = false;
 
-				if (el)
-					el.click();
+				if (!el)
+					return;
+
+				/* Busy state on the node the user is actually looking at.
+				   `disabled` on a cbi-dropdown only STYLES it — handleClick
+				   (ui.js) never consults the attribute — so the `busy` flag
+				   above is what actually blocks a second pick; the attribute
+				   is there to make the block visible.
+
+				   Completion is observed on the hidden button, because
+				   createHandlerFn's `disabled`/`spinning` pair on it is the one
+				   signal the click leaves behind: it does not hand back the
+				   promise. Capped, so a handler that never re-enables its
+				   button cannot leave the menu stuck for good. */
+				busy = true;
+				ddNode.classList.add('spinning');
+				ddNode.setAttribute('disabled', '');
+
+				var done = function() {
+					busy = false;
+					ddNode.classList.remove('spinning');
+					ddNode.removeAttribute('disabled');
+				};
+
+				el.click();
+
+				if (!el.disabled)
+					return done();
+
+				var waited = 0;
+				var poll = setInterval(function() {
+					waited += 150;
+
+					if (el.disabled && waited < 120000)
+						return;
+
+					clearInterval(poll);
+					done();
+				}, 150);
 			});
 
 			var extra = [

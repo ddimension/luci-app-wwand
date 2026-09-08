@@ -116,7 +116,11 @@ function renderConnections(details) {
 		var st = d.st.state || d.cfg.state || '?';
 		var rows = [
 			[ _('Interface'), d.cfg.interface + (d.cfg.mux_id ? ' · mux %d'.format(d.cfg.mux_id) : '') ],
-			[ _('State'), E('strong', { 'style': 'color:%s'.format(st == 'CONNECTED' ? '#3c3' : '#da3') }, st) ]
+			/* array, not a bare string: E() assigns a bare string child through
+			   innerHTML (luci.js:1395) while an array member becomes a text
+			   node. `st` is daemon/uci text, so it must not be parsed as
+			   markup. */
+			[ _('State'), E('strong', { 'style': 'color:%s'.format(st == 'CONNECTED' ? '#3c3' : '#da3') }, [ st ]) ]
 		];
 		if (v4) {
 			rows.push([ _('IPv4'), '%s/%d'.format(v4.addr, v4.prefix) ]);
