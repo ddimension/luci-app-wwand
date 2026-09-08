@@ -685,7 +685,18 @@ return view.extend({
 			(function() {
 				var lockTxt = fmt.fmtLocks((data.info || {}).locks);
 
-				if (!lockTxt) return null;
+				/* '' and not null: openwrt-25.12's dom.append tests `children`
+				   — the array, always truthy — instead of `children[i]`, so a
+				   null MEMBER falls through to createTextNode(String(null)) and
+				   the literal word "null" is painted into the section
+				   (luci.js:1382 on that branch). Fixed upstream by 7b02b9add
+				   ("luci-base: fix \"null\" text appearing in modal",
+				   2026-05-11) and NOT backported, so on 25.12 it is live.
+				   Reported against the Cell lock section with a DOM inspector
+				   shot pinning the stray text node
+				   (ddimension/luci-app-wwand#6). An empty string appends an
+				   empty text node on both branches, which is invisible. */
+				if (!lockTxt) return '';
 
 				return E('div', { 'class': 'cbi-value-description', 'style': 'margin:4px 0' },
 					[ _('Modem currently locked: %s — the live read-back of the lock editor.').format(lockTxt) ]);
