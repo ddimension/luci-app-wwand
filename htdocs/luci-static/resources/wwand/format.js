@@ -222,9 +222,15 @@ return baseclass.extend({
 
 		if (reg.registration == 1) {
 			/* same two shapes as fmtOperator; prefer the name, then either
-			   spelling of the numeric id, and only then the generic word */
+			   spelling of the numeric id, and only then the generic word.
+			   BOTH halves are guarded: '%02d'.format(null) is
+			   Math.floor(+null || 0) -> "00" (cbi.js:753-754), so guarding only
+			   mcc renders a real-looking 260/00 for a half-populated plmn
+			   instead of falling through to plmn.id. fmtOperator in this file
+			   already guards both; this one did not. */
 			var op = (reg.plmn && (reg.plmn.description ||
-				(reg.plmn.mcc != null ? '%d/%02d'.format(reg.plmn.mcc, reg.plmn.mnc) : null) ||
+				((reg.plmn.mcc != null && reg.plmn.mnc != null)
+					? '%d/%02d'.format(reg.plmn.mcc, reg.plmn.mnc) : null) ||
 				reg.plmn.id)) || _('registered');
 			return op + (reg.roaming ? ' ' + _('(roaming)') : '');
 		}
