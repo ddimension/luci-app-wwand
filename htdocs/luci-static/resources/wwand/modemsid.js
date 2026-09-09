@@ -57,14 +57,14 @@ function bindModem(o) {
 		var opt = this.ucioption || this.option;
 
 		/* NEVER delete on the wwand_modem section from here.
-		
+
 		   This redirect is used by the INTERFACE form (the proto handler). That
 		   form only REFERENCES a modem; the section belongs to the hardware and
 		   is shared with every other interface on it. An empty field here is
 		   almost never "the user cleared this", because the fields are blank
 		   whenever the form did not resolve the modem — and LuCI then calls
 		   remove() for each of them on save.
-		
+
 		   Two earlier attempts got this wrong, both by assuming when cfgvalue
 		   runs:
 		     - the original had no guard at all, so adding a SECOND interface on
@@ -76,7 +76,7 @@ function bindModem(o) {
 		       section and the comparison passes. It also never runs at all for
 		       an inactive option (form.js:2167). Reported still broken on r29
 		       (ddimension/luci-app-wwand#7), with `reset_gpio` gone as well.
-		
+
 		   Clearing a modem-level option is the MODEMS page's job, where the
 		   section IS the wwand_modem and `bind` is a pass-through — there
 		   remove() reaches it directly and means what it says. What this one

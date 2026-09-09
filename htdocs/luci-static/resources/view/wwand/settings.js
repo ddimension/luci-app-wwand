@@ -971,7 +971,7 @@ return view.extend({
 									});
 								}) }, _('Switch protocol')),
 							E('div', { 'class': 'cbi-value-description' },
-								_('Flips the control protocol (QMI ↔ MBIM). The modem resets; use only when the other protocol is known to work on this module.')),
+								_('Rewrites the modem firmware mode (QMI ↔ MBIM). The modem resets; use only when the other mode is known to work on this module. The daemon clears a contradicting "Control protocol" pin when the switch succeeds.')),
 						]),
 					]),
 				]);
