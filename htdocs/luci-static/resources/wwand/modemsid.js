@@ -38,15 +38,9 @@ function ensureModemSid(ifaceSid) {
    Reads new-style (wwand_modem) or, until one exists, legacy inline; writes
    new-style and clears any legacy inline copy. */
 function bindModem(o) {
-	/* Which section this option's form ACTUALLY read for a given interface.
-	   Load and save do not always agree, and the difference destroys data —
-	   see remove(). */
-	o.boundTo = {};
-
 	o.cfgvalue = function(sid) {
 		var opt = this.ucioption || this.option;
 		var msid = modemSid(sid);
-		this.boundTo[sid] = msid;
 		return uci.get('network', msid || sid, opt);
 	};
 	o.write = function(sid, val) {
@@ -61,36 +55,37 @@ function bindModem(o) {
 	};
 	o.remove = function(sid) {
 		var opt = this.ucioption || this.option;
-		var msid = modemSid(sid);
 
-		/* An empty field clears the MODEM section only when the form read that
-		   same section when it loaded. Without this, adding a SECOND interface
-		   on an existing modem wiped that modem's hardware binding:
-		   `option modem` is declared before these options, so on save it is
-		   written first and modemSid() suddenly resolves — while at render time
-		   it did not, so every field here was blank and LuCI called remove()
-		   for each. The user never saw the value, never touched it, and it
-		   belonged to a section another interface depends on.
-
-		   Reported with the generated uci captured verbatim
-		   (openwrt/packages#30185, RUTC50 + RG520N, 2026-09-08):
-
-		       uci set network.wwan1.proto='wwand'
-		       uci del network.wwmodem_auto.path        <-- this
-		       uci set network.wwan1.modem='wwmodem_auto'
-
-		   after which the modem section named no hardware at all, wwand dropped
-		   it and every interface pointing at it, and the box came up with
-		   "0 modem(s), 0 context(s)".
-
-		   Deliberately clearing a value the form DID show still works: there
-		   cfgvalue resolved the same section, so the two agree. */
-		if (msid && this.boundTo[sid] === msid)
-			uci.unset('network', msid, opt);
-
+		/* NEVER delete on the wwand_modem section from here.
+		
+		   This redirect is used by the INTERFACE form (the proto handler). That
+		   form only REFERENCES a modem; the section belongs to the hardware and
+		   is shared with every other interface on it. An empty field here is
+		   almost never "the user cleared this", because the fields are blank
+		   whenever the form did not resolve the modem — and LuCI then calls
+		   remove() for each of them on save.
+		
+		   Two earlier attempts got this wrong, both by assuming when cfgvalue
+		   runs:
+		     - the original had no guard at all, so adding a SECOND interface on
+		       an existing modem deleted its `path` (openwrt/packages#30185);
+		     - the next recorded which section cfgvalue had addressed and
+		       compared at remove() time. That cannot work: form.js:2148 calls
+		       cfgvalue inside save(), AFTER `option modem` has been written by
+		       an earlier option, so the recorded value resolves to the modem
+		       section and the comparison passes. It also never runs at all for
+		       an inactive option (form.js:2167). Reported still broken on r29
+		       (ddimension/luci-app-wwand#7), with `reset_gpio` gone as well.
+		
+		   Clearing a modem-level option is the MODEMS page's job, where the
+		   section IS the wwand_modem and `bind` is a pass-through — there
+		   remove() reaches it directly and means what it says. What this one
+		   still does is drop a legacy inline copy from the interface, which is
+		   the migration half and touches nothing shared. */
 		if (opt != 'device')
 			uci.unset('network', sid, opt);
 	};
+
 	return o;
 }
 
