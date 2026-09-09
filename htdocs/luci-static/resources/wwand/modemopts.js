@@ -187,7 +187,6 @@ return baseclass.extend({
 		o.value('qmi', 'QMI');
 		o.value('mbim', 'MBIM');
 		o.value('ncm', _('NCM (AT + ethernet data port)'));
-		o.value('ppp', 'PPP');
 		o.optional = true;
 		bind(o);
 
