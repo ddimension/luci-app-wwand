@@ -6,6 +6,8 @@
 'require wwand.bands as bands';
 'require wwand.rpc as wrpc';
 'require wwand.format as fmt';
+'require wwand.graph as graph';
+'require request';
 'require wwand.mccmnc as mccmnc';
 
 /* ubus declarations live in the shared wwand.rpc module */
@@ -67,42 +69,6 @@ function cellTable(title, rows) {
 		E('table', { 'class': 'table' }, [ cellHead() ].concat(rows)) ]);
 }
 function mhz(f) { return f ? f.mhz.toFixed(1) + ' MHz' : null; }
-
-/* peak-hold across polls, per modem, for antenna alignment */
-var peak = {};
-function trackPeak(name, key, val) {
-	if (val == null) return null;
-	peak[name] = peak[name] || {};
-	if (peak[name][key] == null || val > peak[name][key]) peak[name][key] = val;
-	return peak[name][key];
-}
-
-/* colour by quality thresholds [good, fair] (higher = better) */
-function qcolor(v, good, fair) {
-	if (v == null) return '#888';
-	if (v >= good) return '#3c3'; if (v >= fair) return '#da3'; return '#e33';
-}
-
-/* a labelled bar: value mapped from [min,max] to 0..100% */
-function bar(label, val, unit, min, max, good, fair) {
-	// snr arrives as 0.1 dB int and is divided by 10 at the call site —
-	// JS float arithmetic then renders artefacts (26.299999999999997);
-	// round to one decimal for display (an int passes through unchanged)
-	if (val != null)
-		val = Math.round(val * 10) / 10;
-
-	var pct = (val == null) ? 0 : Math.max(0, Math.min(100, (val - min) / (max - min) * 100));
-	var col = qcolor(val, good, fair);
-	return E('div', { 'style': 'margin:4px 0' }, [
-		E('div', { 'style': 'display:flex;justify-content:space-between' }, [
-			E('span', {}, label),
-			E('strong', { 'style': 'color:%s'.format(col) },
-				[ (val == null) ? '—' : '%s %s'.format(val, unit) ])
-		]),
-		E('div', { 'style': 'background:#eee;border-radius:3px;height:10px;overflow:hidden' },
-			E('div', { 'style': 'width:%d%%;height:100%%;background:%s'.format(pct, col) }))
-	]);
-}
 
 /* Per-context connection detail: IPs, gateways, DNS, MTU — the stuff you
    otherwise only see by digging through ubus / the modem. */
@@ -322,7 +288,7 @@ function cachedCall(name, key, ttl_s, fn) {
 	return Promise.resolve(e.v || {});
 }
 
-function renderLive(name, modem) {
+function renderLive(name, modem, graphs) {
 	return Promise.all([
 		L.resolveDefault(callSignal(name), {}),   /* every tick: antenna aiming */
 		cachedCall(name, 'cells', 3, function() { return callCells(name); }),
@@ -346,52 +312,13 @@ function renderLive(name, modem) {
 		var lte = sig.lte || {}, nr = sig.nr5g || {};
 		var cols = [];
 
-		/* --- signal panel (alignment) --- */
-		var RSRP_DESC = _('Reference Signal Received Power — signal strength in dBm; closer to 0 is better (-80 excellent, -100 fair, -110 weak)');
-		var RSRQ_DESC = _('Reference Signal Received Quality in dB — how clean the signal is (-10 good, -15 poor)');
-		var SINR_DESC = _('Signal-to-Interference-plus-Noise Ratio in dB — higher is better (20 excellent, 13 good, 0 marginal)');
-		var sigRows = [];
-		if (fmt.hasSignal(lte.rsrp)) {
-			sigRows.push(bar(fmt.term('LTE RSRP', RSRP_DESC), lte.rsrp, 'dBm', -120, -70, -90, -105));
-			sigRows.push(bar(fmt.term('LTE RSRQ', RSRQ_DESC), lte.rsrq, 'dB', -20, -3, -10, -15));
-			sigRows.push(bar(fmt.term('LTE SINR', SINR_DESC), (lte.snr/10), 'dB', -5, 30, 13, 0));
-			var pk = trackPeak(name, 'rsrp', lte.rsrp);
-			var pkq = trackPeak(name, 'sinr', lte.snr/10);
-			sigRows.push(E('div', { 'style': 'margin-top:6px;color:#666;font-size:90%' },
-				[ _('Peak: RSRP %s dBm · SINR %s dB').format(pk, (pkq != null) ? pkq.toFixed(1) : '—') ]));
-		}
-		if (fmt.hasSignal(nr.rsrp)) {
-			sigRows.push(E('hr'));
-			sigRows.push(bar(fmt.term('5G RSRP', RSRP_DESC), nr.rsrp, 'dBm', -120, -70, -90, -105));
-			sigRows.push(bar(fmt.term('5G SINR', SINR_DESC), (nr.snr/10), 'dB', -5, 30, 13, 0));
-		}
-		/* Fall back to the generic RSSI when the modem reports no RSRP. It is a
-		   coarser measure — total received power in the band, interference
-		   included, so it cannot separate a strong neighbour from a strong
-		   serving cell — but it still moves when the antenna moves, which is
-		   what this panel is for. Some modems report nothing else at all
-		   (fmt.signalKind), and showing them an empty panel discarded the one
-		   number they do give us. The condition IS signalKind(): "no RSRP on
-		   either RAT but an rssi" is exactly what it answers, and routing the
-		   decision through it keeps the branch and its tests describing the
-		   same thing. */
-		if (fmt.signalKind(sig) == 'rssi') {
-			var RSSI_DESC = _('Received Signal Strength Indicator — total power in the band including interference, in dBm. Coarser than RSRP, but it is what this modem reports (-65 excellent, -85 fair, -100 weak)');
-			sigRows.push(bar(fmt.term('RSSI', RSSI_DESC), sig.rssi, 'dBm', -110, -50, -75, -95));
-			sigRows.push(E('div', { 'style': 'margin-top:6px;color:#666;font-size:90%' },
-				[ _('Peak: RSSI %s dBm').format(trackPeak(name, 'rssi', sig.rssi)) ]));
-		}
-		if (!sigRows.length)
-			/* array child -> createTextNode (luci.js:1382-83); a bare string
-			   would go in as markup. Static translations here, but the app
-			   applies the array form throughout and a lone exception is what
-			   gets copied next. */
-			sigRows.push(E('em', {}, [ fmt.signalNone(reg) ]));
-
-		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
-			E('h3', {}, _('Signal — aim the antenna for the highest RSRP/SINR')),
-			E('div', {}, sigRows)
-		]));
+		/* The graphs live OUTSIDE the node this function returns — the caller
+		   replaces that node every second, and a canvas rebuilt with it would
+		   lose its ring buffers every tick. So feed them the sample we already
+		   have rather than letting them fetch their own: same data, no second
+		   RPC, and the numbers below cannot disagree with the lines above. */
+		if (graphs)
+			graphs.push(sig, reg);
 
 		var term = fmt.term;
 
@@ -613,11 +540,10 @@ function renderLive(name, modem) {
 					.concat(msNode ? [ msNode ] : [])));
 		}
 
+		/* Configuration warnings are NOT rendered here any more: they belong
+		   above the graphs, and everything above the graphs has to survive the
+		   per-second repaint of this node. The caller owns them now. */
 		var out = [];
-
-		/* --- configuration warnings (if the daemon reports any) --- */
-		var warns = renderWarnings(modem.config_warnings);
-		if (warns) out.push(warns);
 
 		out.push(E('div', { 'style': 'display:flex;gap:16px;flex-wrap:wrap' }, cols));
 
@@ -716,15 +642,83 @@ function renderLive(name, modem) {
 
 return view.extend({
 	load: function() {
-		return L.resolveDefault(callStatus(), {});
+		return Promise.all([
+			L.resolveDefault(callStatus(), {}),
+			/* the graph canvas: threshold rules only, series drawn by graph.js */
+			request.get(L.resource('wwand/signal.svg')).then(function(r) {
+				return r.ok ? r.text() : null;
+			}).catch(function() { return null; }),
+		]);
 	},
 
-	render: function(modems) {
+	render: function(loaded) {
+		var svgText = loaded[1];
 		/* deep link from the Modems overview: ?modem=<name> preselects */
 		var current = null;
 		try { current = new URLSearchParams(window.location.search).get('modem'); } catch(e) {}
 		var selWrap = E('span', {});   // filled with a modem selector when >1
+
+		/* THREE PERSISTENT BOXES, then the per-tick one. Everything the poll
+		   rebuilds wholesale lives in `live`; the warnings and the graphs sit
+		   above it and are updated IN PLACE, because a graph rebuilt every
+		   second would lose its ring buffers every second and never draw a
+		   line. That constraint is what fixes the page order — warnings, then
+		   graphs, then the panels — rather than a preference. */
+		var warnBox = E('div', {});
+		var graphBox = E('div', {});
 		var live = E('div', { 'id': 'wwand-live' }, E('em', {}, _('loading…')));
+
+		/* One graph instance PER MODEM, kept across selector changes so coming
+		   back to a modem still shows the window it had. Only the selected one
+		   is fed (that is the only modem the page fetches signal for), so an
+		   unwatched modem's line has a real gap rather than an invented one.
+
+		   Instances are NOT evicted when a modem leaves the status reply, and
+		   that is deliberate: a modem vanishing for a few seconds — a reset, a
+		   re-enumeration, the very events worth having history across — would
+		   otherwise take its history with it. The cost is one detached SVG per
+		   modem name seen since the page loaded, which is bounded by how many
+		   modems a box has. */
+		var graphs = {};
+
+		function showGraphs(name) {
+			/* The canvas asset is fetched once in load(). If that failed there
+			   are no graphs for the life of the page — say why, once, instead
+			   of leaving a gap where they should be and letting the reader
+			   wonder whether the modem is reporting nothing. */
+			if (!svgText) {
+				if (graphBox._for !== '_nosvg') {
+					graphBox._for = '_nosvg';
+					dom.content(graphBox, E('em', { 'style': 'color:#666' },
+						[ _('Signal graphs unavailable: the graph canvas (wwand/signal.svg) could not be loaded. Reload the page to try again.') ]));
+				}
+
+				return null;
+			}
+
+			if (graphBox._for === name)
+				return graphs[name];
+
+			graphBox._for = name;
+			graphs[name] = graphs[name] || graph.create(svgText);
+			dom.content(graphBox, graphs[name].node);
+
+			return graphs[name];
+		}
+
+		/* Warnings change rarely; rebuilding them every second would drop any
+		   text selection and flicker. Compare a signature first, like the
+		   selector does. */
+		function showWarnings(modem) {
+			var w = (modem || {}).config_warnings;
+			var sig = JSON.stringify(w || null);
+
+			if (sig === warnBox._sig)
+				return;
+
+			warnBox._sig = sig;
+			dom.content(warnBox, renderWarnings(w) || '');
+		}
 
 		/* Rebuild the modem dropdown only when the set of modems actually
 		   changes; otherwise the 1s poll would recreate the <select> under the
@@ -742,7 +736,7 @@ return view.extend({
 			if (sig === selWrap._sig) return;
 			selWrap._sig = sig;
 			var sel = E('select', { 'class': 'cbi-input-select',
-				'change': function(ev){ current = ev.target.value; peak[current] = {}; refresh(); } },
+				'change': function(ev){ current = ev.target.value; refresh(); } },
 				names.map(function(n){
 					var m = ms[n];
 					return E('option', { 'value': n,
@@ -768,15 +762,28 @@ return view.extend({
 				if (!names.length) {
 					current = null;
 					dom.content(selWrap, '');
+					dom.content(warnBox, ''); warnBox._sig = null;
+					dom.content(graphBox, ''); graphBox._for = null;
 					dom.content(el, E('em', {}, _('wwand is not running or no modem present yet.')));
 					return;
 				}
 
 				if (!current || !ms[current]) current = names[0];
 				buildSelector(ms);
-				return renderLive(current, ms[current]).then(function(node){
+				showWarnings(ms[current]);
+
+				/* Remember WHICH modem this render is for. renderLive() is
+				   asynchronous (five ubus calls deep), and a selector change
+				   during that window returns early from its own refresh()
+				   because this one is still busy — so without the check below
+				   the in-flight result lands after the change and paints the
+				   old modem's panels beneath the new modem's name. Discard it
+				   and let the next tick, a second away, render the right one. */
+				var want = current;
+
+				return renderLive(want, ms[want], showGraphs(want)).then(function(node){
 					var e2 = document.getElementById('wwand-live');
-					if (e2) dom.content(e2, node);
+					if (e2 && current === want) dom.content(e2, node);
 				});
 			}).then(done, function(e) {
 				done();
@@ -785,19 +792,17 @@ return view.extend({
 			});
 		}
 
-		var resetBtn = E('button', { 'class': 'btn cbi-button', 'click': function(){
-			if (current) peak[current] = {}; refresh();
-		} }, _('Reset peak'));
-
 		poll.add(refresh, 1);
 		refresh();
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('Modem Status')),
 			E('div', { 'class': 'cbi-map-descr' },
-				_('Live cellular signal and cell environment — updates about once per second. Aim the antenna for the highest RSRP / SINR; the peak values below help while turning it.')),
+				_('Live cellular signal and cell environment — updates about once per second. Aim the antenna for the highest RSRP / SINR: the graphs keep the last few minutes in the browser, so you can see what turning it did. The history is not stored on the router and starts empty after a reload.')),
 			E('div', { 'class': 'cbi-section', 'style': 'display:flex;gap:12px;align-items:center' },
-				[ selWrap, resetBtn ]),
+				[ selWrap ]),
+			warnBox,
+			graphBox,
 			live
 		]);
 	},

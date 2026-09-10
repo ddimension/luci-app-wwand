@@ -158,19 +158,80 @@ return baseclass.extend({
 	/* signal values use -32768 as the "not measured" sentinel */
 	hasSignal: function(v) { return v != null && v > -32768; },
 
-	/* Which detail level the signal panel can actually draw from this reply.
-	   Not every modem reports RSRP: the generic `rssi` is the common floor and
-	   for some it is ALL there is — the Fibocom FM350-GL on NCM (HW-observed
-	   2026-09-10) and the EG06 on native MBIM (telemetry_mbim.uc:42) both report
-	   rssi alone, and a QMI modem camped on 2G/3G fills only the generic rssi
-	   too. Treating "no RSRP" as "no signal" threw those values away.
-	     -> 'lte' | 'nr' | 'rssi' | 'none' */
-	signalKind: function(sig) {
+	/* The plotted series out of one modem_signal reply, grouped by QUANTITY:
+	     rsrp = [ RSRP LTE, RSRP 5G, RSCP 3G,
+	              RSSI LTE, RSSI 3G, RSSI 2G, RSSI untagged ]   dBm
+	     sinr = [ LTE, 5G ]                          dB
+	     rsrq = [ LTE, 5G ]                          dB
+	     ecio = [ 3G ]                               dB
+	   Each group gets its own canvas, because each is graded by its own
+	   thresholds — SINR, RSRQ and Ec/Io are all in dB and mean entirely
+	   different things, so sharing an axis would have one judged by another's
+	   rules. Sharing a unit is not sharing a scale.
+
+	   ONE SERIES PER RAT within a group, never one line that changes meaning.
+	   A modem flapping between 4G and 5G would otherwise draw a trace that is
+	   sometimes the LTE anchor and sometimes the NR carrier, with nothing saying
+	   where it switched — and on EN-DC both arrive in the SAME reply and differ
+	   a lot (LTE -94 dBm beside 5G -106, observed on an RG502Q, 2026-09-10). A
+	   gap in the 5G line is then the useful information: 5G was not serving.
+	   The same argument covers a modem falling back to 3G or 2G, which is
+	   precisely the event worth seeing on a graph.
+
+	   THE 2G/3G STRENGTH MEASURES ARE NOT RSRP and are not graded like it, but
+	   they ARE received power in dBm, so they belong on the strength canvas with
+	   the caveat stated in its hint.
+
+	   RSSI KEEPS ITS RAT. The daemon reports rssi in up to four places, and only
+	   the top-level one is genuinely RAT-less (the AT+CSQ floor a NAS 1.0 stack
+	   falls back to — HW-seen on the E182E). `lte.rssi`, `wcdma.rssi` and
+	   `gsm_rssi` all say which radio measured them. An earlier cut collapsed
+	   them with `sig.rssi ?? lte.rssi` into one line labelled plainly "RSSI",
+	   which meant that on any modem without a top-level value — the RM520N-GL,
+	   for one — the RAT-less line WAS the LTE line and did not say so. Each RAT
+	   now carries its own, and RSCP is not folded in either: RSCP and RSSI are
+	   different measures of 3G strength and a series must not change which one
+	   it means. The untagged line appears only when the reply really is
+	   untagged, which is exactly when there is no better answer — a modem that
+	   reports BOTH forms gets one line, the tagged one, because the second
+	   would be the same measurement drawn again without its radio.
+
+	   UNIT TRAPS, all three of them real:
+	     - `snr` arrives in TENTHS of a dB from every backend.
+	     - NR RSRQ is NOT inside `nr5g`: QMI NAS Get Signal Info carries NR
+	       RSRP/SNR in TLV 0x17 and RSRQ in TLV 0x18 of its own, so the reply has
+	       a top-level `nr5g_rsrq` (codec/schema/nas.uc:110-113, libqmi 1.38).
+	     - 3G Ec/Io is `ecio` from the QMI and ^HCSQ paths and `ecno` from
+	       +CESQ (atcmd_parse.uc:307,356) — the same measure under two names.
+
+	   A missing value stays null and must NOT become 0: on a dBm scale a zero is
+	   off the top, and a gap has to read as "not reported", never as a reading. */
+	signalSample: function(sig) {
 		sig = sig || {};
-		if (this.hasSignal((sig.lte || {}).rsrp))   return 'lte';
-		if (this.hasSignal((sig.nr5g || {}).rsrp))  return 'nr';
-		if (this.hasSignal(sig.rssi))               return 'rssi';
-		return 'none';
+
+		let lte = sig.lte || {};
+		let nr = sig.nr5g || {};
+		let wcdma = sig.wcdma || {};
+		let num = (v) => this.hasSignal(v) ? v : null;
+		let snr = (v) => this.hasSignal(v) ? v / 10 : null;
+
+		/* The untagged slot is a LAST RESORT, not an extra line. Several modems
+		   report the same measurement twice — the FM350-GL sends rssi -101 and
+		   lte.rssi -101, the E3372 sends -85 and -86 (both HW-observed
+		   2026-09-10) — and drawing both gave a duplicate line whose only
+		   distinction was claiming to have no radio behind it. It appears when,
+		   and only when, nothing tagged is on offer: that is the E182E on a
+		   NAS 1.0 stack, whose AT+CSQ floor really is all there is. */
+		const tagged = num(lte.rssi) ?? num(wcdma.rssi) ?? num(sig.gsm_rssi);
+
+		return {
+			rsrp: [ num(lte.rsrp), num(nr.rsrp), num(wcdma.rscp),
+			        num(lte.rssi), num(wcdma.rssi), num(sig.gsm_rssi),
+			        (tagged != null) ? null : num(sig.rssi) ],
+			sinr: [ snr(lte.snr), snr(nr.snr) ],
+			rsrq: [ num(lte.rsrq), num(nr.rsrq) ?? num(sig.nr5g_rsrq) ],
+			ecio: [ num(wcdma.ecio) ?? num(wcdma.ecno) ],
+		};
 	},
 
 	/* What to say when there is no signal detail at all. The old text asserted
