@@ -27,7 +27,7 @@ msgstr ""
 msgid "(none)"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:229
+#: htdocs/luci-static/resources/wwand/format.js:235
 msgid "(roaming)"
 msgstr ""
 
@@ -608,12 +608,6 @@ msgstr ""
 msgid ""
 "Firmware version reported by the modem — relevant when comparing behaviour "
 "or looking for carrier-specific builds"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/wwand/settings.js:974
-msgid ""
-"Flips the control protocol (QMI ↔ MBIM). The modem resets; use only when the "
-"other protocol is known to work on this module."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/wwand/settings.js:542
@@ -1635,6 +1629,13 @@ msgstr ""
 msgid "Revision"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/wwand/settings.js:974
+msgid ""
+"Rewrites the modem firmware mode (QMI ↔ MBIM). The modem resets; use only "
+"when the other mode is known to work on this module. The daemon clears a "
+"contradicting \"Control protocol\" pin when the switch succeeds."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/wwand/settings.js:900
 msgid "Roaming"
 msgstr ""
@@ -2209,7 +2210,7 @@ msgstr ""
 msgid "any"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:321
+#: htdocs/luci-static/resources/wwand/format.js:327
 msgid "armed"
 msgstr ""
 
@@ -2229,7 +2230,7 @@ msgstr ""
 msgid "available"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:245
+#: htdocs/luci-static/resources/wwand/format.js:251
 msgid "blocked (%s)"
 msgstr ""
 
@@ -2245,7 +2246,7 @@ msgstr ""
 msgid "both usable at once"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:256
+#: htdocs/luci-static/resources/wwand/format.js:262
 msgid "busy (reads failing)"
 msgstr ""
 
@@ -2462,16 +2463,16 @@ msgstr ""
 msgid "reading…"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:262
+#: htdocs/luci-static/resources/wwand/format.js:268
 msgid "ready"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:262
+#: htdocs/luci-static/resources/wwand/format.js:268
 msgid "ready, PIN enabled"
 msgstr ""
 
 #: htdocs/luci-static/resources/wwand/format.js:166
-#: htdocs/luci-static/resources/wwand/format.js:228
+#: htdocs/luci-static/resources/wwand/format.js:234
 msgid "registered"
 msgstr ""
 
@@ -2479,7 +2480,7 @@ msgstr ""
 msgid "reject cause %d"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:235
+#: htdocs/luci-static/resources/wwand/format.js:241
 msgid "rejected: %s"
 msgstr ""
 
@@ -2508,7 +2509,7 @@ msgstr ""
 msgid "searching"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:237
+#: htdocs/luci-static/resources/wwand/format.js:243
 msgid "searching…"
 msgstr ""
 

@@ -365,8 +365,28 @@ function renderLive(name, modem) {
 			sigRows.push(bar(fmt.term('5G RSRP', RSRP_DESC), nr.rsrp, 'dBm', -120, -70, -90, -105));
 			sigRows.push(bar(fmt.term('5G SINR', SINR_DESC), (nr.snr/10), 'dB', -5, 30, 13, 0));
 		}
+		/* Fall back to the generic RSSI when the modem reports no RSRP. It is a
+		   coarser measure — total received power in the band, interference
+		   included, so it cannot separate a strong neighbour from a strong
+		   serving cell — but it still moves when the antenna moves, which is
+		   what this panel is for. Some modems report nothing else at all
+		   (fmt.signalKind), and showing them an empty panel discarded the one
+		   number they do give us. The condition IS signalKind(): "no RSRP on
+		   either RAT but an rssi" is exactly what it answers, and routing the
+		   decision through it keeps the branch and its tests describing the
+		   same thing. */
+		if (fmt.signalKind(sig) == 'rssi') {
+			var RSSI_DESC = _('Received Signal Strength Indicator — total power in the band including interference, in dBm. Coarser than RSRP, but it is what this modem reports (-65 excellent, -85 fair, -100 weak)');
+			sigRows.push(bar(fmt.term('RSSI', RSSI_DESC), sig.rssi, 'dBm', -110, -50, -75, -95));
+			sigRows.push(E('div', { 'style': 'margin-top:6px;color:#666;font-size:90%' },
+				[ _('Peak: RSSI %s dBm').format(trackPeak(name, 'rssi', sig.rssi)) ]));
+		}
 		if (!sigRows.length)
-			sigRows.push(E('em', {}, _('no signal (modem not registered)')));
+			/* array child -> createTextNode (luci.js:1382-83); a bare string
+			   would go in as markup. Static translations here, but the app
+			   applies the array form throughout and a lone exception is what
+			   gets copied next. */
+			sigRows.push(E('em', {}, [ fmt.signalNone(reg) ]));
 
 		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
 			E('h3', {}, _('Signal — aim the antenna for the highest RSRP/SINR')),

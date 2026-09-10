@@ -158,6 +158,32 @@ return baseclass.extend({
 	/* signal values use -32768 as the "not measured" sentinel */
 	hasSignal: function(v) { return v != null && v > -32768; },
 
+	/* Which detail level the signal panel can actually draw from this reply.
+	   Not every modem reports RSRP: the generic `rssi` is the common floor and
+	   for some it is ALL there is — the Fibocom FM350-GL on NCM (HW-observed
+	   2026-09-10) and the EG06 on native MBIM (telemetry_mbim.uc:42) both report
+	   rssi alone, and a QMI modem camped on 2G/3G fills only the generic rssi
+	   too. Treating "no RSRP" as "no signal" threw those values away.
+	     -> 'lte' | 'nr' | 'rssi' | 'none' */
+	signalKind: function(sig) {
+		sig = sig || {};
+		if (this.hasSignal((sig.lte || {}).rsrp))   return 'lte';
+		if (this.hasSignal((sig.nr5g || {}).rsrp))  return 'nr';
+		if (this.hasSignal(sig.rssi))               return 'rssi';
+		return 'none';
+	},
+
+	/* What to say when there is no signal detail at all. The old text asserted
+	   "modem not registered" whenever RSRP was missing, which is a different
+	   claim entirely — and one the Serving cell panel beside it contradicted on
+	   screen, saying `registered` for the same modem. Registration comes from
+	   the registration block, the same source regShort() uses. */
+	signalNone: function(reg) {
+		return (reg && reg.registration == 1)
+			? _('registered — this modem reports no signal detail')
+			: _('no signal (modem not registered)');
+	},
+
 	/* frequency in MHz (plain number, NOT tenths) -> "1234.5 MHz" */
 	mhz: function(v) { return (v != null) ? v.toFixed(1) + ' MHz' : null; },
 
