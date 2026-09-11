@@ -397,9 +397,19 @@ return baseclass.extend({
 			const cur = buf[buf.length - 1];
 			const avg = seen.length ? seen.reduce((a, b) => a + b, 0) / seen.length : null;
 
+			/* ONE msgid, not three. `avg` and `peak` as separate _() calls put
+			   two context-free words in the catalogue and left the sentence
+			   around them untranslatable, so its word order, spacing and
+			   punctuation were fixed for every language.
+
+			   ONE space before the bracket, not two: LuCI's i18n-scan collapses
+			   whitespace when it builds the catalogue (build/i18n-scan.pl:43,85),
+			   so a literal with a double space can never match the msgid it
+			   generates and the translation would silently never apply. No
+			   shipped template in the tree contains one. */
 			dom.content(ctx.legend[i], [ (cur != null)
-				? '%.1f %s  (%s %.1f, %s %.1f)'.format(cur, s.unit,
-					_('avg'), avg, _('peak'), Math.max.apply(null, seen))
+				? _('%.1f %s (avg %.1f, peak %.1f)').format(cur, s.unit,
+					avg, Math.max.apply(null, seen))
 				: _('not reported') ]);
 		}
 	},

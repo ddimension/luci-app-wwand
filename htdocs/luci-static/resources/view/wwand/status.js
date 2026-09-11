@@ -641,18 +641,18 @@ function renderLive(name, modem, graphs) {
 }
 
 return view.extend({
+	/* Only the canvas. The status itself is NOT fetched here: refresh() issues
+	   its own callStatus() as soon as the view is rendered, so a second one at
+	   load time is a ubus round trip whose result is thrown away — and it was,
+	   silently, because nothing read it. */
 	load: function() {
-		return Promise.all([
-			L.resolveDefault(callStatus(), {}),
-			/* the graph canvas: threshold rules only, series drawn by graph.js */
-			request.get(L.resource('wwand/signal.svg')).then(function(r) {
-				return r.ok ? r.text() : null;
-			}).catch(function() { return null; }),
-		]);
+		/* the graph canvas: threshold rules only, series drawn by graph.js */
+		return request.get(L.resource('wwand/signal.svg')).then(function(r) {
+			return r.ok ? r.text() : null;
+		}).catch(function() { return null; });
 	},
 
-	render: function(loaded) {
-		var svgText = loaded[1];
+	render: function(svgText) {
 		/* deep link from the Modems overview: ?modem=<name> preselects */
 		var current = null;
 		try { current = new URLSearchParams(window.location.search).get('modem'); } catch(e) {}
