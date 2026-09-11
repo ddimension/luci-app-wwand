@@ -560,23 +560,28 @@ function renderLive(name, modem, graphs) {
 			   which today means MBIM SYS_CAPS; over QMI the executor count is a
 			   lower bound inferred from logical slots in use, so the most that
 			   can be said is a floor. Rendered with "at least" so an inference
-			   can never be read as a fact. */
+			   can never be read as a fact.
+
+			   AND WHEN NEITHER IS AVAILABLE, NOTHING IS SHOWN. Over QMI a single
+			   logical slot in use supports no floor at all — a modem with a
+			   second radio stack whose other slot is empty looks exactly like a
+			   single-stack one — so the daemon returns mode and mode_min both
+			   null. That is every QMI dual-slot box with one SIM in it, i.e. the
+			   normal case, and it used to render as "not determinable over QMI ·
+			   inferred": a row that tells the operator nothing, with a word
+			   appended that is wrong twice over, since nothing was inferred.
+			   Same rule as the aggregation ratio in docs/gotchas.md — report
+			   nothing rather than something that reads as a measurement. */
 			var ms = (res[3] || {}).multisim, msNode = null;
 
-			if (ms) {
-				var msTxt;
-
-				if (ms.mode)
-					msTxt = ({
+			if (ms && (ms.mode || ms.mode_min)) {
+				var msTxt = ms.mode
+					? (({
 						dssa: _('one SIM active at a time (switching)'),
 						dsds: _('both registered, one carries data'),
 						dsda: _('both usable at once'),
-					})[ms.mode] || ms.mode.toUpperCase();
-				else if (ms.mode_min)
-					msTxt = _('at least %s').format(ms.mode_min.toUpperCase());
-				else
-					msTxt = _('not determinable over %s').format(
-						ms.source == 'qmi-logical-slots' ? 'QMI' : ms.source);
+					})[ms.mode] || ms.mode.toUpperCase())
+					: _('at least %s').format(ms.mode_min.toUpperCase());
 
 				msNode = E('div', { 'style': 'margin-top:6px;font-size:90%;color:#666' }, [
 					E('span', { 'title': ms.exact
