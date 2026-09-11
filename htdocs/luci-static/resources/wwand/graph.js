@@ -78,8 +78,13 @@ const SCALES = {
 	rsrp: { min: -120, max: -50, unit: 'dBm',
 	        good: -80, fair: -90, weak: -100,
 	        labels: [ _('excellent'), _('good'), _('fair') ],
-	        title: _('Signal strength'),
-	        hint: _('The measure to aim an antenna by, and the same steps the router\'s signal LEDs use. Solid lines are the serving cell\'s own power — RSRP on LTE and 5G, RSCP on 3G; LTE and 5G NR are graded alike, because published tables give SSB-RSRP the same boundaries as LTE RSRP below 6 GHz. Dashed lines are RSSI, the total power in the band including neighbours and interference: coarser, graded differently (-65/-75/-85 dBm), and on 2G the only thing there is. An RSSI line carries the RAT that measured it; the plain amber one appears only when the modem reports an untagged value and nothing better.') },
+	        title: _('Signal strength (RSRP)'),
+	        hint: _('The measure to aim an antenna by, and the same steps the router\'s signal LEDs use: the serving cell\'s own power, RSRP on LTE and 5G, RSCP on 3G. LTE and 5G NR are graded alike, because published tables give SSB-RSRP the same boundaries as LTE RSRP below 6 GHz. RSSI is a different measure on its own graph.') },
+	rssi: { min: -110, max: -30, unit: 'dBm',
+	        good: -65, fair: -75, weak: -85,
+	        labels: [ _('excellent'), _('good'), _('fair') ],
+	        title: _('Band power (RSSI)'),
+	        hint: _('Total received power in the band — the serving cell plus its neighbours plus interference. Coarser than RSRP and graded 20 dB higher (-65/-75/-85 dBm), which is why it has its own graph: a strong signal reaches -46 dBm, off the top of any scale drawn for RSRP. On 2G it is the only measure there is, and on a modem that reports nothing better it is all you get. Each line carries the radio that measured it; the plain amber one appears only when the reply is untagged.') },
 	sinr: { min: -10, max: 30, unit: 'dB',
 	        good: 20, fair: 13, weak: 0,
 	        labels: [ _('excellent'), _('good'), _('fair') ],
@@ -111,11 +116,18 @@ const SERIES = {
 	/* Solid = the serving cell's own power (RSRP, or RSCP on 3G); dashed = the
 	   band-wide RSSI, which counts neighbours and interference too. Same RAT,
 	   same colour, so the pair reads as one radio measured two ways — and the
-	   untagged amber line appears only when the modem tags nothing at all. */
+	   untagged amber line appears only when the modem tags nothing at all.
+
+	   THEY ARE ON SEPARATE CANVASES because they are separate quantities with
+	   ladders 20 dB apart. Sharing one pinned a -46 dBm RSSI to the top edge of
+	   an RSRP scale, where it showed nothing (ddimension/wwand#14). */
 	rsrp: [ { label: _('RSRP LTE'), colour: RAT.lte },
 	        { label: _('RSRP 5G'),  colour: RAT.nr },
-	        { label: _('RSCP 3G'),  colour: RAT.umts },
-	        { label: _('RSSI LTE'), colour: RAT.lte,  dashed: true },
+	        { label: _('RSCP 3G'),  colour: RAT.umts } ],
+	/* dashed here too, though nothing solid shares the canvas: the reader who
+	   has learnt "dashed = band power" on one graph should not have to relearn
+	   it on the next. */
+	rssi: [ { label: _('RSSI LTE'), colour: RAT.lte,  dashed: true },
 	        { label: _('RSSI 3G'),  colour: RAT.umts, dashed: true },
 	        { label: _('RSSI 2G'),  colour: RAT.gsm,  dashed: true },
 	        { label: _('RSSI'),     colour: RAT.any,  dashed: true } ],
@@ -429,7 +441,7 @@ return baseclass.extend({
 		const empty = E('em', {}, [ '' ]);
 
 		const node = E('div', { 'style': 'display:flex;gap:16px;flex-wrap:wrap' },
-			[ empty ].concat([ 'rsrp', 'sinr', 'rsrq', 'ecio' ]
+			[ empty ].concat([ 'rsrp', 'rssi', 'sinr', 'rsrq', 'ecio' ]
 				.map((k) => this.mkGraph(graphs, k, svgText))));
 
 		return {

@@ -159,8 +159,8 @@ return baseclass.extend({
 	hasSignal: function(v) { return v != null && v > -32768; },
 
 	/* The plotted series out of one modem_signal reply, grouped by QUANTITY:
-	     rsrp = [ RSRP LTE, RSRP 5G, RSCP 3G,
-	              RSSI LTE, RSSI 3G, RSSI 2G, RSSI untagged ]   dBm
+	     rsrp = [ RSRP LTE, RSRP 5G, RSCP 3G ]                  dBm
+	     rssi = [ RSSI LTE, RSSI 3G, RSSI 2G, RSSI untagged ]   dBm
 	     sinr = [ LTE, 5G ]                          dB
 	     rsrq = [ LTE, 5G ]                          dB
 	     ecio = [ 3G ]                               dB
@@ -178,9 +178,13 @@ return baseclass.extend({
 	   The same argument covers a modem falling back to 3G or 2G, which is
 	   precisely the event worth seeing on a graph.
 
-	   THE 2G/3G STRENGTH MEASURES ARE NOT RSRP and are not graded like it, but
-	   they ARE received power in dBm, so they belong on the strength canvas with
-	   the caveat stated in its hint.
+	   THE 2G/3G STRENGTH MEASURES ARE NOT RSRP and are not graded like it. RSCP
+	   is the 3G equivalent of RSRP — the serving cell's own pilot — so it sits
+	   with them. RSSI does not: it is the whole band, its ladder is 20 dB higher
+	   (-65/-75/-85 against -80/-90/-100), and a strong signal reaches -46 dBm,
+	   which is off the top of any scale drawn for RSRP. Sharing the canvas
+	   pinned it to the ceiling where it carried no information at all
+	   (HW-observed, ddimension/wwand#14, 2026-09-11).
 
 	   RSSI KEEPS ITS RAT. The daemon reports rssi in up to four places, and only
 	   the top-level one is genuinely RAT-less (the AT+CSQ floor a NAS 1.0 stack
@@ -225,8 +229,8 @@ return baseclass.extend({
 		const tagged = num(lte.rssi) ?? num(wcdma.rssi) ?? num(sig.gsm_rssi);
 
 		return {
-			rsrp: [ num(lte.rsrp), num(nr.rsrp), num(wcdma.rscp),
-			        num(lte.rssi), num(wcdma.rssi), num(sig.gsm_rssi),
+			rsrp: [ num(lte.rsrp), num(nr.rsrp), num(wcdma.rscp) ],
+			rssi: [ num(lte.rssi), num(wcdma.rssi), num(sig.gsm_rssi),
 			        (tagged != null) ? null : num(sig.rssi) ],
 			sinr: [ snr(lte.snr), snr(nr.snr) ],
 			rsrq: [ num(lte.rsrq), num(nr.rsrq) ?? num(sig.nr5g_rsrq) ],

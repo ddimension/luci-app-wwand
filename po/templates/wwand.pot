@@ -1,7 +1,7 @@
 msgid ""
 msgstr "Content-Type: text/plain; charset=UTF-8"
 
-#: htdocs/luci-static/resources/wwand/graph.js:411
+#: htdocs/luci-static/resources/wwand/graph.js:423
 msgid "%.1f %s (avg %.1f, peak %.1f)"
 msgstr ""
 
@@ -31,7 +31,7 @@ msgstr ""
 msgid "(none)"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:322
+#: htdocs/luci-static/resources/wwand/format.js:326
 msgid "(roaming)"
 msgstr ""
 
@@ -48,7 +48,7 @@ msgstr ""
 msgid "0 — leave as-is"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:96
+#: htdocs/luci-static/resources/wwand/graph.js:101
 msgid "3G signal quality (Ec/Io)"
 msgstr ""
 
@@ -236,6 +236,10 @@ msgstr ""
 msgid "Band"
 msgstr ""
 
+#: htdocs/luci-static/resources/wwand/graph.js:86
+msgid "Band power (RSSI)"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/wwand/modems.js:370
 msgid "Band, operator, SIM, eSIM and SMS tools for this modem"
 msgstr ""
@@ -318,7 +322,7 @@ msgstr ""
 msgid "Configuration"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:297
+#: htdocs/luci-static/resources/wwand/format.js:301
 msgid "Configuration warnings"
 msgstr ""
 
@@ -540,7 +544,7 @@ msgstr ""
 msgid "EARFCN:PCI value to copy into the cell-lock field of the modem settings"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:126
+#: htdocs/luci-static/resources/wwand/graph.js:138
 msgid "Ec/Io 3G"
 msgstr ""
 
@@ -672,7 +676,7 @@ msgid ""
 "the vendor configured it."
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:87
+#: htdocs/luci-static/resources/wwand/graph.js:92
 msgid ""
 "How far the wanted signal stands above noise and interference — this, not "
 "RSRP, is what throughput follows. 0 dB is the edge of usable. LTE and 5G NR "
@@ -1039,7 +1043,7 @@ msgstr ""
 msgid "Modems"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:92
+#: htdocs/luci-static/resources/wwand/graph.js:97
 msgid ""
 "Mostly a read on how busy the cell is: it falls as the cell fills, even with "
 "the antenna untouched. Treat it as an indicator rather than a target — "
@@ -1414,39 +1418,39 @@ msgid ""
 "the unlock entirely."
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:117
+#: htdocs/luci-static/resources/wwand/graph.js:126
 msgid "RSCP 3G"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:116
+#: htdocs/luci-static/resources/wwand/graph.js:125
 msgid "RSRP 5G"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:115
+#: htdocs/luci-static/resources/wwand/graph.js:124
 msgid "RSRP LTE"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:125
+#: htdocs/luci-static/resources/wwand/graph.js:137
 msgid "RSRQ 5G"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:124
+#: htdocs/luci-static/resources/wwand/graph.js:136
 msgid "RSRQ LTE"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:121
+#: htdocs/luci-static/resources/wwand/graph.js:133
 msgid "RSSI"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:120
+#: htdocs/luci-static/resources/wwand/graph.js:132
 msgid "RSSI 2G"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:119
+#: htdocs/luci-static/resources/wwand/graph.js:131
 msgid "RSSI 3G"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:118
+#: htdocs/luci-static/resources/wwand/graph.js:130
 msgid "RSSI LTE"
 msgstr ""
 
@@ -1544,7 +1548,7 @@ msgid ""
 "Reference Signal Received Quality in dB (higher = better; -10 good, -15 poor)"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:91
+#: htdocs/luci-static/resources/wwand/graph.js:96
 msgid "Reference signal quality (RSRQ)"
 msgstr ""
 
@@ -1746,11 +1750,11 @@ msgstr ""
 msgid "SIMs (per-ICCID overrides)"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:123
+#: htdocs/luci-static/resources/wwand/graph.js:135
 msgid "SINR 5G"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:122
+#: htdocs/luci-static/resources/wwand/graph.js:134
 msgid "SINR LTE"
 msgstr ""
 
@@ -1868,12 +1872,12 @@ msgid ""
 "loaded. Reload the page to try again."
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:86
+#: htdocs/luci-static/resources/wwand/graph.js:91
 msgid "Signal quality (SINR)"
 msgstr ""
 
 #: htdocs/luci-static/resources/wwand/graph.js:81
-msgid "Signal strength"
+msgid "Signal strength (RSRP)"
 msgstr ""
 
 #: htdocs/luci-static/resources/wwand/format.js:109
@@ -1986,7 +1990,7 @@ msgstr ""
 msgid "Temperature"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:97
+#: htdocs/luci-static/resources/wwand/graph.js:102
 msgid ""
 "The 3G counterpart to SINR: pilot energy against everything else in the "
 "carrier. Above roughly -7 dB a connection starts to suffer; the steps drawn "
@@ -2045,13 +2049,10 @@ msgstr ""
 #: htdocs/luci-static/resources/wwand/graph.js:82
 msgid ""
 "The measure to aim an antenna by, and the same steps the router's signal "
-"LEDs use. Solid lines are the serving cell's own power — RSRP on LTE and 5G, "
-"RSCP on 3G; LTE and 5G NR are graded alike, because published tables give "
-"SSB-RSRP the same boundaries as LTE RSRP below 6 GHz. Dashed lines are RSSI, "
-"the total power in the band including neighbours and interference: coarser, "
-"graded differently (-65/-75/-85 dBm), and on 2G the only thing there is. An "
-"RSSI line carries the RAT that measured it; the plain amber one appears only "
-"when the modem reports an untagged value and nothing better."
+"LEDs use: the serving cell's own power, RSRP on LTE and 5G, RSCP on 3G. LTE "
+"and 5G NR are graded alike, because published tables give SSB-RSRP the same "
+"boundaries as LTE RSRP below 6 GHz. RSSI is a different measure on its own "
+"graph."
 msgstr ""
 
 #: htdocs/luci-static/resources/wwand/esim.js:346
@@ -2141,6 +2142,17 @@ msgstr ""
 #: htdocs/luci-static/resources/view/wwand/modems.js:369
 #: htdocs/luci-static/resources/view/wwand/modems.js:370
 msgid "Tools"
+msgstr ""
+
+#: htdocs/luci-static/resources/wwand/graph.js:87
+msgid ""
+"Total received power in the band — the serving cell plus its neighbours plus "
+"interference. Coarser than RSRP and graded 20 dB higher (-65/-75/-85 dBm), "
+"which is why it has its own graph: a strong signal reaches -46 dBm, off the "
+"top of any scale drawn for RSRP. On 2G it is the only measure there is, and "
+"on a modem that reports nothing better it is all you get. Each line carries "
+"the radio that measured it; the plain amber one appears only when the reply "
+"is untagged."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/wwand/modems.js:520
@@ -2275,7 +2287,7 @@ msgstr ""
 msgid "active (mode %d)"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:284
+#: htdocs/luci-static/resources/wwand/format.js:288
 msgid "actual"
 msgstr ""
 
@@ -2291,7 +2303,7 @@ msgstr ""
 msgid "any"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:414
+#: htdocs/luci-static/resources/wwand/format.js:418
 msgid "armed"
 msgstr ""
 
@@ -2311,7 +2323,7 @@ msgstr ""
 msgid "available"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:338
+#: htdocs/luci-static/resources/wwand/format.js:342
 msgid "blocked (%s)"
 msgstr ""
 
@@ -2327,7 +2339,7 @@ msgstr ""
 msgid "both usable at once"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:349
+#: htdocs/luci-static/resources/wwand/format.js:353
 msgid "busy (reads failing)"
 msgstr ""
 
@@ -2437,10 +2449,11 @@ msgstr ""
 #: htdocs/luci-static/resources/wwand/graph.js:85
 #: htdocs/luci-static/resources/wwand/graph.js:90
 #: htdocs/luci-static/resources/wwand/graph.js:95
+#: htdocs/luci-static/resources/wwand/graph.js:100
 msgid "excellent"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:283
+#: htdocs/luci-static/resources/wwand/format.js:287
 msgid "expected"
 msgstr ""
 
@@ -2448,6 +2461,7 @@ msgstr ""
 #: htdocs/luci-static/resources/wwand/graph.js:85
 #: htdocs/luci-static/resources/wwand/graph.js:90
 #: htdocs/luci-static/resources/wwand/graph.js:95
+#: htdocs/luci-static/resources/wwand/graph.js:100
 msgid "fair"
 msgstr ""
 
@@ -2459,6 +2473,7 @@ msgstr ""
 #: htdocs/luci-static/resources/wwand/graph.js:85
 #: htdocs/luci-static/resources/wwand/graph.js:90
 #: htdocs/luci-static/resources/wwand/graph.js:95
+#: htdocs/luci-static/resources/wwand/graph.js:100
 msgid "good"
 msgstr ""
 
@@ -2516,7 +2531,7 @@ msgstr ""
 msgid "no reset control"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:245
+#: htdocs/luci-static/resources/wwand/format.js:249
 msgid "no signal (modem not registered)"
 msgstr ""
 
@@ -2540,7 +2555,7 @@ msgstr ""
 msgid "not present on this SIM"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/graph.js:413
+#: htdocs/luci-static/resources/wwand/graph.js:425
 msgid "not reported"
 msgstr ""
 
@@ -2569,20 +2584,20 @@ msgstr ""
 msgid "reading…"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:355
+#: htdocs/luci-static/resources/wwand/format.js:359
 msgid "ready"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:355
+#: htdocs/luci-static/resources/wwand/format.js:359
 msgid "ready, PIN enabled"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:253
-#: htdocs/luci-static/resources/wwand/format.js:321
+#: htdocs/luci-static/resources/wwand/format.js:257
+#: htdocs/luci-static/resources/wwand/format.js:325
 msgid "registered"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:244
+#: htdocs/luci-static/resources/wwand/format.js:248
 msgid "registered — this modem reports no signal detail"
 msgstr ""
 
@@ -2590,7 +2605,7 @@ msgstr ""
 msgid "reject cause %d"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:328
+#: htdocs/luci-static/resources/wwand/format.js:332
 msgid "rejected: %s"
 msgstr ""
 
@@ -2615,11 +2630,11 @@ msgstr ""
 msgid "scan vanished (daemon restarted?)"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:253
+#: htdocs/luci-static/resources/wwand/format.js:257
 msgid "searching"
 msgstr ""
 
-#: htdocs/luci-static/resources/wwand/format.js:330
+#: htdocs/luci-static/resources/wwand/format.js:334
 msgid "searching…"
 msgstr ""
 
