@@ -733,40 +733,147 @@ return view.extend({
 			dom.content(body, node);
 		}
 
+		/* SELECT, THEN DELETE ONCE.
+		
+		   There used to be a Delete button per row. With a SIM full of cell
+		   broadcasts that is the wrong shape, and not because of the round
+		   trips: every deletion reflows the table, so the next Delete button is
+		   somewhere else and the operator has to re-locate and re-decide for
+		   each one — a moving target under a repeated irreversible action
+		   (ddimension/luci-app-wwand#8).
+		
+		   So: ticking boxes changes nothing, the list holds still while you
+		   choose, and there is exactly one destructive click at the end. The
+		   table reflows once, afterwards, when there is nothing left to aim at.
+		   The per-row button is gone rather than kept alongside — leaving it
+		   would leave the hazard. */
 		function rows(msgs) {
 			if (!msgs || !msgs.length)
 				return E('em', {}, _('No messages stored.'));
 
+			var boxes = [];
+
+			/* Shift-click selects a range. Without it, "delete 46 of 47" means
+			   46 individual clicks, which is the same repetition problem in a
+			   safer hat. */
+			var lastClicked = null;
+
+			function onBoxClick(ev) {
+				var here = boxes.indexOf(ev.target);
+
+				if (ev.shiftKey && lastClicked !== null && here >= 0) {
+					var a = Math.min(lastClicked, here), b = Math.max(lastClicked, here);
+
+					for (var i = a; i <= b; i++)
+						boxes[i].checked = ev.target.checked;
+				}
+
+				lastClicked = here;
+				sync();
+			}
+
 			var trs = msgs.map(function(m) {
 				var idxs = (m.indexes && m.indexes.length) ? m.indexes
 					: (m.index != null ? [ m.index ] : []);
+				/* a multipart message is several storage slots and must go as a
+				   unit — half a message left behind is worse than either */
+				var box = E('input', {
+					'type': 'checkbox',
+					'aria-label': _('Select this message'),
+					'click': onBoxClick,
+				});
+
+				box.wwandIdx = idxs;
+				boxes.push(box);
+
 				return E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td', 'style': 'width:1%' }, box),
 					/* arrays: an SMS is written by whoever knows the number, so
 					   sender, timestamp and body are all outside text */
 					E('td', { 'class': 'td' }, [ m.sender || '—' ]),
 					E('td', { 'class': 'td', 'style': 'white-space:nowrap' }, [ m.timestamp || '' ]),
 					E('td', { 'class': 'td', 'style': 'white-space:pre-wrap' },
 						[ (m.text || '') + (m.incomplete ? ' ' + _('(incomplete)') : '') ]),
-					E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
-						'class': 'btn cbi-button cbi-button-remove',
-						click: ui.createHandlerFn(self, function() {
-							if (!confirm(_('Delete this message?')))
-								return;
-							return Promise.all(idxs.map(function(i) {
-								return callSmsDelete(modem, storageSel.value, i);
-							})).then(load);
-						}) }, _('Delete'))),
 				]);
 			});
 
-			return E('table', { 'class': 'table' }, [
-				E('tr', { 'class': 'tr table-titles' }, [
-					E('th', { 'class': 'th' }, _('Sender')),
-					E('th', { 'class': 'th' }, _('Received')),
-					E('th', { 'class': 'th' }, _('Message')),
-					E('th', { 'class': 'th', 'style': 'width:1%' }, ''),
+			var all = E('input', {
+				'type': 'checkbox',
+				'aria-label': _('Select all messages'),
+				'click': function(ev) {
+					boxes.forEach(function(b) { b.checked = ev.target.checked; });
+					lastClicked = null;
+					sync();
+				},
+			});
+
+			var delBtn = E('button', {
+				'class': 'btn cbi-button cbi-button-remove',
+				'disabled': '',
+				'click': ui.createHandlerFn(self, function() {
+					var sel = boxes.filter(function(b) { return b.checked; });
+					var idx = [];
+
+					sel.forEach(function(b) {
+						b.wwandIdx.forEach(function(i) { idx.push(i); });
+					});
+
+					if (!idx.length)
+						return;
+
+					/* A COUNT, not the indices. Storage indices are an internal
+					   addressing detail — the operator cannot check "1-48 except
+					   12" against what is on the screen, so it reads as
+					   precision while verifying nothing. The count is checkable
+					   against the ticks, and if it disagrees with what they see,
+					   something arrived. */
+					if (!confirm(_('Delete %d selected message(s)?').format(sel.length)))
+						return;
+
+					return callSmsDelete(modem, storageSel.value, 0, idx).then(function(res) {
+						/* One bad slot does not strand the rest, so say what
+						   actually happened instead of "error" or nothing. */
+						if (res && res.failed && res.failed.length)
+							ui.addNotification(null, E('p', _('Deleted %d of %d messages; %d could not be deleted.')
+								.format(res.deleted || 0, res.requested || sel.length, res.failed.length)), 'warning');
+
+						return load();
+					});
+				}),
+			}, _('Delete selected'));
+
+			function sync() {
+				var n = boxes.filter(function(b) { return b.checked; }).length;
+
+				if (n)
+					delBtn.removeAttribute('disabled');
+				else
+					delBtn.setAttribute('disabled', '');
+
+				delBtn.textContent = n
+					? _('Delete %d selected').format(n)
+					: _('Delete selected');
+
+				all.checked = (n > 0 && n == boxes.length);
+				all.indeterminate = (n > 0 && n < boxes.length);
+			}
+
+			return E([], [
+				E('table', { 'class': 'table' }, [
+					E('tr', { 'class': 'tr table-titles' }, [
+						E('th', { 'class': 'th', 'style': 'width:1%' }, all),
+						E('th', { 'class': 'th' }, _('Sender')),
+						E('th', { 'class': 'th' }, _('Received')),
+						E('th', { 'class': 'th' }, _('Message')),
+					]),
+				].concat(trs)),
+				E('div', { 'style': 'margin-top:6px' }, [
+					delBtn,
+					' ',
+					E('span', { 'class': 'cbi-value-description' },
+						_('Tick messages and delete them in one step; shift-click selects a range.')),
 				]),
-			].concat(trs));
+			]);
 		}
 
 		function load() {

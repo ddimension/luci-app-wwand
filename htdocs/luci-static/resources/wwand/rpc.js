@@ -71,7 +71,12 @@ return baseclass.extend({
 
 	/* --- SMS -------------------------------------------------------------- */
 	smsList:   rpc.declare({ object: 'wwand', method: 'modem_sms_list', params: [ 'modem', 'storage' ], expect: {} }),
-	smsDelete: rpc.declare({ object: 'wwand', method: 'modem_sms_delete', params: [ 'modem', 'storage', 'index' ], expect: {} }),
+	/* `indices` deletes a set in ONE call and answers { deleted, requested,
+	   failed }; `index` is the single-message form and still answers { ok }.
+	   Deliberately no "delete all": the daemon has no such primitive, because it
+	   would delete what is in the store when the modem runs it rather than what
+	   the operator was shown. */
+	smsDelete: rpc.declare({ object: 'wwand', method: 'modem_sms_delete', params: [ 'modem', 'storage', 'index', 'indices' ], expect: {} }),
 
 	/* --- migration -------------------------------------------------------- */
 	/* convert selected legacy proto qmi/mbim/ncm interfaces to proto wwand
