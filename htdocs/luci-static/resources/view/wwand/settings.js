@@ -775,8 +775,10 @@ return view.extend({
 			var trs = msgs.map(function(m) {
 				var idxs = (m.indexes && m.indexes.length) ? m.indexes
 					: (m.index != null ? [ m.index ] : []);
-				/* a multipart message is several storage slots and must go as a
-				   unit — half a message left behind is worse than either */
+				/* a multipart message is several storage slots, and they are
+				   selected and submitted together — though the deletion itself
+				   is sequential, so a mid-way failure can still leave part of
+				   one behind; that is what the warning below reports */
 				var box = E('input', {
 					'type': 'checkbox',
 					'aria-label': _('Select this message'),
@@ -832,10 +834,17 @@ return view.extend({
 
 					return callSmsDelete(modem, storageSel.value, 0, idx).then(function(res) {
 						/* One bad slot does not strand the rest, so say what
-						   actually happened instead of "error" or nothing. */
+						   actually happened instead of "error" or nothing.
+
+						   Counted in STORAGE SLOTS, not messages, and it says
+						   so: a multipart message owns several, the deletion is
+						   sequential rather than transactional, and a failure
+						   partway can leave part of one behind. Reporting "2 of
+						   3 messages" for one three-part message would be a
+						   worse kind of wrong than an unfamiliar word. */
 						if (res && res.failed && res.failed.length)
-							ui.addNotification(null, E('p', _('Deleted %d of %d messages; %d could not be deleted.')
-								.format(res.deleted || 0, res.requested || sel.length, res.failed.length)), 'warning');
+							ui.addNotification(null, E('p', _('Deleted %d of %d storage slots; %d could not be deleted. A message spanning several slots may be partly left behind.')
+								.format(res.deleted || 0, res.requested || idx.length, res.failed.length)), 'warning');
 
 						return load();
 					});
