@@ -413,6 +413,56 @@ function renderLive(name, modem, graphs) {
 		}
 		if (modem.msisdn)
 			mdmRows.push([ term('MSISDN', _('The phone number stored on the SIM (often empty on data SIMs)')), modem.msisdn ]);
+
+		/* THE RECOVERY LADDER, not just its counter.
+		 *
+		 * A bare attempt count tells an operator a number. What they need while
+		 * a box is misbehaving is which escalations have already fired, what
+		 * comes next, how far off it is — and, at the hardware rung, which of
+		 * the two actions this box would actually take. The last one is not
+		 * guessable from the UI: a board with a power line still cannot use it
+		 * when two modems share it, so the escalation silently has nothing to
+		 * fire. The daemon answers that with the same code path the action
+		 * takes (hwops.repower_plan), so the page cannot promise what the
+		 * ladder would not do. */
+		var rec = modem.recovery;
+
+		if (rec) {
+			var fired = rec.rungs ? rec.rungs.filter(function(x) { return x.fired; }).length : 0;
+			var state = rec.armed
+				? _('armed')
+				: _('not armed — no exchange has succeeded in the selected protocol yet');
+			var line = '%s · %d/%d %s'.format(state, fired,
+				rec.rungs ? rec.rungs.length : 0, _('steps taken'));
+
+			if (rec.next)
+				line += ' · %s'.format(rec.next['in'] > 0
+					? _('next: %s in %d attempts').format(rec.next.action, rec.next['in'])
+					: _('next: %s, due now').format(rec.next.action));
+
+			mdmRows.push([ term(_('Recovery'), _('wwand escalates a failing modem in steps: cycle the operating mode, reset the modem, then the board\'s power or reset line, and a reboot beyond that. Each step fires once per outage. The ladder stays disarmed until one exchange has succeeded in the selected control protocol, so a misdetected modem is never repowered.')),
+				'%s (%d %s)'.format(line, rec.attempts || 0, _('attempts')) ]);
+
+			var hw = rec.hardware || {};
+			var hwText;
+
+			if (hw.action == 'reset_gpio')
+				hwText = _('reset line %s (%s)').format(hw.gpio,
+					hw.source == 'modem' ? _('from this modem\'s configuration') : _('board default'));
+			else if (hw.action == 'power_cycle')
+				hwText = hw.has_power === false
+					? _('power cycle — but the board profile reports no power control')
+					: _('power cycle the modem');
+			else if (hw.error == 'multi_modem_needs_reset_gpio')
+				hwText = _('nothing — this box has more than one modem and the board lines would hit the wrong one. Set reset_gpio on the modem to give this step something to do.');
+			else if (hw.error == 'no_board_profile')
+				hwText = _('nothing — no board profile for this device');
+			else
+				hwText = _('nothing');
+
+			mdmRows.push([ term(_('Hardware step'), _('What the hardware step of the recovery ladder would actually do on this box for this modem — asked of the same code that performs it, not inferred.')),
+				hwText ]);
+		}
 		if (modem.fcc_lock != null && modem.fcc_lock != 0)
 			mdmRows.push([ term(_('FCC lock'), _('This module boots radio-locked (laptop-SKU) and the modem will not register while the lock is armed — set fcc_auth on the modem configuration to unlock at boot')),
 				_('active (mode %d)').format(modem.fcc_lock) ]);
