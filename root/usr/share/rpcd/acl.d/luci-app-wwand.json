@@ -54,5 +54,15 @@
 				]
 			}
 		}
+	},
+	"luci-app-wwand-log": {
+		"description": "Read the system log for the wwand log viewer on the modem status page. SEPARATE ROLE ON PURPOSE: rpcd cannot filter a method's arguments or its result, so granting `log read` grants the WHOLE system log \u2014 kernel, auth, dropbear, firewall \u2014 not just the wwand lines, which are picked out in the browser afterwards. Keeping it out of the luci-app-wwand role lets an operator be given the modem pages without the box's logs; the viewer says it cannot read them and everything else on the page still works.",
+		"read": {
+			"ubus": {
+				"log": [
+					"read"
+				]
+			}
+		}
 	}
 }
