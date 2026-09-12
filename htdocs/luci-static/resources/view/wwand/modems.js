@@ -20,11 +20,17 @@
 var callStatus = wrpc.status;
 var callProbe = wrpc.probe;
 var callSignal = wrpc.signal;
+var callSlots = wrpc.slots;
 var callContexts = wrpc.contexts;
 
 /* compact registration/SIM mappings live in the shared wwand.format module */
 var fmtReg = fmt.fmtRegistration;
-var fmtSim = fmt.fmtSim;
+/* BOUND, not a bare reference. The other aliases in this block are standalone
+   functions, but fmtSim composes two siblings through `this` — and a detached
+   method in a strict-mode module gets `this === undefined`, so the column would
+   throw on every render rather than degrade. The alias style is fine; it just
+   has to survive a method that is not standalone. */
+var fmtSim = fmt.fmtSim.bind(fmt);
 
 function fmtSignal(sig) {
 	var parts = [];
@@ -56,12 +62,24 @@ return view.extend({
 			var status = r[1] || {};
 			var names = Object.keys(status);
 
-			return Promise.all(names.map(function(n) {
-				return L.resolveDefault(callSignal(n), {});
-			})).then(function(sigs) {
-				var signals = {};
-				names.forEach(function(n, i) { signals[n] = sigs[i] || {}; });
-				return { status: status, probe: r[2] || {}, contexts: r[3] || {}, signals: signals };
+			/* one signal AND one slot read per modem. The fan-out doubles, but
+			   load() runs ONCE per page view — this table does not poll — so
+			   the cost is one extra round trip per modem on opening the page,
+			   not one per second. That buys the SIM column the thing it could
+			   not say before: which slot is live and whether it holds an eSIM. */
+			return Promise.all([
+				Promise.all(names.map(function(n) { return L.resolveDefault(callSignal(n), {}); })),
+				Promise.all(names.map(function(n) { return L.resolveDefault(callSlots(n), {}); })),
+			]).then(function(both) {
+				var signals = {}, slots = {};
+
+				names.forEach(function(n, i) {
+					signals[n] = both[0][i] || {};
+					slots[n] = both[1][i] || {};
+				});
+
+				return { status: status, probe: r[2] || {}, contexts: r[3] || {},
+				         signals: signals, slots: slots };
 			});
 		});
 	},
@@ -69,6 +87,7 @@ return view.extend({
 	render: function(data) {
 		var status = data.status || {};
 		var signals = data.signals || {};
+		var simSlots = data.slots || {};
 		var contexts = data.contexts || {};
 
 		/* per-modem connection counts from the context map (keyed by interface;
@@ -136,7 +155,7 @@ return view.extend({
 			return (c.up == c.total) ? '%d'.format(c.up) : '%d / %d'.format(c.up, c.total);
 		});
 		col('_state', _('State'), function(sid) { return fmtState(status[sid]); });
-		col('_sim', _('SIM'), function(sid) { return fmtSim(status[sid]); });
+		col('_sim', _('SIM'), function(sid) { return fmtSim(status[sid], simSlots[sid]); });
 		col('_reg', _('Registration'), function(sid) { return fmtReg(status[sid]); });
 		col('_sig', _('Signal'), function(sid) { return fmtSignal(signals[sid]); });
 
@@ -192,6 +211,27 @@ return view.extend({
 				}, label);
 			};
 
+			/* The daemon answers a refused hardware step with a token, and the
+			   token used to reach the user verbatim — "Repower unavailable:
+			   multi_modem_needs_reset_gpio." (seen on the Chateau, which carries
+			   two modems on one board power line, 2026-09-12). The refusal is
+			   correct and worth reading: cutting that line would drop the OTHER
+			   modem too. Say so. An unmapped token still falls through, because
+			   a raw token beats no reason at all. */
+			var HW_REASON = {
+				multi_modem_needs_reset_gpio: _('this board powers both modems from one line, so cutting it would drop the other modem too — give this modem its own "Modem reset GPIO" to repower it alone'),
+				no_board_profile: _('this board is not in wwand\'s profile table, so it has no known power or reset line'),
+				no_power_control: _('the board profile has no modem power line'),
+				reset_gpio_unavailable: _('the configured reset GPIO could not be driven'),
+				no_such_modem: _('the daemon does not know this modem'),
+				no_reset_control: _('no reset control for this modem'),
+			};
+
+			var hwReason = function(res, fallback) {
+				var e = res && res.error;
+				return e ? (HW_REASON[e] || e) : fallback;
+			};
+
 			/* Reboot: GPIO-first then backend soft reset (ubus modem_reset).
 			   Confirm first — it drops this modem's connection(s) briefly. */
 			var reboot = E('button', {
@@ -205,7 +245,8 @@ return view.extend({
 						if (res && (res.ok || res.resetting))
 							ui.addNotification(null, E('p', {}, [ _('Modem reset triggered (%s).').format(res.action || '?') ]), 'info');
 						else
-							ui.addNotification(null, E('p', {}, [ _('Reset unavailable: %s.').format((res && res.error) || _('no reset control')) ]), 'warning');
+							ui.addNotification(null, E('p', {}, [ _('Reset unavailable: %s.')
+								.format(hwReason(res, _('no reset control'))) ]), 'warning');
 					});
 				}),
 			}, _('Reboot'));
@@ -225,7 +266,8 @@ return view.extend({
 						if (res && res.ok)
 							ui.addNotification(null, E('p', {}, [ _('Modem repowered (%s).').format(res.action || '?') ]), 'info');
 						else
-							ui.addNotification(null, E('p', {}, [ _('Repower unavailable: %s.').format((res && res.error) || _('no power/reset control')) ]), 'warning');
+							ui.addNotification(null, E('p', {}, [ _('Repower unavailable: %s.')
+								.format(hwReason(res, _('no power/reset control'))) ]), 'warning');
 					});
 				}),
 			}, _('Repower'));

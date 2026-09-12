@@ -62,9 +62,25 @@ return baseclass.extend({
 			available: _('available'),
 		};
 
-		var renderOps = function(ops) {
+		/* QmiNasNetworkScanResult, as the daemon names it */
+		var SCAN_RESULT_LABEL = {
+			abort: _('the modem aborted the scan'),
+			radio_link_failure: _('radio link failure during the scan'),
+		};
+
+		var renderOps = function(ops, scanResult) {
 			if (!ops || !ops.length) {
-				dom.content(results, E('em', {}, _('No operators found.')));
+				/* "No operators found" is a claim about the air, and it is the
+				   wrong one when the modem simply gave up — which it reports in
+				   its own scan-result field (QmiNasNetworkScanResult). Seen on an
+				   RG502QEA, 2026-09-12: 180 s and an empty list for a scan fired
+				   mid-teardown, then a full list from the same modem minutes
+				   later. Say which of the two happened. */
+				var why = scanResult && scanResult != 'success'
+					? (SCAN_RESULT_LABEL[scanResult] || scanResult) : null;
+				dom.content(results, E('em', {}, why
+					? _('No operators returned — %s.').format(why)
+					: _('No operators found.')));
 				return;
 			}
 			/* a scan may list the same PLMN once per supported RAT (2G/3G/4G/5G) —
@@ -156,17 +172,26 @@ return baseclass.extend({
 			]));
 		};
 
+		/* `started` is a BROWSER timestamp, deliberately. The daemon reports its
+		   own start time in st.started, but that is the ROUTER clock, and
+		   subtracting it from Date.now() measures the skew between the two
+		   machines rather than the elapsed scan — on a box whose clock has not
+		   been set it reads days (observed: 624335s on the NR7101, 2026-09-12),
+		   and when the router runs ahead the Math.max() floor pinned it at 0
+		   forever. A cellular router is in exactly that state where this widget
+		   matters: no RTC, and no NTP until the modem this page is scanning with
+		   has brought a connection up. One clock only. */
 		var pollScan = function(started) {
 			window.setTimeout(function() {
 				callScanStatus(data.modem).then(function(st) {
 					if (st && st.running) {
-						scanSpinner(st.started ? Math.max(0, Math.round(Date.now() / 1000 - st.started)) : null);
+						scanSpinner(Math.max(0, Math.round((Date.now() - started) / 1000)));
 						return pollScan(started);
 					}
 					if (!st || st.ok === false || st.error || st.idle)
 						return scanFail((st && (st.error || (st.idle ? _('scan vanished (daemon restarted?)') : '?'))) || '?');
 					scanBtn.disabled = false;
-					renderOps(st.operators || []);
+					renderOps(st.operators || [], st.scan_result);
 				}).catch(function(e) {
 					/* one failed poll is not a failed scan (rpcd hiccup) — retry */
 					pollScan(started);
@@ -183,7 +208,7 @@ return baseclass.extend({
 				restore();
 				if (r && r.ok === false)
 					return scanFail(r.error || '?');
-				renderOps((r || {}).operators || []);
+				renderOps((r || {}).operators || [], (r || {}).scan_result);
 			}).catch(function(e) {
 				restore();
 				scanFail((e && e.message) || e);
@@ -194,10 +219,11 @@ return baseclass.extend({
 			'click': ui.createHandlerFn(self, function() {
 				scanBtn.disabled = true;
 				scanSpinner(null);
+				var t0 = Date.now();
 				return callScanStart(data.modem).then(function(r) {
 					if (r && r.ok === false)
 						return scanFail(r.error || '?');
-					pollScan(r && r.started);
+					pollScan(t0);
 				}).catch(function(e) {
 					return legacyScan();
 				});
