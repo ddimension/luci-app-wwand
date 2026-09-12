@@ -107,6 +107,56 @@ return baseclass.extend({
 				data: series('gauge', sinr, 'sinr', 'SINR'),
 			});
 
+		/* Aggregation, which is why anyone wants this in an RRD at all: the live
+		   graph shows carriers and bandwidth for as long as a browser is open,
+		   and the question people actually have ("does the second carrier come
+		   back at night?") is about the hours it was not. Two graphs, not one —
+		   a count runs 1..6 and a bandwidth 5..200, and an axis carrying both
+		   flattens the count onto the baseline.
+
+		   The instance names are `carriers_lte` / `carriers_nr`, so the RAT
+		   suffix is `nr` here where the signal series use `nr5g`; both map to
+		   the same purple through the lookup below. */
+		const RAT_AGG = { lte: RAT.lte, nr: RAT.nr5g };
+		const LABEL_AGG = { lte: 'LTE', nr: '5G' };
+
+		const aggSeries = (insts, prefix, unit) => {
+			const options = {};
+
+			for (const inst of insts) {
+				const rat = inst.slice(prefix.length).replace(/^_/, '');
+
+				options[`gauge_${inst.replace(/\W/g, '_')}_value`] = {
+					title: `${unit} ${LABEL_AGG[rat] || rat}`,
+					color: RAT_AGG[rat] || RAT.any,
+					noarea: true,
+					overlay: true,
+				};
+			}
+
+			return { instances: { gauge: insts }, options: options };
+		};
+
+		const carriers = pick('gauge', /^carriers_/);
+
+		if (carriers.length)
+			out.push({
+				title: '%H: Aggregated carriers on %pi',
+				vlabel: 'Carriers',
+				number_format: '%5.0lf',
+				data: aggSeries(carriers, 'carriers', 'Carriers'),
+			});
+
+		const bwidth = pick('gauge', /^bandwidth_/);
+
+		if (bwidth.length)
+			out.push({
+				title: '%H: Aggregate bandwidth on %pi',
+				vlabel: 'MHz',
+				number_format: '%5.0lf MHz',
+				data: aggSeries(bwidth, 'bandwidth', 'MHz'),
+			});
+
 		if (have('temperature').length)
 			out.push({
 				title: '%H: Modem temperature on %pi',

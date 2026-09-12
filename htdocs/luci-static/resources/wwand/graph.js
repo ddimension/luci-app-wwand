@@ -95,6 +95,24 @@ const SCALES = {
 	        labels: [ _('excellent'), _('good'), _('fair') ],
 	        title: _('Reference signal quality (RSRQ)'),
 	        hint: _('Mostly a read on how busy the cell is: it falls as the cell fills, even with the antenna untouched. Treat it as an indicator rather than a target — published ladders disagree below -10 dB, and 5G NR is graded a little tighter than the LTE steps drawn here.') },
+	/* NO QUALITY LADDER, deliberately — and that is why `labels` is absent
+	   rather than empty. There is no "excellent" number of carriers: two is
+	   better than one on a busy cell and irrelevant on an empty one, and an
+	   operator that aggregates three 10 MHz carriers gives less than one that
+	   gives a single 20 MHz. The three coloured rules would have to mean
+	   something to be drawn, so they are not drawn; prepare() skips them for
+	   any scale without labels, and the minute marks and the legend's
+	   current/avg/peak carry the reading instead.
+
+	   THE TWO ARE SEPARATE CANVASES for the reason this page separated SINR and
+	   RSRQ: a count runs 1..6 and a bandwidth 5..200, and sharing an axis pins
+	   one of them flat against an edge. */
+	ca: { min: 0, max: 6, minmax: 2, autoscale: true, unit: '', integral: true,
+	      title: _('Aggregated carriers'),
+	      hint: _('How many downlink carriers the modem is aggregating, one line per radio technology — under EN-DC the LTE anchor and the 5G carriers are counted separately, so both lines are present at once. A secondary carrier that is configured but not activated is not counted: it carries no data. A modem that reports no carrier list at all still shows its serving cell as one carrier. The 5G line appears only while a 5G carrier is actually serving, not merely visible.') },
+	bw: { min: 0, max: 100, minmax: 20, autoscale: true, unit: 'MHz',
+	      title: _('Aggregate bandwidth'),
+	      hint: _('The downlink bandwidth of the aggregated carriers added up, per radio technology — the width of the pipe, which is what carrier aggregation is for. It moves independently of the carrier count: three 10 MHz carriers are less than one 20 MHz carrier. Drawn only where the modem reports a width per carrier. The 5G line is usually absent for that reason: the 5G rows of the carrier list carry a bandwidth whose unit this tree has not verified against hardware, and a confidently wrong 100 MHz is worse than a gap.') },
 	ecio: { min: -20, max: 0, unit: 'dB',
 	        good: -6, fair: -10, weak: -13,
 	        labels: [ _('excellent'), _('good'), _('fair') ],
@@ -136,6 +154,15 @@ const SERIES = {
 	rsrq: [ { label: _('RSRQ LTE'),  colour: RAT.lte },
 	        { label: _('RSRQ 5G'),   colour: RAT.nr } ],
 	ecio: [ { label: _('Ec/Io 3G'),  colour: RAT.umts } ],
+	/* Same colours as every other canvas, so a technology switch reads the same
+	   way here as there: the LTE line ends where the 5G line begins, and both
+	   present is EN-DC. That is the "switched technologies" half of
+	   ddimension/wwand#14 — visible in the picture, without a RAT graph whose
+	   y-axis would have to invent an order for 2G/3G/4G/5G. */
+	ca:   [ { label: _('LTE carriers'), colour: RAT.lte },
+	        { label: _('5G carrier'),   colour: RAT.nr } ],
+	bw:   [ { label: _('LTE'),          colour: RAT.lte },
+	        { label: _('5G NR'),        colour: RAT.nr } ],
 };
 
 /* ONE definition of how a series is stroked, used by the line in the graph and
@@ -277,6 +304,16 @@ return baseclass.extend({
 		const height = HEIGHT - 2;
 		const yOf = (v) => height - ((v - s.min) / (s.max - s.min)) * height;
 
+		/* A scale with no `labels` has no quality ladder — a carrier count and a
+		   bandwidth have no "excellent". It still needs a SCALE: without any
+		   horizontal reference a line floats at some height and the reader
+		   cannot tell 2 carriers from 4. Those canvases get the same three rules
+		   drawn as plain value gridlines instead, placed by draw() because their
+		   top depends on the data. Nothing to do here. */
+		/* ...but fall THROUGH to the minute marks below. Returning here skipped
+		   them too, so the two new canvases had neither a value scale nor a time
+		   one — a line in an empty box. */
+		if (s.labels)
 		for (const t of [ { id: 't_good', v: s.good, txt: s.labels[0] },
 		                  { id: 't_fair', v: s.fair, txt: s.labels[1] },
 		                  { id: 't_poor', v: s.weak, txt: s.labels[2] } ]) {
@@ -356,7 +393,93 @@ return baseclass.extend({
 
 		const height = HEIGHT - 2;
 		const s = ctx.scale;
-		const span = s.max - s.min;
+
+		/* A dBm has an absolute meaning and a fixed scale to be read against. A
+		   carrier count and a bandwidth do not: 10 MHz on a 0..200 axis is a
+		   line lying on the baseline, which is the same "pinned to an edge and
+		   telling you nothing" that took RSSI off the RSRP canvas. So these two
+		   grow with what they are showing, never below `minmax` so a steady
+		   value does not fill the canvas, and the top is rounded up to keep the
+		   line off the ceiling. Shared across the canvas's series, or the LTE
+		   and 5G lines would be drawn against different axes. */
+		let smax = s.max;
+
+		if (s.autoscale) {
+			let hi = 0;
+
+			for (const buf of ctx.values)
+				for (const v of buf)
+					if (v != null && v > hi) hi = v;
+
+			/* INCLUDING THE SAMPLE THAT HAS NOT BEEN STORED YET. The buffers are
+			   appended further down, so a value computed from them alone is one
+			   tick stale — and every upward step then drew the new peak clamped
+			   to the old ceiling while the legend already printed it. Visible on
+			   the first 100 MHz sample against a 20 MHz scale. */
+			for (const v of (values || []))
+				if (v != null && v > hi) hi = v;
+
+			smax = Math.max(s.minmax || 1, Math.ceil((hi * 1.25) / (s.minmax || 1)) * (s.minmax || 1));
+		}
+
+		const span = smax - s.min;
+
+		/* THE VALUE GRIDLINES for a scale that has no quality ladder. The three
+		   rules the canvas already carries are reused rather than adding
+		   elements: same lines, neutral colour, and a plain number instead of
+		   "excellent". Without them these two canvases had no horizontal
+		   reference at all — a line at some height and no way to tell two
+		   carriers from four, which is worse than the fixed scale they replaced.
+		
+		   PLACED HERE, NOT IN prepare(), because the top of an auto-scaled axis
+		   moves with the data and prepare() only runs when the box is resized.
+		
+		   THE COLOUR IS !important FOR THE SAME REASON THE THRESHOLDS ARE: LuCI
+		   themes restyle `#view div[style] > svg line[style]` to the theme text
+		   colour (luci-theme-footstrap cascade.css:298-299), which would be
+		   harmless here — but the style attribute is REWRITTEN on every draw, so
+		   it has to carry the full declaration each time or the green of a
+		   previous quality canvas would survive on a reused node. */
+		if (!s.labels) {
+			const gridStep = (smax >= 8) ? 1 : 0.5;
+			const ticks = [];
+
+			for (const frac of [ 0.25, 0.5, 0.75 ]) {
+				let v = s.min + span * frac;
+
+				v = s.integral ? Math.round(v) : Math.round(v / gridStep) * gridStep;
+
+				if (v > s.min && v < smax && ticks.indexOf(v) < 0)
+					ticks.push(v);
+			}
+
+			const ids = [ 't_good', 't_fair', 't_poor' ];
+
+			for (let k = 0; k < ids.length; k++) {
+				const line = ctx.svg.querySelector('#' + ids[k]);
+				const label = ctx.svg.querySelector('#' + ids[k] + '_l');
+				const v = ticks[k];
+				const y = (v != null)
+					? height - ((v - s.min) / span) * height : -10;
+
+				if (line) {
+					line.setAttribute('y1', y);
+					line.setAttribute('y2', y);
+					line.setAttribute('style',
+						'stroke:#888 !important;stroke-width:0.6;stroke-dasharray:4,3');
+				}
+
+				if (label) {
+					label.setAttribute('y', y - 3);
+					label.setAttribute('style',
+						'fill:#888 !important; font-size:9pt; font-family:sans-serif');
+					label.textContent = (v != null)
+						? (s.integral ? '' + v : v.toFixed(gridStep < 1 ? 1 : 0))
+							+ (s.unit ? ' ' + s.unit : '')
+						: '';
+				}
+			}
+		}
 
 		for (let i = 0; i < ctx.series.length; i++) {
 			const buf = ctx.values[i];
@@ -393,7 +516,7 @@ return baseclass.extend({
 					continue;
 				}
 
-				const clamped = Math.min(s.max, Math.max(s.min, v));
+				const clamped = Math.min(smax, Math.max(s.min, v));
 				const y = height - ((clamped - s.min) / span) * height;
 
 				d.push('%s%d,%s'.format(pen ? 'L' : 'M', Math.round(x), y.toFixed(1)));
@@ -419,9 +542,26 @@ return baseclass.extend({
 			   so a literal with a double space can never match the msgid it
 			   generates and the translation would silently never apply. No
 			   shipped template in the tree contains one. */
+			/* A carrier count is a whole number: "2.0 carriers (avg 2.0, peak
+			   2.0)" reads as a measurement with a precision it does not have.
+			   The average keeps a decimal on purpose — "avg 1.4" over the window
+			   is the useful part, it says the second carrier comes and goes. */
+			/* THREE forms, and the unit-less one is not a nicety: "1 carriers"
+			   is wrong in English and cannot be fixed by substituting a unit
+			   into a fixed sentence, so the carrier canvas carries no unit at
+			   all and its heading says what is being counted. The existing
+			   msgid is left EXACTLY as it was for every other canvas — an
+			   msgid that changes is a translation that silently stops
+			   applying, and there is a .pot in this tree already. */
 			dom.content(ctx.legend[i], [ (cur != null)
-				? _('%.1f %s (avg %.1f, peak %.1f)').format(cur, s.unit,
-					avg, Math.max.apply(null, seen))
+				? (s.integral
+					? (s.unit
+						? _('%d %s (avg %.1f, peak %d)').format(cur, s.unit,
+							avg, Math.max.apply(null, seen))
+						: _('%d (avg %.1f, peak %d)').format(cur,
+							avg, Math.max.apply(null, seen)))
+					: _('%.1f %s (avg %.1f, peak %.1f)').format(cur, s.unit,
+						avg, Math.max.apply(null, seen)))
 				: _('not reported') ]);
 		}
 	},
@@ -441,16 +581,21 @@ return baseclass.extend({
 		const empty = E('em', {}, [ '' ]);
 
 		const node = E('div', { 'style': 'display:flex;gap:16px;flex-wrap:wrap' },
-			[ empty ].concat([ 'rsrp', 'rssi', 'sinr', 'rsrq', 'ecio' ]
+			[ empty ].concat([ 'rsrp', 'rssi', 'sinr', 'rsrq', 'ecio', 'ca', 'bw' ]
 				.map((k) => this.mkGraph(graphs, k, svgText))));
 
 		return {
 			node: node,
-			push: L.bind(function(sig, reg) {
+			/* `cells` is optional: the caller already fetches it for its own
+			   panels (cached, so this costs no extra RPC), and a caller that
+			   does not simply leaves the two aggregation canvases hidden — they
+			   reveal on their first real value like every other one. */
+			push: L.bind(function(sig, reg, cells) {
 				const sample = fmt.signalSample(sig);
+				const carriers = fmt.carrierSample(cells);
 
 				for (const ctx of graphs)
-					this.draw(ctx, sample[ctx.kind]);
+					this.draw(ctx, sample[ctx.kind] ?? carriers[ctx.kind]);
 
 				const any = graphs.some((ctx) => ctx.seen.some((v) => v));
 

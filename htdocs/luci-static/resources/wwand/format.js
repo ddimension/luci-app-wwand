@@ -104,6 +104,138 @@ return baseclass.extend({
 	   plus a "Switch now" button on an inactive present slot. `extras` =
 	   page-specific buttons rendered before it (e.g. "Set as primary");
 	   `onSwitch(physical)` runs after the shared confirm. */
+	/* A 20-digit ICCID or a 32-digit EID printed as one run cannot be checked
+	   against the number on the card in your hand — which is the only thing
+	   anyone ever does with it. Grouped in fours, and in a monospace run so the
+	   groups line up between slots. */
+	groupDigits: function(v) {
+		return ('' + v).replace(/(.{4})/g, '$1 ').trim();
+	},
+
+	digits: function(v) {
+		return E('span', { 'style': 'font-family:monospace' }, [ this.groupDigits(v) ]);
+	},
+
+	/* One slot, as a labelled block rather than a comma-separated sentence.
+	   What it used to print was
+	     Slot 2 (eSIM) — present, ICCID 8988…95, EID 8903…64 [Switch now]
+	   which is every fact the panel had, in prose, with the two longest numbers
+	   in the tree jammed into the middle of it — and, on an eUICC, no mention of
+	   the profiles, which is the whole question you have about an eSIM. The card
+	   on the Chateau carries four.
+
+	   `live` is the active card's detail (imsi/operator/pin), which only the
+	   caller can supply and only for the ACTIVE slot: an inactive card has no
+	   IMSI to read and no PIN state to report without powering it up, so those
+	   rows are simply absent there rather than guessed at.
+
+	   `profiles` is the eUICC's profile list, likewise only readable while that
+	   eUICC is the active card — the APDU channel runs through the active slot.
+	   Said in those words when it cannot be read, because "no profiles" and
+	   "cannot look from here" are different statements. */
+	simSlotCard: function(sl, o) {
+		o = o || {};
+
+		var rows = [];
+		var kind = sl.is_euicc ? _('eUICC (eSIM)') : _('SIM card');
+		var head = [
+			E('strong', {}, [ _('Slot %d').format(sl.physical) ]),
+			' \u00b7 ' + kind,
+		];
+
+		if (sl.active)
+			head.push(E('span', { 'style': 'margin-left:.5em;padding:0 .4em;border-radius:3px;'
+				+ 'background:#2c8a2c;color:#fff;font-size:85%' }, [ _('active') ]));
+		else if (sl.card != 'present')
+			head.push(E('span', { 'style': 'margin-left:.5em;color:#888;font-size:85%' }, [ _('empty') ]));
+
+		(o.buttons || []).forEach(function(b) { head.push(b); });
+
+		if (sl.card == 'present') {
+			if (o.operator)
+				rows.push([ _('Operator'), o.operator ]);
+
+			if (sl.iccid)
+				rows.push([ 'ICCID', this.digits(sl.iccid) ]);
+
+			if (sl.eid)
+				rows.push([ 'EID', this.digits(sl.eid) ]);
+
+			if (o.imsi)
+				rows.push([ 'IMSI', E('span', { 'style': 'font-family:monospace' }, [ o.imsi ]) ]);
+
+			if (o.pin)
+				rows.push([ _('PIN'), o.pin ]);
+
+			/* the per-slot surface some AT modems expose (ESLOTSINFO-class):
+			   the INACTIVE slot's PIN and service state is exactly what decides
+			   whether switching to it is worth trying */
+			if (sl.cpin)    rows.push([ _('PIN state'), sl.cpin ]);
+			if (sl.service) rows.push([ _('Service'), sl.service ]);
+			if (sl.atr)     rows.push([ 'ATR', E('span', { 'style': 'font-family:monospace' }, [ sl.atr ]) ]);
+
+			/* which radio stack this slot is wired to — noise on a box with one,
+			   and the whole point on a box with two */
+			if (o.showLogical && sl.logical_slot != null)
+				rows.push([ _('Radio stack'), '' + sl.logical_slot ]);
+		}
+
+		var body = rows.map(function(r) {
+			return E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td', 'style': 'width:7em;color:#888' }, [ r[0] ]),
+				E('td', { 'class': 'td' }, [ r[1] ]),
+			]);
+		});
+
+		var out = [ E('div', { 'style': 'margin-bottom:2px' }, head) ];
+
+		if (body.length)
+			out.push(E('table', { 'class': 'table', 'style': 'margin:0 0 .4em .8em' }, body));
+
+		if (sl.is_euicc && sl.card == 'present')
+			out.push(this.esimProfileList(o.profiles, sl.active));
+
+		return E('div', { 'style': 'margin-bottom:.8em' }, out);
+	},
+
+	/* The profiles on an eUICC. `list` null = not read (see simSlotCard). */
+	esimProfileList: function(list, active) {
+		if (list == null)
+			return E('div', { 'style': 'margin-left:.8em;font-size:90%;color:#888' },
+				[ active ? _('Profiles: not read')
+					: _('Profiles are readable only while this slot is the active one') ]);
+
+		if (!list.length)
+			return E('div', { 'style': 'margin-left:.8em;font-size:90%;color:#888' },
+				[ _('No profiles installed') ]);
+
+		var self = this;
+		var rows = list.map(function(p) {
+			var on = (p.state == 'enabled');
+			/* arrays, not bare strings: a profile name comes off the CARD and
+			   dom.append() would route a bare string through innerHTML
+			   (luci.js:1394-96) */
+			var label = p.provider || p.name || p.nickname || _('(unnamed)');
+			var nick = (p.nickname && p.nickname != label) ? (' \u201c' + p.nickname + '\u201d') : '';
+
+			return E('tr', { 'class': 'tr', 'style': on ? 'font-weight:600' : 'opacity:.75' }, [
+				E('td', { 'class': 'td', 'style': 'width:1.2em' }, [ on ? '\u25cf' : '' ]),
+				E('td', { 'class': 'td' }, [ label + nick ]),
+				E('td', { 'class': 'td', 'style': 'width:6em' }, [ on ? _('enabled') : (p.state || '') ]),
+				E('td', { 'class': 'td', 'style': 'font-family:monospace' },
+					[ p.iccid ? self.groupDigits(p.iccid) : '' ]),
+			]);
+		});
+
+		return E('div', { 'style': 'margin-left:.8em' }, [
+			E('div', { 'style': 'font-size:90%;color:#888' },
+				[ _('Profiles (%d)').format(list.length) ]),
+			E('table', { 'class': 'table', 'style': 'margin:0' }, rows),
+		]);
+	},
+
+	/* the old single-line renderer, kept for the eSIM page's slot list until it
+	   moves over too — status.js uses simSlotCard */
 	simSlotRow: function(sl, onSwitch, extras) {
 		var line = [
 			E('strong', {}, [ _('Slot %d').format(sl.physical) +
@@ -238,6 +370,75 @@ return baseclass.extend({
 		};
 	},
 
+	/* carrierSample(cells): the aggregation picture, per RAT, for the two count
+	   canvases — [ LTE, 5G NR ] in the same order as their SERIES.
+
+	   BOTH LEGS ARE COUNTED. Under EN-DC the modem aggregates an LTE anchor and
+	   one or more 5G carriers, and the carrier list carries a row for each with
+	   its own band token, so `rat` separates them. An entry without one is the
+	   QMI carrier-aggregation message, which is LTE by construction.
+
+	   AN SCC THAT IS NOT ACTIVATED IS NOT A CARRIER. QMI reports a secondary
+	   cell's QmiNasScellState (0 deconfigured, 1 deactivated, 2 activated) and
+	   a deconfigured one still appears in the list; counting it would show
+	   3-carrier aggregation on a link carrying one. A row with no state is the
+	   AT path, which lists only what is in use.
+
+	   NO CARRIER LIST IS NOT NO CARRIER. A modem that answers neither query
+	   still has a serving cell, and drawing zero there would read as a dead
+	   link. The serving cell supplies the floor — but only for a leg that is
+	   actually serving: a 5G-capable modem parked on LTE still reports the
+	   neighbouring NR band it can see (HW-observed on an RG502QEA, 2026-09-12:
+	   serving.nr band n1 while dsd said mode LTE, nr false), and taking that as
+	   a carrier would draw a 5G line for a leg carrying nothing. `dsd.nr` is
+	   the thing that says the 5G leg is up. */
+	carrierSample: function(cells) {
+		cells = cells || {};
+
+		var ca = Array.isArray(cells.ca) ? cells.ca : [];
+		var srv = cells.serving || {};
+		var dsd = cells.dsd || {};
+		var n = { lte: 0, nr: 0 };
+		var bw = { lte: 0, nr: 0 };
+		var haveBw = { lte: false, nr: false };
+
+		for (var i = 0; i < ca.length; i++) {
+			var c = ca[i];
+			/* `rat` where the producer sets it; the role text is the fallback,
+			   because the Fibocom telemetry has said 'PCC NR' in the role since
+			   before there was a `rat` field and an installed base still
+			   answers that way (found on a WH3000 Pro, 2026-09-12). Same
+			   two-step in the collectd feed, deliberately. */
+			var rat = (c.rat == 'nr' ||
+				(c.rat == null && ('' + c.role).toUpperCase().indexOf('NR') >= 0))
+				? 'nr' : 'lte';
+
+			if (c.role == 'SCC' && c.state != null && c.state != 2)
+				continue;
+
+			n[rat]++;
+
+			if (c.bandwidth_mhz != null) { bw[rat] += c.bandwidth_mhz; haveBw[rat] = true; }
+		}
+
+		if (!n.lte && srv.lte) {
+			n.lte = 1;
+
+			if (srv.lte.bandwidth_mhz != null) { bw.lte = srv.lte.bandwidth_mhz; haveBw.lte = true; }
+		}
+
+		if (!n.nr && srv.nr && dsd.nr) {
+			n.nr = 1;
+
+			if (srv.nr.bandwidth_mhz != null) { bw.nr = srv.nr.bandwidth_mhz; haveBw.nr = true; }
+		}
+
+		return {
+			ca: [ n.lte || null, n.nr || null ],
+			bw: [ haveBw.lte ? bw.lte : null, haveBw.nr ? bw.nr : null ],
+		};
+	},
+
 	/* What to say when there is no signal detail at all. The old text asserted
 	   "modem not registered" whenever RSRP was missing, which is a different
 	   claim entirely — and one the Serving cell panel beside it contradicted on
@@ -334,7 +535,58 @@ return baseclass.extend({
 		return _('searching…');
 	},
 
-	fmtSim: function(mi) {
+	/* The SIM column of the modem list. `slots` is the modem_sim_slots reply
+	   when the caller has one — the readiness word alone answered "can this
+	   modem use its card", which is worth knowing and is not the question
+	   anybody actually has on a box with two slots or an eSIM in one of them.
+	   Optional, because the column still has to render when the read failed
+	   (an E392 answers sim_transport/unsupported) — then it says exactly what
+	   it said before rather than inventing a slot number. */
+	fmtSim: function(mi, slots) {
+		var base = this.fmtSimState(mi);
+		var where = this.fmtSimWhere(slots);
+
+		if (!where)
+			return base;
+
+		/* "- · Slot 1/2 · eSIM" is what happens when the readiness word is the
+		   placeholder: a dash means "nothing to report", and leading with it in
+		   front of two things that ARE reported reads as an error. Seen on an
+		   MBIM box (RM520N-GL) whose status carries no pin1, which is the only
+		   input fmtSimState has left once the card is neither blocked, busy nor
+		   annotated. Where there is something to say, say it. */
+		return (base == '-') ? where : (base + ' \u00b7 ' + where);
+	},
+
+	/* which slot is live, and what kind of card is in it — the half the state
+	   word cannot carry. Silent on a single-slot box with an ordinary SIM,
+	   where there is nothing to choose between and nothing to say. */
+	fmtSimWhere: function(slots) {
+		var list = (slots && Array.isArray(slots.slots)) ? slots.slots : null;
+
+		if (!list || !list.length)
+			return null;
+
+		var act = null;
+
+		for (var i = 0; i < list.length; i++)
+			if (list[i].active) { act = list[i]; break; }
+
+		if (!act)
+			return null;
+
+		var parts = [];
+
+		if (list.length > 1)
+			parts.push(_('Slot %d/%d').format(act.physical, list.length));
+
+		if (act.is_euicc)
+			parts.push('eSIM');
+
+		return parts.length ? parts.join(' \u00b7 ') : null;
+	},
+
+	fmtSimState: function(mi) {
 		if (!mi)
 			return '-';
 

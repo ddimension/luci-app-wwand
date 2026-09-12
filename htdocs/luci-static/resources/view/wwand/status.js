@@ -4,6 +4,7 @@
 'require dom';
 'require ui';
 'require wwand.bands as bands';
+'require wwand.logbox as logbox';
 'require wwand.rpc as wrpc';
 'require wwand.format as fmt';
 'require wwand.graph as graph';
@@ -11,12 +12,13 @@
 'require wwand.mccmnc as mccmnc';
 
 /* ubus declarations live in the shared wwand.rpc module */
-var callStatus = wrpc.status;
+var callStatus = wrpc.statusRaw;
 var callContexts = wrpc.contexts;
 var callSignal = wrpc.signal;
 var callCells = wrpc.cells;
 var callDatapath = wrpc.datapath;
 var callCtxStatus = wrpc.ctxStatus;
+var callEsim = function(m, op) { return wrpc.esim(m, op); };
 var callSlots = wrpc.slots;
 var callSwitchSlot = wrpc.switchSlot;
 
@@ -288,7 +290,14 @@ function cachedCall(name, key, ttl_s, fn) {
 	return Promise.resolve(e.v || {});
 }
 
-function renderLive(name, modem, graphs) {
+/* The ladder's action names, in words. Only the software rungs need one here —
+   the hardware step has its own sentence above it. */
+const ACTION_LABEL = {
+	opmode_cycle: _('cycle the radio'),
+	modem_reset:  _('reset the modem'),
+};
+
+function renderLive(name, modem, graphs, board) {
 	return Promise.all([
 		L.resolveDefault(callSignal(name), {}),   /* every tick: antenna aiming */
 		cachedCall(name, 'cells', 3, function() { return callCells(name); }),
@@ -296,6 +305,27 @@ function renderLive(name, modem, graphs) {
 		cachedCall(name, 'slots', 15, function() { return callSlots(name); }),
 		cachedCall(name, 'datapath', 5, function() { return callDatapath(name); })
 	]).then(function(res) {
+		/* The eUICC's profile list, and ONLY when the active slot is one.
+		   Reading it walks an APDU channel to the card, which is expensive
+		   compared with everything else on this page and pointless on a plain
+		   SIM — and impossible for an eUICC sitting in the inactive slot, where
+		   there is no channel to walk. Cached hard (60 s): a profile list
+		   changes when somebody downloads or switches a profile, not between
+		   two ticks of a status page. */
+		var euicc = ((res[3] || {}).slots || []).some(function(sl) {
+			return sl.active && sl.is_euicc && sl.card == 'present';
+		});
+
+		return (euicc
+			? cachedCall(name, 'profiles', 60, function() {
+				return callEsim(name, 'profiles');
+			})
+			: Promise.resolve(null)
+		).then(function(pr) {
+			res[5] = pr && pr.ok !== false ? (pr.profiles || []) : null;
+			return res;
+		});
+	}).then(function(res) {
 		var sig = res[0] || {}, cells = (res[1] || {}).cells || {};
 		var allCtx = res[2] || {};
 		var dpath = res[4] || {};
@@ -318,7 +348,7 @@ function renderLive(name, modem, graphs) {
 		   have rather than letting them fetch their own: same data, no second
 		   RPC, and the numbers below cannot disagree with the lines above. */
 		if (graphs)
-			graphs.push(sig, reg);
+			graphs.push(sig, reg, cells);
 
 		var term = fmt.term;
 
@@ -398,19 +428,16 @@ function renderLive(name, modem, graphs) {
 		if (modem.sim_note)
 			mdmRows.push([ term(_('SIM event'), _('The last thing the card said about itself: a session it closed and why, an internal recovery, or an activation that did not complete.')),
 				E('span', { 'style': 'color:#c00' }, [ modem.sim_note ]) ]);
-		if (modem.iccid)
-			mdmRows.push([ term('ICCID', _('Integrated Circuit Card ID — serial number of the active SIM card or eSIM profile')), modem.iccid ]);
+		/* ICCID and IMSI now live in the SIM slots panel, beside the slot they
+		   came out of — they are the CARD's identity, and repeating them here
+		   made the same number appear twice on one screen with nothing saying
+		   which slot the one in this panel belonged to.
+
+		   IMEI STAYS. It identifies the modem hardware, not the card: it does
+		   not change when you switch slots, and putting it under "SIM slots"
+		   would file a device serial under the wrong heading. */
 		if (modem.imei)
 			mdmRows.push([ term('IMEI', _('International Mobile Equipment Identity — the modem hardware serial')), modem.imei ]);
-		if (modem.imsi) {
-			/* home network of the subscription: MCC = digits 1-3, MNC = 2 or 3
-			   digits after it — show the resolved operator name when known */
-			var iM = '' + modem.imsi;
-			var iName = mccmnc.name(iM.substr(0, 3), iM.substr(3, 2)) ||
-			            mccmnc.name(iM.substr(0, 3), iM.substr(3, 3));
-			mdmRows.push([ term('IMSI', _('International Mobile Subscriber Identity — identifies the subscription on the network; the first digits are the home network (MCC + MNC)')),
-				modem.imsi + (iName ? ' · ' + iName : '') ]);
-		}
 		if (modem.msisdn)
 			mdmRows.push([ term('MSISDN', _('The phone number stored on the SIM (often empty on data SIMs)')), modem.msisdn ]);
 
@@ -446,19 +473,62 @@ function renderLive(name, modem, graphs) {
 			var hw = rec.hardware || {};
 			var hwText;
 
-			if (hw.action == 'reset_gpio')
+			/* ABSENT IS NOT "NONE". A daemon that does not report this field at
+			   all (it is newer than the field) must not have silence read as an
+			   answer — saying "this board exposes no power or reset line" about
+			   a board that has one is worse than saying nothing. Seen for real:
+			   a WH3000 Pro on r68 reports no `recovery` block whatsoever, and
+			   the profile for that board does carry a modem power line. */
+			if (rec.hardware == null)
+				hwText = _('not reported by this wwand version');
+			else if (hw.action == 'reset_gpio')
 				hwText = _('reset line %s (%s)').format(hw.gpio,
 					hw.source == 'modem' ? _('from this modem\'s configuration') : _('board default'));
 			else if (hw.action == 'power_cycle')
-				hwText = hw.has_power === false
-					? _('power cycle — but the board profile reports no power control')
-					: _('power cycle the modem');
-			else if (hw.error == 'multi_modem_needs_reset_gpio')
-				hwText = _('nothing — this box has more than one modem and the board lines would hit the wrong one. Set reset_gpio on the modem to give this step something to do.');
-			else if (hw.error == 'no_board_profile')
-				hwText = _('nothing — no board profile for this device');
-			else
-				hwText = _('nothing');
+				hwText = (hw.has_power !== false)
+					? _('power cycle the modem')
+					/* has_power false has two causes and they want different
+					   things from the reader. A board wwand KNOWS, whose profile
+					   carries no power line, cannot be repowered and that is the
+					   end of it. A board wwand does not know looks identical
+					   from here — same false, same null reset line — while its
+					   pins may be sitting there unread; that owner needs a
+					   profile, not a shrug. Told apart by board.profile, which
+					   the daemon reports for exactly this. */
+					: (board && board.profile === false)
+						? _('nothing — "%s" is not in wwand\'s board profile table, so its modem power and reset lines are unknown. They may well exist.')
+							.format(board.id || '?')
+						: _('power cycle — but this board has no modem power line');
+			else {
+				/* NO HARDWARE STEP. "nothing" was true and not useful: what a
+				   reader needs is what is left, and that is not "reboot only"
+				   either — the ladder still cycles the radio and soft-resets the
+				   modem before it gets anywhere near a reboot, and the reboot is
+				   only in it when failreboot is non-zero.
+
+				   Read from rec.rungs rather than spelled out here, for the
+				   reason recovery.uc gives for exporting that table at all: a
+				   copy in the UI goes on naming the old ladder long after the
+				   real one has moved. */
+				var soft = (rec.rungs || [])
+					.filter(function(r) { return r.action != 'usb_repower' && r.action != 'reboot'; })
+					.map(function(r) { return ACTION_LABEL[r.action] || r.action; });
+				var canReboot = (rec.rungs || []).some(function(r) { return r.action == 'reboot'; });
+
+				var why = (hw.error == 'multi_modem_needs_reset_gpio')
+					? _('this box has more than one modem and the board lines would hit the wrong one — set "Modem reset GPIO" on this modem to give the step something to do')
+					: (hw.error == 'no_board_profile')
+						? _('no board profile for this device, so no power or reset line is known')
+						: _('this board exposes no modem power or reset line');
+
+				hwText = soft.length
+					? (canReboot
+						? _('no GPIO — software only (%s), then a router reboot. %s.')
+							.format(soft.join(_(', then ')), why)
+						: _('no GPIO — software only (%s), and no reboot either, so the ladder keeps retrying. %s.')
+							.format(soft.join(_(', then ')), why))
+					: _('no GPIO — nothing. %s.').format(why);
+			}
 
 			mdmRows.push([ term(_('Hardware step'), _('What the hardware step of the recovery ladder would actually do on this box for this modem — asked of the same code that performs it, not inferred.')),
 				hwText ]);
@@ -549,10 +619,54 @@ function renderLive(name, modem, graphs) {
 		/* --- SIM slots (multi-slot devices; hidden when unsupported) --- */
 		var slots = (res[3] || {}).slots || [];
 		if (slots.length) {
+			var msAll = (res[3] || {}).multisim || {};
+			/* the radio-stack column is noise on a box with one stack and the
+			   point of the panel on a box with two */
+			var showLogical = (+(msAll.executors || 1) > 1);
+
+			/* the active card's own detail, which the slot list does not carry:
+			   IMSI and the home operator it names, and the PIN state. Only the
+			   active slot can have them — an inactive card has no IMSI to read
+			   without powering it up. */
+			var iName = null;
+
+			if (modem.imsi) {
+				var iM = '' + modem.imsi;
+				iName = mccmnc.name(iM.substr(0, 3), iM.substr(3, 2)) ||
+				        mccmnc.name(iM.substr(0, 3), iM.substr(3, 3));
+			}
+
+			/* THREE outcomes, not two. `enabled` is a tri-state: true (the card
+			   asks for a PIN at power-up), false (it does not), and NULL —
+			   which is MBIM, where the protocol reports the PIN it CURRENTLY
+			   requires and therefore cannot say whether one is configured on a
+			   card that is already unlocked. Folding null in with false printed
+			   "not required" for a card nobody had asked. */
+			var pinTxt = modem.sim_block
+				? _('blocked — %s').format(modem.sim_block.reason || '?')
+				: (modem.pin1
+					? (modem.pin1.enabled === true
+						? _('required (%d attempts left)').format(modem.pin1.retries != null ? modem.pin1.retries : 3)
+						: (modem.pin1.enabled === false
+							? _('not required')
+							: _('unlocked — this backend does not report whether a PIN is set')))
+					: null);
+
 			var slotRows = slots.map(function(sl) {
-				/* shared row renderer (wwand.format) */
-				return fmt.simSlotRow(sl, function(physical) {
-					return callSwitchSlot(name, physical);
+				return fmt.simSlotCard(sl, {
+					operator: sl.active ? iName : null,
+					imsi:     sl.active ? modem.imsi : null,
+					pin:      sl.active ? pinTxt : null,
+					profiles: (sl.is_euicc && sl.active) ? (res[5] || null) : null,
+					showLogical: showLogical,
+					buttons: (!sl.active && sl.card == 'present') ? [
+						E('button', { 'class': 'btn cbi-button cbi-button-apply',
+							'style': 'margin-left:.5em',
+							'click': ui.createHandlerFn(null, function() {
+								if (!confirm(_('Switch to SIM slot %d? The connection will drop and re-establish.').format(sl.physical)))
+									return;
+								return callSwitchSlot(name, sl.physical);
+							}) }, _('Switch now')) ] : [],
 				});
 			});
 			/* Two slots is not two usable SIMs, and the slot list alone does not
@@ -590,9 +704,10 @@ function renderLive(name, modem, graphs) {
 						[ msTxt + (ms.exact ? '' : ' · ' + _('inferred')) ]) ]);
 			}
 
-			cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' },
-				[ E('h3', {}, _('SIM slots')), E('div', {}, slotRows) ]
-					.concat(msNode ? [ msNode ] : [])));
+			cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:320px' },
+				[ E('h3', {}, _('SIM slots')) ]
+					.concat(msNode ? [ msNode ] : [])
+					.concat([ E('div', {}, slotRows) ])));
 		}
 
 		/* Configuration warnings are NOT rendered here any more: they belong
@@ -613,11 +728,21 @@ function renderLive(name, modem, graphs) {
 		/* --- carrier aggregation (active carriers) --- unified cell columns --- */
 		if (cells.ca && cells.ca.length) {
 			out.push(cellTable(_('Carrier aggregation'), cells.ca.map(function(c){
-				var isNR = ('' + c.role).indexOf('NR') >= 0;
+				/* `rat`, not the role string. This tested role.indexOf('NR'),
+				   and role is only ever 'PCC' or 'SCC' — so it was never true
+				   and every carrier was resolved as an LTE EARFCN. Harmless
+				   while the parser dropped 5G rows outright; wrong the moment
+				   it stopped, because an NR-ARFCN read as an EARFCN yields a
+				   plausible LTE band rather than nothing. */
+				var isNR = (c.rat == 'nr' ||
+					(c.rat == null && ('' + c.role).toUpperCase().indexOf('NR') >= 0));
 				var cf = isNR ? bands.nrArfcn(c.earfcn) : bands.lteEarfcn(c.earfcn);
 				return cellRow({
-					type: c.role,
-					band: cf ? cf.band : null,
+					/* the Fibocom rows already say 'PCC NR'; do not say it twice */
+					type: (isNR && ('' + c.role).toUpperCase().indexOf('NR') < 0)
+						? (c.role + ' 5G') : c.role,
+					/* the modem's own band token wins — it knows n78 from 78 */
+					band: (c.band != null) ? c.band : (cf ? cf.band : null),
 					earfcn: c.earfcn,
 					freq: mhz(cf),
 					bw: c.bandwidth_mhz ? c.bandwidth_mhz + ' MHz' : null,
@@ -723,6 +848,13 @@ return view.extend({
 		var graphBox = E('div', {});
 		var live = E('div', { 'id': 'wwand-live' }, E('em', {}, _('loading…')));
 
+		/* OUTSIDE `live`, like the graphs and for the same reason: the poll
+		   replaces that node wholesale every second, and a log box rebuilt with
+		   it would reset its filters and its scroll position once a second. It
+		   is also not per-modem — the daemon log is one stream, and the modem
+		   filter inside it is what narrows it. */
+		var logBox = logbox.create();
+
 		/* One graph instance PER MODEM, kept across selector changes so coming
 		   back to a modem still shows the window it had. Only the selected one
 		   is fed (that is the only modem the page fetches signal for), so an
@@ -808,8 +940,14 @@ return view.extend({
 			if (refresh._busy) return;
 			refresh._busy = true;
 			var done = function() { refresh._busy = false; };
-			return callStatus().then(function(ms) {
-				ms = ms || {};
+			/* statusRaw, not status: the same single call, but the whole reply.
+			   The board block hangs off the top level and the Hardware step row
+			   needs it to tell "this board has no power line" from "wwand has
+			   no profile for this board" — two very different things to be told
+			   when your modem will not come back. */
+			return callStatus().then(function(st) {
+				st = st || {};
+				var ms = st.modems || {};
 				var names = Object.keys(ms);
 				var el = document.getElementById('wwand-live');
 				if (!el) return;
@@ -827,6 +965,11 @@ return view.extend({
 				buildSelector(ms);
 				showWarnings(ms[current]);
 
+				/* the log follows the modem this page is showing; it ignores a
+				   repeat, so a reader who set the filter by hand keeps it until
+				   the page's own selection moves */
+				logBox.selectModem(current);
+
 				/* Remember WHICH modem this render is for. renderLive() is
 				   asynchronous (five ubus calls deep), and a selector change
 				   during that window returns early from its own refresh()
@@ -836,7 +979,7 @@ return view.extend({
 				   and let the next tick, a second away, render the right one. */
 				var want = current;
 
-				return renderLive(want, ms[want], showGraphs(want)).then(function(node){
+				return renderLive(want, ms[want], showGraphs(want), st.board).then(function(node){
 					var e2 = document.getElementById('wwand-live');
 					if (e2 && current === want) dom.content(e2, node);
 				});
@@ -858,7 +1001,8 @@ return view.extend({
 				[ selWrap ]),
 			warnBox,
 			graphBox,
-			live
+			live,
+			logBox.node
 		]);
 	},
 
