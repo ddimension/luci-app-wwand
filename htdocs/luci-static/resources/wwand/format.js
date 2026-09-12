@@ -170,7 +170,7 @@ return baseclass.extend({
 			/* the per-slot surface some AT modems expose (ESLOTSINFO-class):
 			   the INACTIVE slot's PIN and service state is exactly what decides
 			   whether switching to it is worth trying */
-			if (sl.cpin)    rows.push([ _('PIN state'), sl.cpin ]);
+			if (sl.cpin)    rows.push([ _('PIN state'), this.cpinText(sl.cpin) ]);
 			if (sl.service) rows.push([ _('Service'), sl.service ]);
 			if (sl.atr)     rows.push([ 'ATR', E('span', { 'style': 'font-family:monospace' }, [ sl.atr ]) ]);
 
@@ -196,6 +196,27 @@ return baseclass.extend({
 			out.push(this.esimProfileList(o.profiles, sl.active));
 
 		return E('div', { 'style': 'margin-bottom:.8em' }, out);
+	},
+
+	/* +CPIN state -> words. The modem's own vocabulary is what the slot read
+	   returns, and printing `EMPTY_EUICC` under a row labelled "PIN state" tells
+	   a reader neither what it means nor that it is not about a PIN at all — it
+	   means the eUICC carries no profile, which is the single most useful thing
+	   that row can say about an empty eSIM. An unknown token is passed through:
+	   a state this table has not met is still better read than hidden. */
+	cpinText: function(v) {
+		const CPIN = {
+			'READY':        _('unlocked'),
+			'SIM PIN':      _('PIN required'),
+			'SIM PUK':      _('PUK required — the PIN is blocked'),
+			'SIM PIN2':     _('PIN2 required'),
+			'SIM PUK2':     _('PUK2 required'),
+			'PH-NET PIN':   _('network lock (SIM not accepted by this modem)'),
+			'EMPTY_EUICC':  _('eUICC with no profile installed'),
+			'NOT_INSERTED': _('no card'),
+		};
+
+		return CPIN[('' + v).toUpperCase()] || v;
 	},
 
 	/* The profiles on an eUICC. `list` null = not read (see simSlotCard). */
