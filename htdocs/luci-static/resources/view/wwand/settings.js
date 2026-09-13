@@ -287,7 +287,12 @@ function plmnTable(title, list, absentHint) {
 			.map(function(k) { return k.toUpperCase() }).join(' ');
 		return E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td' }, [ fmt.fmtPlmn(e.mcc, e.mnc) ]),
-			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, e.mnc) || '—'),
+			/* the modem's own name last: a record with no numeric id is not
+			   unknown, it is alphanumeric — two FM350-GLs list 42 of 44 entries
+			   that way, from the module's operator table rather than a SIM file
+			   that does not exist on the card. Showing '—' next to '?' threw
+			   away the only identity there was. */
+			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, e.mnc) || e.name || '—'),
 			E('td', { 'class': 'td' }, rats),
 		]);
 	});
