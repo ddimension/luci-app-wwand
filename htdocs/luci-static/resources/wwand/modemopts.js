@@ -587,6 +587,12 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		o = s.taboption(tab, form.Value, 'bearer_poll_count', _('Dead-bearer poll count'),
+			_('NCM modems only. How many consecutive status polls may list no data context — with no received traffic in between — before wwand declares the bearer dead and redials. One poll per telemetry interval, so 3 is about three minutes. Lower recovers faster from a drop the modem does not announce; the minimum is 2, because a single unparsed answer on an idle link must not be enough to drop a working connection.'));
+		o.placeholder = '3';
+		o.datatype = 'min(2)';
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'stats_interval', _('Telemetry interval'),
 			_('Seconds between throughput/signal telemetry samples while connected.'));
 		o.placeholder = '60';
