@@ -87,8 +87,28 @@ function notifyEsimApply(modem, res) {
    The bare `error` alone ("qmi") is useless for diagnosis, so append whatever
    detail the daemon passed on — a QMI protocol error number is the difference
    between "it does not work" and a fixable answer. */
+/* The daemon's error tokens are identifiers, not sentences. Shown raw they tell
+   a user nothing and look like a crash: an FM350-GL owner who set an LTE band
+   got the red banner "Failed: unsupported_on_backend" and reasonably read it as
+   the page being broken (ddimension/luci-app-wwand#9). Only the tokens a user
+   can actually act on are translated; anything else still comes through
+   verbatim, because an unrecognised token is better than a wrong guess at what
+   it meant. */
+var ERROR_TEXT = {
+	unsupported_on_backend: _('This modem\'s control backend does not offer that operation.'),
+	unsupported:            _('The modem does not support that operation.'),
+	no_such_modem:          _('No such modem — it may have been unplugged or renamed.'),
+	no_such_context:        _('No such connection.'),
+	busy:                   _('The modem is busy with another operation. Try again in a moment.'),
+	timeout:                _('The modem did not answer in time.'),
+	cancelled:              _('Cancelled.'),
+	modem_not_ready:        _('The modem is not ready yet.'),
+	sim_transport:          _('No usable channel to the SIM on this modem.'),
+	missing_argument:       _('Incomplete request — a required value was missing.'),
+};
+
 function describeError(res) {
-	var r = res || {}, d = r.detail, txt = r.error || '?';
+	var r = res || {}, d = r.detail, txt = ERROR_TEXT[r.error] || r.error || '?';
 	if (d && typeof d == 'object') {
 		var bits = [];
 		if (d.result != null) bits.push(_('result %d').format(d.result));
