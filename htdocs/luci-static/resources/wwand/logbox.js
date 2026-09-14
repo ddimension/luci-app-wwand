@@ -75,7 +75,6 @@ function parse(msg) {
 		if (t) {
 			out.subsys = t[1];
 			out.bare = !s ? t[1] : null;   /* see classify() */
-			out.baretail = !s ? rest.slice(t[0].length) : null;
 		} else if (!s) {
 			out.subsys = (/^([a-z0-9_]{1,16})\b/.exec(rest) || [])[1] || null;
 		}
@@ -111,7 +110,6 @@ function classify(rows) {
 		}
 
 		delete r.bare;
-		delete r.baretail;
 	}
 
 	return rows;
@@ -235,7 +233,7 @@ return baseclass.extend({
 						sev: sev, sevname: SEVERITY[sev] || '?',
 						stamp: '%02d:%02d:%02d'.format(d.getHours(), d.getMinutes(), d.getSeconds()),
 						modem: p.modem, conn: p.conn, subsys: p.subsys, text: p.text,
-						bare: p.bare, baretail: p.baretail,
+						bare: p.bare,
 					});
 				}
 

@@ -18,7 +18,6 @@ var callSignal = wrpc.signal;
 var callCells = wrpc.cells;
 var callDatapath = wrpc.datapath;
 var callCtxStatus = wrpc.ctxStatus;
-var callEsim = function(m, op) { return wrpc.esim(m, op); };
 var callSlots = wrpc.slots;
 var callSwitchSlot = wrpc.switchSlot;
 
@@ -318,17 +317,31 @@ function renderLive(name, modem, graphs, board) {
 		   there is no channel to walk. Cached hard (60 s): a profile list
 		   changes when somebody downloads or switches a profile, not between
 		   two ticks of a status page. */
-		var euicc = ((res[3] || {}).slots || []).some(function(sl) {
+		/* the RECORD, not a boolean: the read needs that slot's physical number.
+		   The bridge does `+(params?.slot ?? 1)`, so an explicit 0 is NOT
+		   replaced by the default — it is sent as the physical UIM slot, and
+		   slots are 1-based (modem_sim_switch_slot refuses anything else). QMI
+		   would open the wrong slot; MBIM and AT ignore the field, which is
+		   exactly what would have hidden it. The daemon's esim_ready handler
+		   passes eslot.physical for the same reason. */
+		var euicc = ((res[3] || {}).slots || []).find(function(sl) {
 			return sl.active && sl.is_euicc && sl.card == 'present';
 		});
 
 		return (euicc
 			? cachedCall(name, 'profiles', 60, function() {
-				return callEsim(name, 'profiles');
+				return wrpc.esimProfiles(name, euicc.physical);
 			})
 			: Promise.resolve(null)
 		).then(function(pr) {
-			res[5] = pr && pr.ok !== false ? (pr.profiles || []) : null;
+			/* KEY OFF `profiles`, not off truthiness. cachedCall substitutes {}
+			   for a denied or failed read (L.resolveDefault) and caches THAT for
+			   60 s — and `{}.profiles || []` is an empty list, so the slot said
+			   "no profiles installed", the one claim esimProfileList() exists to
+			   keep apart from "not read". An eUICC that genuinely has none answers
+			   profiles: [], and an empty array is truthy, so that still reads as
+			   installed-none (openwrt/luci#8917). */
+			res[5] = (pr && pr.ok !== false && pr.profiles) ? pr.profiles : null;
 			return res;
 		});
 	}).then(function(res) {

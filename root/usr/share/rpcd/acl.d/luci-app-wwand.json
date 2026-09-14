@@ -10,6 +10,7 @@
 					"context_status",
 					"modem_cells",
 					"modem_datapath",
+					"modem_esim_profiles",
 					"modem_euicc_profiles",
 					"modem_get_settings",
 					"modem_plmn_lists",

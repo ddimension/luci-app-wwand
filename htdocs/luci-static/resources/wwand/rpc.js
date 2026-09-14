@@ -54,6 +54,13 @@ return baseclass.extend({
 	pinVerify:  rpc.declare({ object: 'wwand', method: 'modem_sim_pin_verify', params: [ 'modem', 'pin' ], expect: {} }),
 	simPuk:     rpc.declare({ object: 'wwand', method: 'modem_sim_puk', params: [ 'modem', 'puk', 'new_pin' ], expect: {} }),
 	pinLock:    rpc.declare({ object: 'wwand', method: 'modem_sim_pin_lock', params: [ 'modem', 'pin', 'enable' ], expect: {} }),
+	/* READ-ONLY profile list. NOT `esim` with op 'profiles': that method is in
+	   the WRITE acl because its other ops enable, disable and delete profiles,
+	   and rpcd grants a METHOD, never a method with certain arguments — so a
+	   read-only operator was denied the status page on every eUICC box. */
+	esimProfiles: rpc.declare({ object: 'wwand', method: 'modem_esim_profiles',
+		params: [ 'modem', 'slot' ], expect: {} }),
+
 	esim:       rpc.declare({ object: 'wwand', method: 'modem_esim',
 		params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify' ], expect: {} }),
 
