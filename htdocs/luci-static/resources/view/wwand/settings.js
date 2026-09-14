@@ -253,7 +253,7 @@ function plmnEditRow(e, noRat) {
 	/* live operator-name resolution from the bundled MCC/MNC table, updated
 	   while typing so a typo is caught before writing to the SIM */
 	var nameEl = E('td', { 'class': 'td', 'style': 'color:#666' },
-		mccmnc.describe(e.mcc, e.mnc) || '');
+		[ mccmnc.describe(e.mcc, e.mnc) || '' ]);
 	var upd = function() {
 		nameEl.textContent = mccmnc.describe(
 			(mccIn.value || '').replace(/\D/g, ''),
@@ -292,8 +292,8 @@ function plmnTable(title, list, absentHint) {
 			   that way, from the module's operator table rather than a SIM file
 			   that does not exist on the card. Showing '—' next to '?' threw
 			   away the only identity there was. */
-			E('td', { 'class': 'td' }, mccmnc.describe(e.mcc, e.mnc) || e.name || '—'),
-			E('td', { 'class': 'td' }, rats),
+			E('td', { 'class': 'td' }, [ mccmnc.describe(e.mcc, e.mnc) || e.name || '—' ]),
+			E('td', { 'class': 'td' }, [ rats ]),
 		]);
 	});
 
@@ -759,14 +759,14 @@ return view.extend({
 		}
 
 		/* SELECT, THEN DELETE ONCE.
-		
+
 		   There used to be a Delete button per row. With a SIM full of cell
 		   broadcasts that is the wrong shape, and not because of the round
 		   trips: every deletion reflows the table, so the next Delete button is
 		   somewhere else and the operator has to re-locate and re-decide for
 		   each one — a moving target under a repeated irreversible action
 		   (ddimension/luci-app-wwand#8).
-		
+
 		   So: ticking boxes changes nothing, the list holds still while you
 		   choose, and there is exactly one destructive click at the end. The
 		   table reflows once, afterwards, when there is nothing left to aim at.
@@ -868,8 +868,8 @@ return view.extend({
 						   3 messages" for one three-part message would be a
 						   worse kind of wrong than an unfamiliar word. */
 						if (res && res.failed && res.failed.length)
-							ui.addNotification(null, E('p', _('Deleted %d of %d storage slots; %d could not be deleted. A message spanning several slots may be partly left behind.')
-								.format(res.deleted || 0, res.requested || idx.length, res.failed.length)), 'warning');
+							ui.addNotification(null, E('p', [ _('Deleted %d of %d storage slots; %d could not be deleted. A message spanning several slots may be partly left behind.')
+								.format(res.deleted || 0, res.requested || idx.length, res.failed.length) ]), 'warning');
 
 						return load();
 					});

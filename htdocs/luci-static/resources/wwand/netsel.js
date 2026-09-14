@@ -78,9 +78,9 @@ return baseclass.extend({
 				   later. Say which of the two happened. */
 				var why = scanResult && scanResult != 'success'
 					? (SCAN_RESULT_LABEL[scanResult] || scanResult) : null;
-				dom.content(results, E('em', {}, why
+				dom.content(results, E('em', {}, [ why
 					? _('No operators returned — %s.').format(why)
-					: _('No operators found.')));
+					: _('No operators found.') ]));
 				return;
 			}
 			/* a scan may list the same PLMN once per supported RAT (2G/3G/4G/5G) —
@@ -181,8 +181,19 @@ return baseclass.extend({
 		   forever. A cellular router is in exactly that state where this widget
 		   matters: no RTC, and no NTP until the modem this page is scanning with
 		   has brought a connection up. One clock only. */
+		/* A scan the daemon never finishes would otherwise keep this chain
+		   alive for the life of the LuCI document: the view is gone, the
+		   widget is detached, and modem_scan_status is still being asked once
+		   a second. Checked before scheduling AND inside the callback, since
+		   the navigation can happen in between. */
 		var pollScan = function(started) {
+			if (!results.isConnected)
+				return;
+
 			window.setTimeout(function() {
+				if (!results.isConnected)
+					return;
+
 				callScanStatus(data.modem).then(function(st) {
 					if (st && st.running) {
 						scanSpinner(Math.max(0, Math.round((Date.now() - started) / 1000)));

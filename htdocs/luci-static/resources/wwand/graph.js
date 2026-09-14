@@ -430,10 +430,10 @@ return baseclass.extend({
 		   "excellent". Without them these two canvases had no horizontal
 		   reference at all — a line at some height and no way to tell two
 		   carriers from four, which is worse than the fixed scale they replaced.
-		
+
 		   PLACED HERE, NOT IN prepare(), because the top of an auto-scaled axis
 		   moves with the data and prepare() only runs when the box is resized.
-		
+
 		   THE COLOUR IS !important FOR THE SAME REASON THE THRESHOLDS ARE: LuCI
 		   themes restyle `#view div[style] > svg line[style]` to the theme text
 		   colour (luci-theme-footstrap cascade.css:298-299), which would be

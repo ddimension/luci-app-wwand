@@ -127,7 +127,7 @@ return baseclass.extend({
 
 		/* The modem the PAGE is showing, so the log follows the selector above
 		   it instead of making you set the same thing twice.
-		
+
 		   TWO REASONS IT IS NOT JUST `modem.value = name`. The dropdown is built
 		   from the modems that appear IN THE LOG, and a modem that has said
 		   nothing yet has no option to select — so the wish is remembered and
@@ -275,7 +275,19 @@ return baseclass.extend({
 			if (timer) { window.clearInterval(timer); timer = null; }
 
 			if (liveBox.checked)
-				timer = window.setInterval(reload, 5000);
+				/* STOP WHEN THE VIEW IS GONE. Nothing calls back into this widget on
+				   navigation, so a plain setInterval would go on reading the SYSTEM
+				   LOG every five seconds for the life of the LuCI document, holding
+				   the whole widget alive with it. */
+				timer = window.setInterval(() => {
+					if (!node.isConnected) {
+						window.clearInterval(timer);
+						timer = null;
+						return;
+					}
+
+					reload();
+				}, 5000);
 		});
 
 		const node = E('div', { 'class': 'cbi-section' }, [

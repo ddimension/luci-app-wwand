@@ -82,6 +82,13 @@ def safe_child(expr):
         return False
     if '+' in masked and '\x00' in masked:
         return False        # concatenation involving a literal -> a string
+    # `a() || b || 'fallback'` is a string in EVERY branch, but it carries no
+    # .format() and no +, so both tests above pass it. That shape shipped a real
+    # hole: a PLMN row rendered `describe(...) || e.name || '—'` as a bare child,
+    # and e.name is the operator name the MODEM supplied (openwrt/luci#8917).
+    # A literal anywhere in an || chain settles the type of the whole expression.
+    if '||' in masked and '\x00' in masked:
+        return False
     return True
 
 def check(path):
@@ -101,15 +108,31 @@ def check(path):
                 break
     return bad
 
+# NO ARGUMENTS USED TO MEAN NO WORK, and it still printed "clean" and exited 0.
+# That is the worst possible answer: it was quoted as evidence that a diff was
+# safe when nothing had been read at all. Default to the package's own trees, and
+# refuse rather than reassure if even those are missing.
+roots = sys.argv[1:]
+
+if not roots:
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    roots = [ d for d in (os.path.join(here, 'htdocs'), os.path.join(here, 'root'))
+              if os.path.isdir(d) ]
+
+if not roots:
+    sys.exit('check-xss: nothing to scan — pass a directory')
+
 rc = 0
-for root in sys.argv[1:]:
+scanned = 0
+for root in roots:
     for dirpath, _dirs, files in os.walk(root):
         for f in sorted(files):
             if not f.endswith('.js'):
                 continue
             p = os.path.join(dirpath, f)
+            scanned += 1
             for line, expr in check(p):
                 print(f'{p}:{line}: bare string child -> innerHTML: {expr}')
                 rc = 1
-print('check-xss: ' + ('FLAGGED' if rc else 'clean'))
+print('check-xss: %s (%d files)' % ('FLAGGED' if rc else 'clean', scanned))
 sys.exit(rc)
