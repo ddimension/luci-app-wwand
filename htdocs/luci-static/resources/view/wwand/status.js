@@ -275,9 +275,15 @@ function renderDatapath(dp) {
    cadence. A tick always resolves immediately with the latest known value — a
    modem op that blocks (eSIM management, UIM busy, init phases) can delay ONE
    background refresh but can no longer stall the page. */
-var slowCache = {};
+/* null-prototype: the keys are modem names straight out of uci, so a section
+   literally called `__proto__` would otherwise write through to Object's
+   prototype. Only an admin can create that name, which is why this is a
+   two-character fix and not a vulnerability — but CodeQL flags the pattern and
+   a cache keyed by names from outside has no business having a prototype
+   (openwrt/luci#8917, code-scanning alert 16). */
+var slowCache = Object.create(null);
 function cachedCall(name, key, ttl_s, fn) {
-	var c = slowCache[name] = slowCache[name] || {};
+	var c = slowCache[name] = slowCache[name] || Object.create(null);
 	var e = c[key] = c[key] || { t: 0, v: null, busy: false };
 	if (!e.busy && (Date.now() - e.t) >= ttl_s * 1000) {
 		e.busy = true;
@@ -413,8 +419,24 @@ function renderLive(name, modem, graphs, board) {
 		   proven within seconds and the row never appears; one that is not is
 		   usually a wrong `option protocol` or an unrecognised driver, and the
 		   operator needs to know that recovery is disarmed rather than wonder
-		   why nothing is being retried. */
-		if (modem.proven === false)
+		   why nothing is being retried.
+
+		   ONLY when there is no `recovery` block. `proven` and the ladder's
+		   `armed` are the SAME fact — the daemon derives both from
+		   `counters.proto_ok` — so with a ladder present this pushed two rows
+		   both labelled Recovery, saying the same thing in different words
+		   with different tooltips (openwrt/luci#8917). The ladder row is the
+		   superset and carries the advice now. This one stays for the case
+		   the ladder cannot cover: a daemon old enough to report no
+		   `recovery` block at all, which is not hypothetical — a WH3000 Pro
+		   on r68 reports none.
+
+		   `!modem.recovery`, not `== null`: this has to be the exact complement
+		   of the ladder's own `if (rec)`, or a falsy-but-not-null value would
+		   render NEITHER row. recovery_view() always returns an object today, so
+		   that gap is unreachable — but the pair should hold by construction, not
+		   because the other end happens to cooperate. */
+		if (modem.proven === false && !modem.recovery)
 			mdmRows.push([ term(_('Recovery'), _('The modem has not yet answered in the control protocol wwand is using, so no hardware recovery step will run — repowering a modem that was never broken only adds outages. Check the control protocol setting and the bound driver.')),
 				E('span', { 'style': 'color:#b8860b' }, [ _('disarmed — the modem has not answered yet') ]) ]);
 
@@ -459,8 +481,12 @@ function renderLive(name, modem, graphs, board) {
 			var state = rec.armed
 				? _('armed')
 				: _('not armed — no exchange has succeeded in the selected protocol yet');
-			var line = '%s · %d/%d %s'.format(state, fired,
-				rec.rungs ? rec.rungs.length : 0, _('steps taken'));
+			/* ONE msgid per sentence. `_('steps taken')` dropped into an
+			   untranslatable '%s' shell reaches a translator as two
+			   context-free words they cannot reorder — the same defect the
+			   graph.js legend line was collapsed to fix. */
+			var line = _('%s · %d/%d steps taken').format(state, fired,
+				rec.rungs ? rec.rungs.length : 0);
 
 			if (rec.next)
 				line += ' · %s'.format(rec.next['in'] > 0
@@ -468,7 +494,7 @@ function renderLive(name, modem, graphs, board) {
 					: _('next: %s, due now').format(rec.next.action));
 
 			mdmRows.push([ term(_('Recovery'), _('wwand escalates a failing modem in steps: cycle the operating mode, reset the modem, then the board\'s power or reset line, and a reboot beyond that. Each step fires once per outage. The ladder stays disarmed until one exchange has succeeded in the selected control protocol, so a misdetected modem is never repowered.')),
-				'%s (%d %s)'.format(line, rec.attempts || 0, _('attempts')) ]);
+				_('%s (%d attempts)').format(line, rec.attempts || 0) ]);
 
 			var hw = rec.hardware || {};
 			var hwText;
@@ -499,6 +525,15 @@ function renderLive(name, modem, graphs, board) {
 						? _('nothing — "%s" is not in wwand\'s board profile table, so its modem power and reset lines are unknown. They may well exist.')
 							.format(board.id || '?')
 						: _('power cycle — but this board has no modem power line');
+			/* An action this page does not know — a rung added to the daemon
+			   after this release. Falling through to the branch below would
+			   describe it as "no GPIO — software only", which the daemon never
+			   said, under a tooltip promising the answer came from the code
+			   that performs it. Quote it instead and say plainly that the page
+			   is the older half (openwrt/luci#8917). */
+			else if (hw.action != null && hw.action !== '')
+				hwText = _('%s — reported by the daemon; this page is older than that step and cannot describe it.')
+					.format(hw.action);
 			else {
 				/* NO HARDWARE STEP. "nothing" was true and not useful: what a
 				   reader needs is what is left, and that is not "reboot only"
