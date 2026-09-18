@@ -326,23 +326,41 @@ return view.extend({
 			try { picked = new URLSearchParams(window.location.search).get('modem'); } catch(e) {}
 			var name = (picked && names.indexOf(picked) >= 0) ? picked : names[0];
 
-			return Promise.all([
-				callGet(name),
-				L.resolveDefault(callPlmn(name), {}),
-				L.resolveDefault(callSlots(name), {}),
-				L.resolveDefault(callEsim(name, 'profiles', 0, '', '', ''), {}),
-				L.resolveDefault(callEsim(name, 'backend', 0, '', '', ''), {}),
-				/* carrier config: absent on modems without QMI PDC, which is
-				   normal — resolveDefault keeps the page working either way */
-				L.resolveDefault(wrpc.carrierConfig(name, 'get', ''), {}),
-				L.resolveDefault(wrpc.carrierConfig(name, 'list', ''), {}),
-			]).then(function(res) {
-				var esimData = res[3] || {};
-				esimData.backend = (res[4] || {}).backend;
-				return { modem: name, mods: r[0] || {}, info: (r[0] || {})[name] || {},
-				         settings: res[0], plmn: res[1],
-				         slots: (res[2] || {}).slots || [], esim: esimData,
-				         mbnSel: res[5] || {}, mbnList: (res[6] || {}).configs || [] };
+			/* The slots come FIRST, because the eSIM calls below need to say
+			   which card they mean. They used to pass a literal 0, which is not
+			   a slot at all: the daemon resolves it with `?? 1`, and `??` only
+			   replaces a MISSING value — so the 0 travelled through and asked
+			   for physical slot 0 (openwrt/luci#8917 review; the status page
+			   was fixed the same way and this call was missed). On a dual-SIM
+			   box a fixed number is the wrong card anyway, so ask the eUICC's
+			   own slot and leave it unset when there is none, which is the one
+			   case the daemon's default is right for. */
+			return L.resolveDefault(callSlots(name), {}).then(function(slotRes) {
+				var slots = (slotRes || {}).slots || [];
+				var euicc = slots.filter(function(s) { return s.is_euicc })[0];
+				/* 1, not null, when there is no eUICC to point at: the ubus
+				   signature types `slot` as an integer (ubus.uc modem_esim
+				   args), so a null is not something to send through it. 1 is
+				   the daemon's own default, stated explicitly. */
+				var slot = euicc ? euicc.physical : 1;
+
+				return Promise.all([
+					callGet(name),
+					L.resolveDefault(callPlmn(name), {}),
+					L.resolveDefault(callEsim(name, 'profiles', slot, '', '', ''), {}),
+					L.resolveDefault(callEsim(name, 'backend', slot, '', '', ''), {}),
+					/* carrier config: absent on modems without QMI PDC, which is
+					   normal — resolveDefault keeps the page working either way */
+					L.resolveDefault(wrpc.carrierConfig(name, 'get', ''), {}),
+					L.resolveDefault(wrpc.carrierConfig(name, 'list', ''), {}),
+				]).then(function(res) {
+					var esimData = res[2] || {};
+					esimData.backend = (res[3] || {}).backend;
+					return { modem: name, mods: r[0] || {}, info: (r[0] || {})[name] || {},
+					         settings: res[0], plmn: res[1],
+					         slots: slots, esim: esimData,
+					         mbnSel: res[4] || {}, mbnList: (res[5] || {}).configs || [] };
+				});
 			});
 		});
 	},
