@@ -333,11 +333,16 @@ return view.extend({
 			   for physical slot 0 (openwrt/luci#8917 review; the status page
 			   was fixed the same way and this call was missed). On a dual-SIM
 			   box a fixed number is the wrong card anyway, so ask the eUICC's
-			   own slot and leave it unset when there is none, which is the one
-			   case the daemon's default is right for. */
+			   own slot, and send the daemon's own default of 1 when there is
+			   none to point at. */
 			return L.resolveDefault(callSlots(name), {}).then(function(slotRes) {
 				var slots = (slotRes || {}).slots || [];
-				var euicc = slots.filter(function(s) { return s.is_euicc })[0];
+				/* `physical` is guarded, not assumed: modemopts.js checks the
+				   same thing on this same reply, and the comment below says a
+				   null must never reach the integer-typed arg — so this must
+				   not be the one place that sends one. */
+				var euicc = slots.filter(function(s) {
+					return s.is_euicc && s.physical != null })[0];
 				/* 1, not null, when there is no eUICC to point at: the ubus
 				   signature types `slot` as an integer (ubus.uc modem_esim
 				   args), so a null is not something to send through it. 1 is

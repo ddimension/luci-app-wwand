@@ -62,7 +62,9 @@ return baseclass.extend({
 		/* the eUICC is not necessarily the ACTIVE slot — ask about the slot
 		   that actually holds it, or neither path can reach the card */
 		var slot = 1;
-		(data.slots || []).forEach(function(sl) { if (sl.is_euicc) slot = sl.physical; });
+		(data.slots || []).forEach(function(sl) {
+			if (sl.is_euicc && sl.physical != null) slot = sl.physical;
+		});
 
 		L.resolveDefault(wrpc.euiccProfiles(data.modem, slot), {}).then(function(r) {
 			if (!r || r.ok === false || !(r.profiles || []).length) {
@@ -104,6 +106,24 @@ return baseclass.extend({
 		var self = this;
 		var esimOk = data.esim && data.esim.ok !== false && data.esim.profiles;
 		var out = [ E('h3', {}, _('SIM')) ];
+
+		/* WHICH CARD THESE ACTIONS ACT ON. The eUICC is not necessarily the
+		   active slot, so every call below has to name the slot that holds it —
+		   the same derivation renderNativeProfiles already does for the read
+		   path. They used to pass a literal 0, which is not a slot at all: the
+		   daemon resolves the argument with `?? 1`, and `??` only replaces a
+		   MISSING value, so the 0 went through and addressed physical slot 0.
+		   The read path was moved off it and these were missed
+		   (openwrt/luci#8917 review) — and these are the writing ones: enable,
+		   disable and delete a profile on the wrong card.
+
+		   1 when there is no eUICC to point at: the ubus signature types `slot`
+		   as an integer, so a null is not something to send through it, and 1 is
+		   the daemon's own default said out loud. */
+		var esimSlot = 1;
+		(data.slots || []).forEach(function(sl) {
+			if (sl.is_euicc && sl.physical != null) esimSlot = sl.physical;
+		});
 
 		var slotRows = (data.slots || []).map(function(sl) {
 			/* shared row renderer (wwand.format); the persist-to-uci button is
@@ -203,20 +223,20 @@ return baseclass.extend({
 					'click': ui.createHandlerFn(self, function() {
 						if (!confirm(_('Enable profile %s? The connection will re-establish.').format(p.iccid)))
 							return;
-						return callEsim(data.modem, 'enable', 0, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
+						return callEsim(data.modem, 'enable', esimSlot, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
 					}) }, _('Enable')));
 			else
 				acts.push(E('button', { 'class': 'btn cbi-button',
 					'click': ui.createHandlerFn(self, function() {
 						if (!confirm(_('Disable the active profile %s?').format(p.iccid)))
 							return;
-						return callEsim(data.modem, 'disable', 0, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
+						return callEsim(data.modem, 'disable', esimSlot, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
 					}) }, _('Disable')));
 			acts.push(E('button', { 'class': 'btn cbi-button cbi-button-remove', 'style': 'margin-left:4px',
 				'click': ui.createHandlerFn(self, function() {
 					if (!confirm(_('Permanently DELETE profile %s from the eUICC?').format(p.iccid)))
 						return;
-					return callEsim(data.modem, 'delete', 0, p.iccid, '', '').then(function() { window.location.reload() });
+					return callEsim(data.modem, 'delete', esimSlot, p.iccid, '', '').then(function() { window.location.reload() });
 				}) }, _('Delete')));
 			return E('tr', { 'class': 'tr' }, [
 				/* arrays, not bare strings: the provider/name/nickname of a
@@ -315,7 +335,7 @@ return baseclass.extend({
 		   few times, then say so and stop. */
 		var pollMisses = 0;
 		var pollStatus = function(mode) {
-			callEsim(data.modem, 'download_status', 0, '', '', '').then(function(st) {
+			callEsim(data.modem, 'download_status', esimSlot, '', '', '').then(function(st) {
 				if (!st || st.state == null) {
 					if (++pollMisses < 5)
 						return window.setTimeout(function() { pollStatus(mode) }, 1200);
@@ -366,7 +386,7 @@ return baseclass.extend({
 							return;
 						}
 						startBusy(_('Starting download…'));
-						return callEsim(data.modem, 'download', 0, '', codeIn.value, confIn.value, ackChk.checked).then(function(res) {
+						return callEsim(data.modem, 'download', esimSlot, '', codeIn.value, confIn.value, ackChk.checked).then(function(res) {
 							if (res && res.ok === false)
 								dom.content(panel, mkBanner('err', '✕', _('Could not start: ') + (res.error || '?')));
 							else
@@ -389,7 +409,7 @@ return baseclass.extend({
 			E('button', { 'class': 'btn cbi-button',
 				'click': ui.createHandlerFn(self, function() {
 					startBusy(_('Listing pending notifications…'));
-					return callEsim(data.modem, 'notifications', 0, '', '', '').then(function(r) {
+					return callEsim(data.modem, 'notifications', esimSlot, '', '', '').then(function(r) {
 						panel.style.display = '';
 						dom.content(panel, [
 							mkBanner((r && r.ok) ? 'ok' : 'err', (r && r.ok) ? '✓' : '✕',
@@ -406,7 +426,7 @@ return baseclass.extend({
 					if (!confirm(_('Send all pending notifications to the operator now?')))
 						return;
 					startBusy(_('Sending confirmations…'));
-					return callEsim(data.modem, 'notify', 0, '', '', '').then(function(res) {
+					return callEsim(data.modem, 'notify', esimSlot, '', '', '').then(function(res) {
 						if (res && res.ok === false)
 							dom.content(panel, mkBanner('err', '✕', _('Failed: ') + (res.error || '?')));
 						else
