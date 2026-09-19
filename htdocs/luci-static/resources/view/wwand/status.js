@@ -325,7 +325,7 @@ function renderLive(name, modem, graphs, board) {
 		   exactly what would have hidden it. The daemon's esim_ready handler
 		   passes eslot.physical for the same reason. */
 		var euicc = ((res[3] || {}).slots || []).find(function(sl) {
-			return sl.active && sl.is_euicc && sl.card == 'present' && sl.physical != null;
+			return sl.active && sl.is_euicc && sl.card == 'present' && sl.physical > 0;
 		});
 
 		return (euicc

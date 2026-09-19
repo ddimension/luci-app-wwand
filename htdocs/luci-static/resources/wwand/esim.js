@@ -12,7 +12,9 @@
    appends; ctx carries the pieces the page owns:
      ctx.simSlotUci(slot)          — persist the primary SIM slot to uci
      ctx.notifyEsimApply(modem, r) — surface how a profile switch applies
-   data: { modem, info, slots, esim } as assembled by the settings view. */
+   data: { modem, info, slots, esimSlot, esim } as assembled by the settings
+   view — `esimSlot` is the physical slot its eSIM reads were made against, so
+   this panel acts on the card it listed. */
 
 var callSwitchSlot = wrpc.switchSlot;
 var callPinLock = wrpc.pinLock;
@@ -60,11 +62,9 @@ return baseclass.extend({
 		var box = E('div', {}, [ E('em', {}, [ _('Asking the modem directly…') ]) ]);
 
 		/* the eUICC is not necessarily the ACTIVE slot — ask about the slot
-		   that actually holds it, or neither path can reach the card */
-		var slot = 1;
-		(data.slots || []).forEach(function(sl) {
-			if (sl.is_euicc && sl.physical != null) slot = sl.physical;
-		});
+		   that actually holds it, or neither path can reach the card.
+		   `load()` already chose it; see the comment in render(). */
+		var slot = data.esimSlot != null ? data.esimSlot : 1;
 
 		L.resolveDefault(wrpc.euiccProfiles(data.modem, slot), {}).then(function(r) {
 			if (!r || r.ok === false || !(r.profiles || []).length) {
@@ -108,22 +108,28 @@ return baseclass.extend({
 		var out = [ E('h3', {}, _('SIM')) ];
 
 		/* WHICH CARD THESE ACTIONS ACT ON. The eUICC is not necessarily the
-		   active slot, so every call below has to name the slot that holds it —
-		   the same derivation renderNativeProfiles already does for the read
-		   path. They used to pass a literal 0, which is not a slot at all: the
-		   daemon resolves the argument with `?? 1`, and `??` only replaces a
-		   MISSING value, so the 0 went through and addressed physical slot 0.
-		   The read path was moved off it and these were missed
-		   (openwrt/luci#8917 review) — and these are the writing ones: enable,
-		   disable and delete a profile on the wrong card.
+		   active slot, so every call below has to name the slot that holds it.
+		   They used to pass a literal 0, which is not a slot at all: the daemon
+		   resolves the argument with `?? 1`, and `??` only replaces a MISSING
+		   value, so the 0 went through and addressed physical slot 0. The read
+		   path was moved off it and these were missed (openwrt/luci#8917
+		   review) — and these are the writing ones: enable, disable and delete
+		   a profile on the wrong card.
+
+		   THE SLOT COMES FROM `load()`, it is not derived again here. It used
+		   to be, in three places with two different rules: the settings view
+		   took the FIRST slot reporting an eUICC, these two took the LAST. A
+		   modem answering with two eUICC slots would therefore list the
+		   profiles of one card and enable, disable or delete on the other —
+		   silently, since both answers are well-formed. Two such slots are
+		   representable: is_euicc is probed per slot and independently
+		   (wwand sim.uc:638 for QMI UIM, modem_ncm.uc:883,888 for AT).
+		   Found in the openwrt/luci#8917 review, 2026-09-19.
 
 		   1 when there is no eUICC to point at: the ubus signature types `slot`
 		   as an integer, so a null is not something to send through it, and 1 is
 		   the daemon's own default said out loud. */
-		var esimSlot = 1;
-		(data.slots || []).forEach(function(sl) {
-			if (sl.is_euicc && sl.physical != null) esimSlot = sl.physical;
-		});
+		var esimSlot = data.esimSlot != null ? data.esimSlot : 1;
 
 		var slotRows = (data.slots || []).map(function(sl) {
 			/* shared row renderer (wwand.format); the persist-to-uci button is

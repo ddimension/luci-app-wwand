@@ -340,9 +340,17 @@ return view.extend({
 				/* `physical` is guarded, not assumed: modemopts.js checks the
 				   same thing on this same reply, and the comment below says a
 				   null must never reach the integer-typed arg — so this must
-				   not be the one place that sends one. */
+				   not be the one place that sends one.
+
+				   `> 0`, not `!= null`: slots are 1-based everywhere the
+				   daemon builds them (sim.uc:633 and mbim_backend.uc:297 both
+				   count `i + 1`, modem_ncm.uc:880,885 say 1 and 2), so a 0
+				   cannot arrive today — but 0 was exactly the value that made
+				   it through the daemon's `?? 1` and addressed a slot that is
+				   not a slot. A guard that admits it states less than what
+				   holds. */
 				var euicc = slots.filter(function(s) {
-					return s.is_euicc && s.physical != null })[0];
+					return s.is_euicc && s.physical > 0 })[0];
 				/* 1, not null, when there is no eUICC to point at: the ubus
 				   signature types `slot` as an integer (ubus.uc modem_esim
 				   args), so a null is not something to send through it. 1 is
@@ -363,7 +371,10 @@ return view.extend({
 					esimData.backend = (res[3] || {}).backend;
 					return { modem: name, mods: r[0] || {}, info: (r[0] || {})[name] || {},
 					         settings: res[0], plmn: res[1],
-					         slots: slots, esim: esimData,
+					         /* the slot the eSIM reads above were made against,
+					            so the panel's actions act on the same card it
+					            listed — see wwand/esim.js render() */
+					         slots: slots, esimSlot: slot, esim: esimData,
 					         mbnSel: res[4] || {}, mbnList: (res[5] || {}).configs || [] };
 				});
 			});
