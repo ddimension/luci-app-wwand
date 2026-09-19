@@ -35,7 +35,7 @@ return baseclass.extend({
 		if (reg && (reg.mcc != null || reg.name))
 			infoRows.push(E('div', {}, [ E('strong', {}, [ _('Registered operator') + ': ' ]),
 				(reg.name || _('unknown')) + ' (' + (reg.mcc != null ? reg.mcc : '?') +
-				'/' + fmt.fmtMnc(reg.mnc) + ')' ]));
+				'/' + fmt.fmtMnc(reg.mnc, reg.mnc_digits) + ')' ]));
 
 		var results = E('div', { 'style': 'margin-top:10px' });
 
@@ -119,7 +119,7 @@ return baseclass.extend({
 					act = E('button', { 'class': 'btn cbi-button cbi-button-apply',
 						'click': ui.createHandlerFn(self, function() {
 							if (!confirm(_('Register manually to %s (%s)? The connection may briefly drop.')
-									.format(op.name || '?', fmt.fmtPlmn(op.mcc, op.mnc))))
+									.format(op.name || '?', fmt.fmtPlmn(op.mcc, op.mnc, op.mnc_digits))))
 								return;
 							return setSelection('manual', op.mcc, op.mnc,
 								_('Manual network selection applied.'));
@@ -130,7 +130,7 @@ return baseclass.extend({
 					   the scan result, and dom.append() would put a bare string
 					   through innerHTML (luci.js:1394-96) */
 					E('td', { 'class': 'td' }, [ op.name || _('(unnamed)') ]),
-					E('td', { 'class': 'td' }, [ fmt.fmtPlmn(op.mcc, op.mnc) ]),
+					E('td', { 'class': 'td' }, [ fmt.fmtPlmn(op.mcc, op.mnc, op.mnc_digits) ]),
 					E('td', { 'class': 'td' }, [ rats.length ? rats.join(', ') : '—' ]),
 					E('td', { 'class': 'td' }, [
 						STATUS_LABEL[op.status] || op.status || '',
@@ -226,7 +226,20 @@ return baseclass.extend({
 			});
 		};
 
+		/* A SCAN IS NOT A READ. It takes the radio off the network for up to
+		 * 240 s (netsel_ops.uc SCAN_TIMEOUT_MS), so modem_scan and
+		 * modem_scan_start moved out of the read ACL grant — which would leave
+		 * a read-only operator looking at a button that answers "permission
+		 * denied". hasViewPermission() returns null when the node spec is not
+		 * known; treat that as permitted rather than disabling a working
+		 * button on a page we cannot classify. Found by a full review,
+		 * 2026-09-19. */
+		var mayScan = (L.hasViewPermission() !== false);
+
 		scanBtn = E('button', { 'class': 'btn cbi-button',
+			'disabled': mayScan ? null : '',
+			'title': mayScan ? null
+				: _('A network scan takes the radio off the network for minutes, so it needs write access.'),
 			'click': ui.createHandlerFn(self, function() {
 				scanBtn.disabled = true;
 				scanSpinner(null);

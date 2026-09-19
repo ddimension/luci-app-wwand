@@ -23,6 +23,36 @@ const src = fs.readFileSync(
 /* drop the loader directives; keep every line number otherwise intact */
 const body = src.replace(/^\s*'require [^']*';\s*$/gm, '');
 
+/* LuCI installs String.prototype.format in cbi.js, which this repo does not
+ * ship — so every helper that uses it was untestable here, which is why the
+ * whole fmtMnc / fmtPlmn / fmtOperator family had no coverage until a review
+ * found a wrong MNC in all three. A STUB, deliberately: it covers only the
+ * directives format.js actually uses (%s, %d and %0Nd — verified by grep over
+ * that file, 2026-09-19) and does no HTML escaping, because nothing asserted
+ * here renders markup. A new directive appearing in format.js and not here
+ * will show up as a literal in an expected value, not as a silent pass. */
+String.prototype.format = function () {
+	var args = arguments, i = 0;
+
+	return this.replace(/%(0(\d+))?([sd%])/g, function (m, _pad, width, conv) {
+		if (conv == '%')
+			return '%';
+
+		var v = args[i++];
+
+		if (conv == 'd') {
+			var out = String(Math.trunc(+v) || 0);
+
+			while (width && out.length < +width)
+				out = '0' + out;
+
+			return out;
+		}
+
+		return String(v);
+	});
+};
+
 const baseclass = { extend: (o) => o };
 const _ = (s) => s;                       /* i18n passthrough */
 const E = () => ({});                     /* no DOM here */
@@ -191,6 +221,42 @@ eq(S({ lte: { rsrp: -32768, snr: -32768 } }), S_({}),
 eq(S({ lte: { snr: 0, rsrp: -100 } }),
    S_({ rsrp: [ -100, null, null ], sinr: [ 0, null ] }),
    'signalSample: 0 dB is a reading, not a gap');
+
+/* A 3-DIGIT MNC IS NOT KNOWABLE FROM THE NUMBER. 310/030 and 310/30 are
+ * different operators and both are the integer 30, so padding to a fixed two
+ * rendered the first as the second — across the operator line, the scan table
+ * and the PLMN editor. The daemon sends `mnc_digits` for exactly this, from
+ * the QMI PCS-digit TLVs and from the quoted PLMN id of an AT scan, and
+ * nothing here read it. Found by a full review, 2026-09-19. */
+eq(fmt.fmtMnc(30, 3), '030', 'fmtMnc: a declared 3-digit MNC keeps its leading zero');
+eq(fmt.fmtMnc(30, 2), '30', 'fmtMnc: a declared 2-digit MNC does not gain one');
+eq(fmt.fmtMnc(30), '30', 'fmtMnc: undeclared falls back to two');
+eq(fmt.fmtMnc(6, 2), '06', 'fmtMnc: 260/06 still pads');
+eq(fmt.fmtMnc(260), '260', 'fmtMnc: a value >= 100 settles its own width');
+eq(fmt.fmtMnc(260, 2), '260', 'fmtMnc: ...and is never truncated to the declared two');
+eq(fmt.fmtMnc(30, 9), '30', 'fmtMnc: a nonsense width is ignored, not looped on');
+eq(fmt.fmtMnc(null, 3), '?', 'fmtMnc: nothing reported stays "?"');
+
+eq(fmt.fmtPlmn(310, 30, 3), '310/030', 'fmtPlmn: the width reaches the pair');
+eq(fmt.fmtPlmn(310, 30), '310/30', 'fmtPlmn: and its absence is the old behaviour');
+
+/* the operator line takes it off the registration block, and when it falls
+ * back to splitting the raw id the id itself states the width */
+eq(fmt.fmtOperator({ plmn: { mcc: 310, mnc: 30, mnc_digits: 3, description: 'X' } }),
+   'X (310/030)', 'fmtOperator: mnc_digits from the registration');
+eq(fmt.fmtOperator({ plmn: { id: '310030', description: 'X' } }),
+   'X (310/030)', 'fmtOperator: the raw id states its own width');
+eq(fmt.fmtOperator({ plmn: { id: '31030', description: 'X' } }),
+   'X (310/30)', 'fmtOperator: ...and the 2-digit one likewise');
+
+/* fmtRegistration renders the same pair with the same hazard — a second
+ * hardcoded %02d that fmtOperator's fix did not reach. */
+eq(fmt.fmtRegistration({ registration: { registration: 1,
+	plmn: { mcc: 310, mnc: 30, mnc_digits: 3 } } }),
+   '310/030', 'fmtRegistration: the MNC width reaches this line too');
+eq(fmt.fmtRegistration({ registration: { registration: 1,
+	plmn: { mcc: 262, mnc: 1 } } }),
+   '262/01', 'fmtRegistration: and a 2-digit MNC still pads');
 
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);

@@ -286,7 +286,7 @@ function plmnTable(title, list, absentHint) {
 			.filter(function(k) { return e[k] })
 			.map(function(k) { return k.toUpperCase() }).join(' ');
 		return E('tr', { 'class': 'tr' }, [
-			E('td', { 'class': 'td' }, [ fmt.fmtPlmn(e.mcc, e.mnc) ]),
+			E('td', { 'class': 'td' }, [ fmt.fmtPlmn(e.mcc, e.mnc, e.mnc_digits) ]),
 			/* the modem's own name last: a record with no numeric id is not
 			   unknown, it is alphanumeric — two FM350-GLs list 42 of 44 entries
 			   that way, from the module's operator table rather than a SIM file
@@ -574,7 +574,27 @@ return view.extend({
 			var entries = collect(), t = typeSel.value;
 			var name = (window.prompt(_('Save as list — name:'), curListName || (t + '-list')) || '').replace(/[^a-zA-Z0-9_]/g, '');
 			if (!name) return;
-			if (uci.get('network', name) == null) uci.add('network', 'wwand_plmnlist', name);
+
+			/* THE NAME MUST BE FREE, OR ALREADY BE ONE OF OURS. This gated on
+			 * existence alone, so typing a name that is already an interface —
+			 * 'wan' being the obvious one — skipped the add and wrote
+			 * `option type 'nas'` and `list plmn` straight onto that interface,
+			 * then saved and applied it. The interface was corrupted and the list
+			 * never existed, so the feature was inert on top of the damage.
+			 * Found by a full review, 2026-09-19. */
+			var existingType = uci.get('network', name) != null
+				? (uci.get('network', name, '.type') || '?') : null;
+
+			if (existingType == null)
+				uci.add('network', 'wwand_plmnlist', name);
+			else if (existingType != 'wwand_plmnlist') {
+				ui.addNotification(null, E('p', {}, [
+					_('"%s" is already a "%s" section in /etc/config/network — refusing to overwrite it. Pick a different name.')
+						.format(name, existingType)
+				]), 'error');
+				return;
+			}
+
 			uci.set('network', name, 'type', t);
 			uci.set('network', name, 'plmn', encodePlmnEntries(entries));
 			var sid = self.ensureModemSid(modem);
@@ -697,7 +717,13 @@ return view.extend({
 		var l4In = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'style': 'width:100%',
 			'placeholder': '1300:246 5230:118', 'value': lock4g.join(' ') });
 		var l5In = E('input', { 'type': 'text', 'class': 'cbi-input-text', 'style': 'width:100%',
-			'placeholder': '242:431070:1:78', 'value': lock5g });
+			/* SCS IS kHz, not a numerology index. The daemon passes this field
+			 * verbatim into AT+QNWLOCK="common/5g" (atcmd.uc:155-160), where a
+			 * '1' is not a subcarrier spacing and the command is rejected. The
+			 * documented form is pci:arfcn:scs:band with scs in kHz
+			 * (docs/reference.md:454, '242:431070:15:1'). Found by a full
+			 * review, 2026-09-19. */
+			'placeholder': '242:431070:30:78', 'value': lock5g });
 		var persistChk = E('input', { 'type': 'checkbox', 'checked': persist ? '' : null });
 
 		var save = function() {

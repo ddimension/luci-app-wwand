@@ -533,8 +533,14 @@ return baseclass.extend({
 		lock4g.placeholder = '1300:246';
 		bind(lock4g);
 
+		/* SCS IS kHz — say so where the user will actually read it. The
+		 * one-click button in the protocol page fills this field with a 30 kHz
+		 * default because nothing in the scan reports the SSB spacing, and the
+		 * field is where that guess becomes visible and editable before Save.
+		 * (It used to fill in a '1', which is not a spacing at all and the
+		 * modem rejected the command.) Found by a full review, 2026-09-19. */
 		var lock5g = s.taboption(tab, form.Value, 'lock_5g', _('5G NR SA cell lock'),
-			_('Lock to a 5G SA cell: "pci:arfcn:scs:band".'));
+			_('Lock to a 5G SA cell: "pci:arfcn:scs:band" — the subcarrier spacing is in kHz (15, 30, 60 …). The "Lock this 5G cell" button fills in 30 as a default; the modem does not report the actual spacing, so check it against your band before saving.'));
 		lock5g.placeholder = '242:431070:15:1';
 		bind(lock5g);
 

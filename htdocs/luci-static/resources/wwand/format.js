@@ -48,12 +48,27 @@ return baseclass.extend({
 	},
 
 	/* MNC as a zero-padded code: the leading zero is significant (260/06 is not
-	   260/6). QMI hands us a bare integer (digit count lost), so pad to 2 digits
-	   minimum; genuine 3-digit MNCs (>=100) keep all three. */
-	fmtMnc: function(mnc) {
+	   260/6, and 310/030 is not 310/30 — different operators).
+
+	   `digits` IS THE WHOLE POINT, and nothing here passed it. A bare integer
+	   cannot say whether 30 is two digits or three, so padding to a fixed two
+	   rendered 310/030 as 310/30 everywhere: operator line, scan table, PLMN
+	   editor. The daemon sends `mnc_digits` for exactly this — it takes it from
+	   the QMI PCS-digit TLVs and from the quoted PLMN id in an AT scan — and
+	   wwandctl_fmt.uc:29-34 has consumed it all along. Bound to 2 or 3 the same
+	   way: those are the only lengths 3GPP defines and the value comes over
+	   ubus. Found by a full review, 2026-09-19. */
+	fmtMnc: function(mnc, digits) {
 		if (mnc == null || mnc === '')
 			return '?';
-		return '%02d'.format(+mnc);
+
+		var w = (digits == 3 || digits == 2) ? digits : ((+mnc >= 100) ? 3 : 2);
+		var out = String(+mnc);   /* not '%d'.format: the padding is below */
+
+		while (out.length < w)
+			out = '0' + out;
+
+		return out;
 	},
 
 	/* "mcc/mnc", or '?' when the modem gave neither. JavaScript turns a missing
@@ -61,11 +76,11 @@ return baseclass.extend({
 	   scan table came to show a mysterious "null" (#6) — and a plain guard at
 	   one call site would only have moved the problem to the next one, so the
 	   pair is formatted in exactly one place. */
-	fmtPlmn: function(mcc, mnc) {
+	fmtPlmn: function(mcc, mnc, digits) {
 		if (mcc == null && mnc == null)
 			return '?';
 
-		return '%s/%s'.format(mcc != null ? mcc : '?', this.fmtMnc(mnc));
+		return '%s/%s'.format(mcc != null ? mcc : '?', this.fmtMnc(mnc, digits));
 	},
 
 	/* registered operator line — "Name (mcc/mnc) · roaming" — from the modem's
@@ -81,16 +96,19 @@ return baseclass.extend({
 		   the pairing users run, and reading only mcc/mnc printed
 		   "PLAY (undefined/undefined)" — reported as a missing operator.
 		   Fall back to the raw id, split the same way the daemon does. */
-		var mcc = plmn.mcc, mnc = plmn.mnc;
+		var mcc = plmn.mcc, mnc = plmn.mnc, digits = plmn.mnc_digits;
 
 		if ((mcc == null || mnc == null) && /^[0-9]{5,6}$/.test('' + (plmn.id || ''))) {
 			mcc = ('' + plmn.id).substr(0, 3);
 			mnc = ('' + plmn.id).substr(3);
+			/* the raw id states the width by how long its MNC half is — the
+			   one place that needs no mnc_digits to know */
+			digits = mnc.length;
 		}
 
 		var name = (plmn.description || '').trim();
 		var pair = (mcc != null && mnc != null)
-			? ' (%s/%s)'.format(mcc, this.fmtMnc(mnc)) : '';
+			? ' (%s/%s)'.format(mcc, this.fmtMnc(mnc, digits)) : '';
 
 		/* neither a name nor an id would otherwise render as a bare "()" */
 		if (!name && !pair)
@@ -541,9 +559,14 @@ return baseclass.extend({
 			   mcc renders a real-looking 260/00 for a half-populated plmn
 			   instead of falling through to plmn.id. fmtOperator in this file
 			   already guards both; this one did not. */
+			/* ...and the MNC's WIDTH, the same as fmtOperator: %02d cannot tell
+			   310/030 from 310/30, two different operators. fmtMnc keeps the
+			   null guard above meaningful — it returns '?' rather than '00'.
+			   Found by a full review, 2026-09-19. */
 			var op = (reg.plmn && (reg.plmn.description ||
 				((reg.plmn.mcc != null && reg.plmn.mnc != null)
-					? '%d/%02d'.format(reg.plmn.mcc, reg.plmn.mnc) : null) ||
+					? '%s/%s'.format(reg.plmn.mcc,
+						this.fmtMnc(reg.plmn.mnc, reg.plmn.mnc_digits)) : null) ||
 				reg.plmn.id)) || _('registered');
 			return op + (reg.roaming ? ' ' + _('(roaming)') : '');
 		}
