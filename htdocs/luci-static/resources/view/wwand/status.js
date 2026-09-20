@@ -177,7 +177,14 @@ function renderDatapath(dp) {
 		   old form appended "· QMAPv5" only for v5, so everything else read as
 		   plain "rmnet" whether it was v1 or v4. `v5` is the fallback for a
 		   daemon older than qmap_version. */
-		[ _('Backend'), dp.backend + (dp.qmap_version != null
+		/* and what `option mux` ASKED for, when that is not what came up.
+		   "auto" resolving to something is the normal case and the one worth
+		   seeing — on MBIM it routinely lands on `untagged`, which says the
+		   session rides the parent with no 802.1q tag per frame. The backend
+		   name on its own cannot say whether anything was decided at all. */
+		[ _('Backend'), (dp.configured && dp.configured != dp.backend
+			? dp.configured + ' \u2192 ' + dp.backend : dp.backend)
+			+ (dp.qmap_version != null
 			? ' · QMAP v' + dp.qmap_version
 			: (dp.v5 ? ' · QMAP v5' : '')) ],
 		[ _('Parent device'), dp.parent || '—' ]

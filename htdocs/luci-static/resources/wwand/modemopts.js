@@ -48,13 +48,14 @@ function uniqVal(o, k, label) {
 /* Label for one entry of the daemon's datapath catalog (status globals.datapaths:
    { name, kind: mode|builtin|plugin, proto: [...] | null, description }).
 
-   Only the two protocol-independent modes get a translated name — everything
-   else is called what `option mux` must literally say, since a datapath name is
-   also the module name of its add-on package. The protocol tag stays on the
+   Only the modes get a translated name — everything else is called what
+   `option mux` must literally say, since a datapath name is also the module
+   name of its add-on package. The protocol tag stays on the
    label even though the list is filtered per row: it is what explains WHY a
    given modem is offered these three and not those five. */
 function dpLabel(e) {
-	var names = { auto: _('Automatic'), raw_ip: _('No multiplexing (plain raw IP)') };
+	var names = { auto: _('Automatic'), raw_ip: _('No multiplexing (plain raw IP)'),
+	              untagged: _('No multiplexing (MBIM session 0, untagged)') };
 	var tags = [];
 
 	if (e.kind == 'plugin')
@@ -320,7 +321,7 @@ return baseclass.extend({
 		   installed rmnet_nss shows up as a normal choice and a list hardcoded
 		   here cannot go stale behind the daemon. */
 		o = s.taboption(tab, form.Value, 'mux', _('Data multiplexing'),
-			_('Kernel datapath that carries this modem\'s data sessions. Leave on automatic unless a modem misbehaves — under automatic an installed vendor datapath that recognises this hardware is used on its own. Naming one pins it. Only datapaths this modem\'s control protocol can use are offered.'));
+			_('Kernel datapath that carries this modem\'s data sessions. Leave on automatic unless a modem misbehaves — under automatic an installed vendor datapath that recognises this hardware is used on its own. Naming one pins it. Only datapaths this modem\'s control protocol can use are offered. What automatic settled on is shown as <em>configured → actual</em> under Datapath on the status page: a single interface on an MBIM modem lands on <em>untagged</em>, where the session rides the parent device with no 802.1q tag on every frame, and a QMI modem that turns out not to carry QMAP lands on <em>raw_ip</em>.'));
 		o.default = 'auto';
 		/* seed: the field must offer something even if the daemon is not
 		   answering (stopped, no modem yet) — the load() below adds the rest */
