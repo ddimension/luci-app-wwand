@@ -134,6 +134,74 @@ return baseclass.extend({
 		return E('span', { 'style': 'font-family:monospace' }, [ this.groupDigits(v) ]);
 	},
 
+
+	/* COLLAPSE A SCAN to one entry per operator. A scan lists the same PLMN
+	   once per supported RAT, so the raw list is 2-4 rows deep per operator;
+	   this keeps the strongest status and UNIONs the technologies, writing the
+	   union to `_rats`.
+
+	   THE MNC WIDTH IS PART OF THE IDENTITY. 310/030 and 310/30 are two
+	   operators — that is the whole reason the daemon carries `mnc_digits`
+	   beside the number, and why the rows render with it. Keying the collapse
+	   on the bare value merged them into one row that inherited the other's
+	   status and technologies, so one of the two disappeared from the list it
+	   exists to be chosen from. It lives here, rather than inline in the view,
+	   because it is a decision about data and this is where such decisions get
+	   a test. Found by review, 2026-09-20. */
+	collapseScan: function(ops) {
+		var rank = { current: 3, available: 2, forbidden: 1 };
+		var byPlmn = {}, order = [];
+
+		(ops || []).forEach(function(op) {
+			var key = op.mcc + '/' + op.mnc + '/' + (op.mnc_digits || 0);
+			var prev = byPlmn[key];
+
+			if (!prev) {
+				op._rats = {};
+				(op.rats || []).forEach(function(r) { op._rats[r] = true; });
+				byPlmn[key] = op; order.push(key);
+			} else {
+				(op.rats || []).forEach(function(r) { prev._rats[r] = true; });
+				if (op.roaming) prev.roaming = true;
+				if ((rank[op.status] || 0) > (rank[prev.status] || 0)) {
+					op._rats = prev._rats; op.roaming = prev.roaming || op.roaming;
+					byPlmn[key] = op;
+				}
+			}
+		});
+
+		return order.map(function(k) { return byPlmn[k]; });
+	},
+
+	/* WHICH SLOT'S eSIM CAN BE READ, in one place. Three call sites used to
+	   decide this for themselves and two of them disagreed: the status page
+	   required an active, present eUICC, the settings page took the first
+	   eUICC in the list whatever its state. So one page said "no profiles" and
+	   the other issued profile reads against a card it could not reach, for the
+	   same modem at the same moment.
+
+	   ACTIVE IS PART OF THE RULE, not an extra caution. The APDU channel the
+	   eSIM operations run over belongs to the ACTIVE card (wwand sim.uc
+	   `_apdu_be`), so an eUICC sitting in the other slot is not addressable
+	   without switching slots first — asking anyway produces failures the UI
+	   then has to hide.
+
+	   `> 0`, not `!= null`: slots are 1-based everywhere the daemon builds them
+	   (sim.uc, mbim_backend.uc and modem_ncm.uc all count from 1), and 0 was
+	   the value that slipped through the daemon's `?? 1` and addressed a slot
+	   that is not a slot. */
+	euiccReadable: function(sl) {
+		return !!(sl && sl.is_euicc && sl.active && sl.card == 'present' && sl.physical > 0);
+	},
+
+	/* the readable eUICC slot RECORD, or null when there is none. Callers that
+	   must put an integer on the wire supply their own default — see the note
+	   in settings.js about the ubus arg being typed. */
+	euiccSlot: function(slots) {
+		var self = this;
+		return (slots || []).filter(function(sl) { return self.euiccReadable(sl); })[0] || null;
+	},
+
 	/* One slot, as a labelled block rather than a comma-separated sentence.
 	   What it used to print was
 	     Slot 2 (eSIM) — present, ICCID 8988…95, EID 8903…64 [Switch now]

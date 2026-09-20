@@ -63,7 +63,12 @@ const fmt = new Function('baseclass', '_', 'E', 'ui', body)(baseclass, _, E, ui)
 let checks = 0, failures = 0;
 function eq(got, want, label) {
 	checks++;
-	if (got === want)
+	/* structural where it matters: several helpers answer with a list, and
+	   `===` on two arrays is always false — which reports a failure whose
+	   "got" and "want" print identically and sends the reader hunting */
+	if (got === want ||
+	    (got && want && typeof got == 'object' && typeof want == 'object' &&
+	     JSON.stringify(got) === JSON.stringify(want)))
 		return;
 	failures++;
 	console.log(`FAIL: ${label}\n      got:  ${JSON.stringify(got)}\n      want: ${JSON.stringify(want)}`);
@@ -257,6 +262,72 @@ eq(fmt.fmtRegistration({ registration: { registration: 1,
 eq(fmt.fmtRegistration({ registration: { registration: 1,
 	plmn: { mcc: 262, mnc: 1 } } }),
    '262/01', 'fmtRegistration: and a 2-digit MNC still pads');
+
+/* --- the one eUICC rule ---------------------------------------------------
+ *
+ * Three call sites used to answer "which slot's eSIM can be read" for
+ * themselves, and two of them disagreed. The rule includes `active` because the
+ * APDU channel belongs to the active card — an eUICC in the other slot is not
+ * addressable without switching first. */
+eq(fmt.euiccReadable({ is_euicc: true, active: true, card: 'present', physical: 1 }),
+   true, 'euicc: an active, present eUICC is readable');
+eq(fmt.euiccReadable({ is_euicc: true, active: false, card: 'present', physical: 2 }),
+   false, 'euicc: ...one in the inactive slot is not');
+eq(fmt.euiccReadable({ is_euicc: true, active: true, card: 'absent', physical: 1 }),
+   false, 'euicc: ...nor an empty slot');
+eq(fmt.euiccReadable({ is_euicc: false, active: true, card: 'present', physical: 1 }),
+   false, 'euicc: ...nor a plain SIM');
+/* 0 is not a slot: slots are 1-based everywhere the daemon builds them, and 0
+ * was the value that slipped through its `?? 1` and addressed a non-slot */
+eq(fmt.euiccReadable({ is_euicc: true, active: true, card: 'present', physical: 0 }),
+   false, 'euicc: ...nor physical slot 0');
+eq(fmt.euiccReadable(null), false, 'euicc: ...and no slot at all is not readable');
+
+eq(fmt.euiccSlot([
+	{ is_euicc: false, active: true, card: 'present', physical: 1 },
+	{ is_euicc: true, active: true, card: 'present', physical: 2 },
+]).physical, 2, 'euicc: the readable slot is found in a mixed list');
+eq(fmt.euiccSlot([ { is_euicc: true, active: false, card: 'present', physical: 2 } ]),
+   null, 'euicc: an unreachable eUICC yields null, not a slot to guess with');
+eq(fmt.euiccSlot([]), null, 'euicc: an empty slot list yields null');
+eq(fmt.euiccSlot(undefined), null, 'euicc: ...and so does a missing one');
+
+/* --- collapsing a scan ----------------------------------------------------
+ *
+ * The identity of an operator includes the WIDTH of its MNC: 310/030 and
+ * 310/30 are two of them. Collapsing on the bare number merged the pair into
+ * one row which then inherited the other's status and technologies. */
+(function () {
+	var out = fmt.collapseScan([
+		{ mcc: 310, mnc: 30, mnc_digits: 2, status: 'available', rats: [ 'LTE' ] },
+		{ mcc: 310, mnc: 30, mnc_digits: 3, status: 'forbidden', rats: [ 'GSM' ] },
+	]);
+
+	eq(out.length, 2, 'collapseScan: 310/30 and 310/030 stay two operators');
+	eq(out[0].status, 'available', 'collapseScan: ...each keeping its own status');
+	eq(out[1].status, 'forbidden', 'collapseScan: ...and the other keeping its own');
+
+	/* the collapse it IS supposed to do: one operator listed per RAT */
+	var same = fmt.collapseScan([
+		{ mcc: 262, mnc: 1, mnc_digits: 2, status: 'available', rats: [ 'LTE' ] },
+		{ mcc: 262, mnc: 1, mnc_digits: 2, status: 'current', rats: [ 'NR5G' ] },
+	]);
+
+	eq(same.length, 1, 'collapseScan: one operator listed twice becomes one row');
+	eq(same[0].status, 'current', 'collapseScan: ...keeping the strongest status');
+	eq(Object.keys(same[0]._rats).sort(), [ 'LTE', 'NR5G' ],
+		'collapseScan: ...and the union of its technologies');
+
+	/* a scan that reports no width at all still collapses by PLMN, rather than
+	   splitting every entry apart on an undefined */
+	var nodig = fmt.collapseScan([
+		{ mcc: 262, mnc: 2, status: 'available', rats: [ 'LTE' ] },
+		{ mcc: 262, mnc: 2, status: 'available', rats: [ 'GSM' ] },
+	]);
+
+	eq(nodig.length, 1, 'collapseScan: entries without mnc_digits still collapse');
+	eq(fmt.collapseScan(undefined), [], 'collapseScan: no list is an empty list');
+})();
 
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);

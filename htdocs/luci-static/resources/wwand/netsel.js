@@ -83,29 +83,10 @@ return baseclass.extend({
 					: _('No operators found.') ]));
 				return;
 			}
-			/* a scan may list the same PLMN once per supported RAT (2G/3G/4G/5G) —
-			   collapse to one row per operator, keeping the strongest status and
-			   UNIONing the radio access technologies the scan reported for it */
-			var rank = { current: 3, available: 2, forbidden: 1 };
+			/* one row per operator; the rule (and why the MNC width is part
+			   of the identity) lives in wwand.format.collapseScan */
 			var RAT_ORDER = { 'NR5G': 0, 'LTE': 1, 'TD-SCDMA': 2, 'UMTS': 3, 'GSM': 4, 'EVDO': 5, 'CDMA': 6 };
-			var byPlmn = {}, order = [];
-			ops.forEach(function(op) {
-				var key = op.mcc + '/' + op.mnc;
-				var prev = byPlmn[key];
-				if (!prev) {
-					op._rats = {};
-					(op.rats || []).forEach(function(r) { op._rats[r] = true; });
-					byPlmn[key] = op; order.push(key);
-				} else {
-					(op.rats || []).forEach(function(r) { prev._rats[r] = true; });
-					if (op.roaming) prev.roaming = true;
-					if ((rank[op.status] || 0) > (rank[prev.status] || 0)) {
-						op._rats = prev._rats; op.roaming = prev.roaming || op.roaming;
-						byPlmn[key] = op;
-					}
-				}
-			});
-			ops = order.map(function(k) { return byPlmn[k]; });
+			ops = fmt.collapseScan(ops);
 			var rows = ops.map(function(op) {
 				var forbidden = (op.status == 'forbidden');
 				var current = (op.status == 'current');

@@ -337,31 +337,34 @@ return view.extend({
 			   none to point at. */
 			return L.resolveDefault(callSlots(name), {}).then(function(slotRes) {
 				var slots = (slotRes || {}).slots || [];
-				/* `physical` is guarded, not assumed: modemopts.js checks the
-				   same thing on this same reply, and the comment below says a
-				   null must never reach the integer-typed arg — so this must
-				   not be the one place that sends one.
-
-				   `> 0`, not `!= null`: slots are 1-based everywhere the
-				   daemon builds them (sim.uc:633 and mbim_backend.uc:297 both
-				   count `i + 1`, modem_ncm.uc:880,885 say 1 and 2), so a 0
-				   cannot arrive today — but 0 was exactly the value that made
-				   it through the daemon's `?? 1` and addressed a slot that is
-				   not a slot. A guard that admits it states less than what
-				   holds. */
-				var euicc = slots.filter(function(s) {
-					return s.is_euicc && s.physical > 0 })[0];
-				/* 1, not null, when there is no eUICC to point at: the ubus
-				   signature types `slot` as an integer (ubus.uc modem_esim
-				   args), so a null is not something to send through it. 1 is
-				   the daemon's own default, stated explicitly. */
-				var slot = euicc ? euicc.physical : 1;
+				/* THE SHARED RULE (wwand.format euiccSlot), not a second
+				   opinion. This site used to take the first eUICC in the list
+				   whatever its state, while the status page required an active,
+				   present one — so the two pages disagreed about the same modem
+				   at the same moment, and this one issued profile reads against
+				   a card whose APDU channel was not open. The guards that used
+				   to be argued here (physical > 0, and why) now live with the
+				   rule itself. */
+				/* NO READABLE eUICC MEANS NO READ, not a read aimed somewhere
+				   else. This used to fall back to physical slot 1 on the
+				   reasoning that the ubus arg is typed as an integer and 1 is
+				   the daemon's default — which is true about the wire and wrong
+				   about the question: with an eUICC sitting in the INACTIVE
+				   slot, slot 1 is the plain SIM, so the fallback did not ask
+				   about the eUICC, it asked about a different card. The answers
+				   were absorbed by resolveDefault and the panel rendered
+				   without an eSIM section, so the only trace was two ubus round
+				   trips per page load that could never succeed. Found by
+				   review, 2026-09-20. */
+				var slot = euicc ? euicc.physical : null;
 
 				return Promise.all([
 					callGet(name),
 					L.resolveDefault(callPlmn(name), {}),
-					L.resolveDefault(callEsim(name, 'profiles', slot, '', '', ''), {}),
-					L.resolveDefault(callEsim(name, 'backend', slot, '', '', ''), {}),
+					slot ? L.resolveDefault(callEsim(name, 'profiles', slot, '', '', ''), {})
+					     : Promise.resolve({}),
+					slot ? L.resolveDefault(callEsim(name, 'backend', slot, '', '', ''), {})
+					     : Promise.resolve({}),
 					/* carrier config: absent on modems without QMI PDC, which is
 					   normal — resolveDefault keeps the page working either way */
 					L.resolveDefault(wrpc.carrierConfig(name, 'get', ''), {}),
@@ -374,7 +377,11 @@ return view.extend({
 					         /* the slot the eSIM reads above were made against,
 					            so the panel's actions act on the same card it
 					            listed — see wwand/esim.js render() */
-					         slots: slots, esimSlot: slot, esim: esimData,
+					         /* the panel still needs an integer for its actions;
+					            the daemon's own default stands in when there is
+					            no eUICC to act on, and with no profiles listed
+					            there is nothing there to act on either */
+					         slots: slots, esimSlot: slot ?? 1, esim: esimData,
 					         mbnSel: res[4] || {}, mbnList: (res[5] || {}).configs || [] };
 				});
 			});
