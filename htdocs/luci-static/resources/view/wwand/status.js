@@ -383,6 +383,16 @@ function renderLive(name, modem, graphs, board) {
 			[ term(_('Mode'), _('Control protocol wwand uses to drive this modem: QMI (Qualcomm native), MBIM (the USB standard) or NCM (AT commands with an ethernet-style data port)')),
 				(modem.protocol || '?').toUpperCase() ],
 		];
+		/* THE RADIO'S TWO SWITCHES, which are not the same switch. The software
+		   one is wwand's to set and it switches it back on at init; the hardware
+		   one is a physical switch or a host airplane-mode toggle, and a modem
+		   held off by it will never register however often it is reset. Shown
+		   only when the modem reports it (MBIM today), and only when something
+		   is off — "both on" is the ordinary case and needs no row. */
+		if (modem.radio && (modem.radio.hw === 0 || modem.radio.sw === 0))
+			mdmRows.push([ term(_('Radio'), _('The modem has two independent radio switches. Software is the one wwand controls and switches on at start-up; hardware is a physical switch or an airplane-mode toggle on the host, which wwand cannot override — a modem held off by it will not register no matter how often it is reset.')),
+				E('strong', { 'style': 'color:#da3' }, [ modem.radio.hw === 0
+					? _('off (hardware switch)') : _('off (software)') ]) ]);
 		/* modem identity read via the backend's native path (QMI DMS, MBIM
 		   device caps, AT CGMI/CGMR) — absent fields are hidden */
 		if (modem.manufacturer) mdmRows.push([ _('Manufacturer'), modem.manufacturer ]);
