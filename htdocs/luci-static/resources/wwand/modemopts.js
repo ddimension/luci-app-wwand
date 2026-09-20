@@ -606,8 +606,27 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
-		o = s.taboption(tab, form.Flag, 'location', _('Enable GPS/location'),
-			_('Start the modem GNSS engine and expose position over ubus.'));
+		/* TWO DIFFERENT PATHS, and this option was labelled as the other one.
+		   `location` is the QMI LOC service, which is documented as broken on
+		   Quectel (docs/backend-interface.md) and is QMI-only; `gnss` runs the
+		   vendor AT command that actually starts the receiver and is where the
+		   NMEA port comes from. A flag that said "Enable GPS/location" and
+		   wrote `location` sent every Quectel owner down the path that does not
+		   work, with no way to find the one that does — `gnss` had no UI at
+		   all. */
+		o = s.taboption(tab, form.Flag, 'gnss', _('GNSS receiver'),
+			_('Switch the modem\'s GNSS receiver on with the vendor AT command. This is the path that works on Quectel and ASR modems; the NMEA port it feeds is reported as <em>gps_port</em>. Install <em>wwand-gps</em> to have ugps pointed at that port automatically and the position published over ubus.'));
+		o.default = '0';
+		bind(o);
+
+		o = s.taboption(tab, form.Flag, 'gnss_set_time', _('Set the clock from GNSS'),
+			_('Let ugps step the system clock from the NMEA time. Off by default — the router already has an NTP client, and two things setting the clock is one more than any box needs. For installs with no RTC where the modem is the only time source.'));
+		o.default = '0';
+		o.depends('gnss', '1');
+		bind(o);
+
+		o = s.taboption(tab, form.Flag, 'location', _('QMI location service'),
+			_('Start the QMI LOC service and expose its position over ubus. QMI only, and known to be broken on Quectel modems — on those use the GNSS receiver above instead. Leave off unless a modem is known to serve LOC.'));
 		o.default = '0';
 		bind(o);
 

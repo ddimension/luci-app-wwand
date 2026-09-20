@@ -17,6 +17,7 @@ var callContexts = wrpc.contexts;
 var callSignal = wrpc.signal;
 var callCells = wrpc.cells;
 var callDatapath = wrpc.datapath;
+var callGps = wrpc.gps;
 var callCtxStatus = wrpc.ctxStatus;
 var callSlots = wrpc.slots;
 var callSwitchSlot = wrpc.switchSlot;
@@ -160,6 +161,94 @@ function capsBadges(caps) {
 			[ labels[s] || s ]);
 	});
 }
+/* GNSS: the port wwand found, the receiver it started, and the position ugps
+   read off it. Three pieces in two processes, and this is the one place they
+   are shown together.
+
+   Rendered only when there is something to say — a box without wwand-gps
+   installed, or without `option gnss`, gets no panel rather than an empty one.
+
+   THE MAP IS A LINK, NOT A TILE. Embedding a tile layer would have the
+   router's own web interface fetch from a third party the moment anyone opens
+   the status page, and send them this router's position to do it. A link is
+   the user's own choice, taken in their own browser, at the moment they make
+   it. */
+function renderGps(g) {
+	if (!g || g.error || (!g.port && !g.reader))
+		return null;
+
+	var term = fmt.term;
+	var rows = [];
+
+	/* ugps ANSWERS IN STRINGS and uses an EMPTY one for a field it has no value
+	   for — "elevation": "", "satellites": "" (measured on a GL-X3000,
+	   2026-09-20). `!= null` would let every one of those through and render
+	   `+"" = 0` as "0.0 m", which reads as a measurement rather than as the
+	   absence of one. */
+	function have(k) {
+		var v = g[k];
+		return (v != null && v !== '') ? v : null;
+	}
+
+	if (g.port)
+		rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration and never opens it — it is reported so a reader can be pointed at it, and wwand-gps does exactly that for ugps.')),
+			g.port ]);
+
+	rows.push([ term(_('Receiver'), _('Whether the modem\'s own GNSS engine has been switched on. wwand starts it with the vendor AT command when `option gnss` is set; without that the port exists and nothing is sent on it.')),
+		g.receiver_started ? _('running')
+			: (g.receiver ? _('requested, not started') : _('off')) ]);
+
+	if (!g.reader)
+		rows.push([ term(_('Reader'), _('ugps is what parses the NMEA and publishes a position. Not answering means it is not running — which is a different thing from having no fix.')),
+			E('span', { 'style': 'color:#da3' }, [ _('ugps is not answering') ]) ]);
+
+	if (g.fix) {
+		var lat = +have('latitude'), lon = +have('longitude');
+
+		rows.push([ term(_('Position'), _('Latitude and longitude as ugps last parsed them.')),
+			E('span', {}, [
+				'%.5f, %.5f'.format(lat, lon), ' ',
+				/* geo: is the RFC 5870 URI — the browser hands it to whatever
+				   map the user actually has, rather than this page choosing
+				   one for them. The OSM link is the fallback for a desktop
+				   browser with no geo: handler. */
+				E('a', { 'href': 'geo:%f,%f'.format(lat, lon) }, [ _('open in map') ]),
+				' · ',
+				E('a', { 'href': 'https://www.openstreetmap.org/?mlat=%f&mlon=%f#map=15/%f/%f'.format(lat, lon, lat, lon),
+				         'target': '_blank', 'rel': 'noreferrer noopener' }, [ 'OpenStreetMap' ])
+			]) ]);
+
+		if (have('elevation') != null)
+			rows.push([ _('Elevation'), '%.1f m'.format(+have('elevation')) ]);
+		if (have('course') != null)
+			rows.push([ _('Course'), '%.0f°'.format(+have('course')) ]);
+		if (have('speed') != null)
+			rows.push([ term(_('Speed'), _('Ground speed as reported by the receiver, in knots — that is the NMEA unit and ugps passes it through.')),
+				'%.1f kn'.format(+have('speed')) ]);
+		/* how old the fix is. A receiver that lost sky keeps answering with the
+		   last position it had, so "where" without "when" is the half that
+		   misleads. */
+		if (have('age') != null)
+			rows.push([ term(_('Fix age'), _('Seconds since ugps last parsed a position. A receiver that has lost the sky keeps reporting the last fix it had, so the age is what says whether it is still current.')),
+				'%d s'.format(+have('age')) ]);
+	}
+	else if (g.reader) {
+		rows.push([ _('Position'), E('span', { 'style': 'color:#888' },
+			[ _('no fix yet') ]) ]);
+	}
+
+	if (have('satellites') != null)
+		rows.push([ term(_('Satellites'), _('How many satellites the receiver is currently using. A cold start outdoors typically needs a minute or two; indoors it may never reach a fix.')),
+			'' + have('satellites') ]);
+	if (have('HDOP') != null)
+		rows.push([ term(_('HDOP'), _('Horizontal dilution of precision: how favourably the satellites in use are spread. Lower is better — under 2 is good, over 5 means the position is only roughly right.')),
+			'' + have('HDOP') ]);
+
+	return E('div', { 'class': 'cbi-section' }, [
+		E('h3', {}, _('GNSS')), tbl(rows)
+	]);
+}
+
 /* Datapath / muxing: the link-layer config wwand applied at datapath setup
    (backend, QMAP aggregation the modem negotiated, endpoint) plus the live
    aggregation seen on the wire — the mean number of packets the modem packs
@@ -315,7 +404,11 @@ function renderLive(name, modem, graphs, board) {
 		cachedCall(name, 'cells', 3, function() { return callCells(name); }),
 		L.resolveDefault(callContexts(), {}),
 		cachedCall(name, 'slots', 15, function() { return callSlots(name); }),
-		cachedCall(name, 'datapath', 5, function() { return callDatapath(name); })
+		cachedCall(name, 'datapath', 5, function() { return callDatapath(name); }),
+		/* GNSS: cheap (one ubus hop to wwand, one to ugps) but it changes on
+		   the second, so a short cache rather than none. Absent when wwand-gps
+		   is not installed, which is the ordinary case and renders nothing. */
+		cachedCall(name, 'gps', 3, function() { return callGps(name); })
 	]).then(function(res) {
 		/* The eUICC's profile list, and ONLY when the active slot is one.
 		   Reading it walks an APDU channel to the card, which is expensive
@@ -346,13 +439,14 @@ function renderLive(name, modem, graphs, board) {
 			   keep apart from "not read". An eUICC that genuinely has none answers
 			   profiles: [], and an empty array is truthy, so that still reads as
 			   installed-none (openwrt/luci#8917). */
-			res[5] = (pr && pr.ok !== false && pr.profiles) ? pr.profiles : null;
+			res[6] = (pr && pr.ok !== false && pr.profiles) ? pr.profiles : null;
 			return res;
 		});
 	}).then(function(res) {
 		var sig = res[0] || {}, cells = (res[1] || {}).cells || {};
 		var allCtx = res[2] || {};
 		var dpath = res[4] || {};
+		var gpsInfo = res[5] || {};
 		var myCtx = Object.keys(allCtx)
 			.filter(function(k){ return allCtx[k].modem == name; })
 			.map(function(k){ return { name: k, cfg: allCtx[k] }; });
@@ -777,7 +871,7 @@ function renderLive(name, modem, graphs, board) {
 					operator: sl.active ? iName : null,
 					imsi:     sl.active ? modem.imsi : null,
 					pin:      sl.active ? pinTxt : null,
-					profiles: fmt.euiccReadable(sl) ? (res[5] || null) : null,
+					profiles: fmt.euiccReadable(sl) ? (res[6] || null) : null,
 					showLogical: showLogical,
 					buttons: (!sl.active && sl.card == 'present') ? [
 						E('button', { 'class': 'btn cbi-button cbi-button-apply',
@@ -844,6 +938,10 @@ function renderLive(name, modem, graphs, board) {
 		/* --- datapath & muxing (aggregation) --- */
 		var dpanel = renderDatapath(dpath);
 		if (dpanel) out.push(dpanel);
+
+		/* --- GNSS (wwand-gps + ugps) --- */
+		var gpanel = renderGps(gpsInfo);
+		if (gpanel) out.push(gpanel);
 
 		/* --- carrier aggregation (active carriers) --- unified cell columns --- */
 		if (cells.ca && cells.ca.length) {
