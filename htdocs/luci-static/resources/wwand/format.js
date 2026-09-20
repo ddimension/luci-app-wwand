@@ -647,6 +647,69 @@ return baseclass.extend({
 		return _('searching…');
 	},
 
+	/* MbimDataSubclass -> the words for it (libmbim 1.32.0 mbim-enums.h
+	   :1867-1872). A BITMASK, so more than one bit can be set; the names are
+	   3GPP's own spellings of how 5G is attached.
+
+	   This is the authoritative answer to NSA-vs-SA. Everywhere else on this
+	   page that distinction is INFERRED — from whether a 5G cell sits beside an
+	   LTE anchor — which is a good guess and still a guess. MBIMEx v3 has the
+	   modem say it, so when it does, the page says where the answer came from
+	   rather than presenting both the same way. */
+	DATA_SUBCLASS: [
+		[ 1 << 0, 'ENDC' ],        /* 5G on an LTE anchor — NSA */
+		[ 1 << 1, '5G NR' ],       /* standalone */
+		[ 1 << 2, 'NEDC' ],
+		[ 1 << 3, 'ELTE' ],
+		[ 1 << 4, 'NGENDC' ],
+	],
+
+	fmtDataSubclass: function(v) {
+		if (v == null || v === 0)
+			return null;
+
+		var out = [];
+
+		this.DATA_SUBCLASS.forEach(function(p) {
+			if (v & p[0]) out.push(p[1]);
+		});
+
+		/* an unknown bit is reported as itself rather than dropped: a modem
+		   setting one is telling us something this table does not know yet */
+		return out.length ? out.join(' + ') : ('0x' + Number(v).toString(16));
+	},
+
+	/* MbimFrequencyRange (libmbim 1.32.0 mbim-enums.h:1627-1629), spelled out.
+	   A bitmask, because carrier aggregation can span both ranges.
+
+	   "FR1" is 3GPP's name and means nothing to a reader who has not looked it
+	   up — and the reason to show this row at all is that the two ranges behave
+	   completely differently: FR1 travels and penetrates, FR2 is fast and stops
+	   at a wall. The band limits are 3GPP TS 38.104 §5.2 (FR1 410 MHz–7.125 GHz
+	   since Rel-17; FR2 24.25–71 GHz), quoted as the round numbers people
+	   actually use. */
+	FREQUENCY_RANGE: [
+		[ 1, 'FR1', _('sub-6 GHz') ],
+		[ 2, 'FR2', _('mmWave, 24 GHz and above') ],
+	],
+
+	fmtFrequencyRange: function(v, verbose) {
+		if (v == null || v === 0)
+			return null;
+
+		var out = [];
+
+		this.FREQUENCY_RANGE.forEach(function(p) {
+			if (v & p[0])
+				out.push(verbose === false ? p[1] : '%s (%s)'.format(p[1], p[2]));
+		});
+
+		/* an unknown bit is reported rather than dropped, as with the data
+		   subclass: a modem setting one is saying something this table does
+		   not know */
+		return out.length ? out.join(' + ') : ('0x' + Number(v).toString(16));
+	},
+
 	/* The SIM column of the modem list. `slots` is the modem_sim_slots reply
 	   when the caller has one — the readiness word alone answered "can this
 	   modem use its card", which is worth knowing and is not the question

@@ -612,6 +612,41 @@ function renderLive(name, modem, graphs, board) {
 			srvRows.push([ term(_('Problem'), _('Registration problem reported by the network — the 3GPP reject cause explains why the attach was refused')),
 				E('span', { 'style': 'color:#c00;font-weight:bold' }, [ msg ]) ]);
 		}
+		/* THE EPS ATTACH, separately from the registration above, because they
+		   fail apart: a modem can register and still have its attach refused —
+		   a wrong attach APN does exactly that, and leaves the page saying
+		   "searching…" with nothing to explain it (reproduced on a GL-X3000 by
+		   configuring a bogus APN, 2026-09-20). MBIMEx v3's LTE Attach Info
+		   carries the 3GPP cause; the daemon reads it when registration times
+		   out. Only rendered when there is something to say. */
+		var ai = modem.attach_info;
+		/* ceer_text belongs in this condition, not only in the body: a modem
+		   that gives only an extended error report — no cause, no attach state
+		   — is precisely the interesting case, and it rendered no row at all
+		   while the body below treated that same text as an error. Raised by
+		   review, 2026-09-20. */
+		if (ai && (ai.nw_error != null || ai.apn || ai.state_text || ai.ceer_text)) {
+			var aMsg = [];
+			if (ai.nw_error != null)
+				aMsg.push(ai.nw_error_text || _('cause %d').format(ai.nw_error));
+			if (ai.state_text)
+				aMsg.push(ai.state_text);
+			/* the modem's own extended error report (AT+CEER), which is where
+			   the reason usually lives: MBIM reports the attach STATE reliably
+			   and leaves NwError empty on most firmware. Shown even when a
+			   numeric cause was derived from it, because the modem's wording is
+			   often more specific than the 3GPP table entry. Skipped when it
+			   merely repeats the mapped text. */
+			if (ai.ceer_text && ai.ceer_text != ai.nw_error_text)
+				aMsg.push(ai.ceer_text);
+			if (ai.apn)
+				aMsg.push(_('APN %s').format(ai.apn));
+
+			srvRows.push([ term(_('EPS attach'), _('The LTE/5G attach the modem performed, and the 3GPP cause when the network refused it. Reported separately from registration because the two can fail independently — a wrong attach APN registers fine and never attaches')),
+				(ai.nw_error != null || ai.ceer_text)
+					? E('span', { 'style': 'color:#c00;font-weight:bold' }, [ aMsg.join(' · ') ])
+					: aMsg.join(' · ') ]);
+		}
 		var opLine = fmt.fmtOperator(reg);
 		if (opLine) {
 			/* resolve the PLMN against the bundled MCC/MNC table; append the
@@ -624,18 +659,28 @@ function renderLive(name, modem, graphs, board) {
 		/* the daemon-identified fine access technology (NB-IoT/LTE-M/5G-SA/…, from
 		   AT where QMI/MBIM can't name it) wins; else the LTE/5G block derives it */
 		var techTerm = term(_('Technology'), _('Radio access technology of the current connection (LTE, 5G NSA = 5G carrier on an LTE anchor, 5G SA = standalone 5G, NB-IoT/LTE-M = IoT modes)'));
+		/* SAID, not inferred. Every other source for this row derives the
+		   NSA/SA distinction from the shape of the cell environment — a 5G
+		   carrier beside an LTE anchor reads as NSA. That is a good guess and
+		   still a guess. MBIMEx v3's Packet Service carries MbimDataSubclass,
+		   where the modem states it; when that is present it is appended so the
+		   reader can see the two agree (or do not). */
+		var ps = modem.packet_service || {};
+		var subclass = fmt.fmtDataSubclass(ps.data_subclass);
+		var fr = fmt.fmtFrequencyRange(ps.frequency_range);
+		var techNote = subclass ? ' · ' + subclass : '';
 		if (modem.rat)
-			srvRows.push([ techTerm, modem.rat ]);
+			srvRows.push([ techTerm, modem.rat + techNote ]);
 		/* the daemon-reported registration tech (reg.tech) covers modems
 		   without a cell environment — a cells-less huawei-cdc stack names
 		   its mode from ^HCSQ; only shown when neither source above applies */
 		if (!modem.rat && !lc && reg.tech)
-			srvRows.push([ techTerm, reg.tech.toUpperCase() ]);
+			srvRows.push([ techTerm, reg.tech.toUpperCase() + techNote ]);
 		if (lc) {
 			var dsd = cells.dsd, svl = (cells.serving||{}).lte;
 			var tech = 'LTE' + ((fmt.hasSignal(nr.rsrp) || (cells.serving||{}).nr) ? ' + 5G NR' : '');
 			if (dsd && dsd.mode && dsd.mode != 'LTE') tech += ' · ' + dsd.mode;
-			if (!modem.rat) srvRows.push([ techTerm, tech ]);
+			if (!modem.rat) srvRows.push([ techTerm, tech + techNote ]);
 			srvRows.push([ term(_('Band'), _('3GPP frequency band of the serving cell (B… = LTE, n… = 5G NR) — lower bands travel further, higher bands carry more bandwidth')),
 				(svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);
 			srvRows.push([ term(_('Frequency'), _('Downlink centre frequency of the serving cell · channel bandwidth')),
@@ -656,6 +701,18 @@ function renderLive(name, modem, graphs, board) {
 			srvRows.push([ term(_('5G cell'), _('The 5G NR serving cell: band · centre frequency · bandwidth · Physical Cell ID')),
 				'%s · %s MHz%s · PCI %s'.format(
 				nband, nf ? nf.mhz.toFixed(1) : '?', nbw, npci) ]);
+		}
+		/* FR1 = sub-6 GHz, FR2 = mmWave. Only MBIMEx reports it, so the row
+		   simply is not there on the backends that do not. */
+		if (fr) {
+			srvRows.push([ term(_('Frequency range'), _('5G frequency range as the modem reports it: FR1 = sub-6 GHz, FR2 = mmWave (24 GHz and above)')), fr ]);
+		}
+		/* the tracking area the modem ATTACHED in, which is not always the one
+		   the serving cell advertises — a modem that has moved cells without
+		   re-attaching shows the difference here */
+		if (ps.tai && ps.tai.mcc != null) {
+			srvRows.push([ term(_('Attach TAI'), _('Tracking Area Identity recorded at attach: PLMN and Tracking Area Code. Differs from the serving cell TAC when the modem moved without re-attaching')),
+				'%s/%s · TAC %d'.format(ps.tai.mcc, fmt.fmtMnc(ps.tai.mnc), ps.tai.tac) ]);
 		}
 
 		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [

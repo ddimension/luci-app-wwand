@@ -329,5 +329,34 @@ eq(fmt.euiccSlot(undefined), null, 'euicc: ...and so does a missing one');
 	eq(fmt.collapseScan(undefined), [], 'collapseScan: no list is an empty list');
 })();
 
+/* --- MBIMEx data subclass / frequency range -------------------------------
+ *
+ * Both are BITMASKS, and the data subclass is the authoritative answer to a
+ * question the rest of the page infers: 5G on an LTE anchor (ENDC) versus
+ * standalone. Values from libmbim 1.32.0 mbim-enums.h:1867-1872 and :1627-1629.
+ */
+eq(fmt.fmtDataSubclass(1 << 0), 'ENDC', 'subclass: bit 0 is ENDC — 5G NSA');
+eq(fmt.fmtDataSubclass(1 << 1), '5G NR', 'subclass: bit 1 is standalone');
+eq(fmt.fmtDataSubclass((1 << 0) | (1 << 3)), 'ENDC + ELTE',
+   'subclass: it is a mask, so several can be set at once');
+/* an unknown bit says so rather than vanishing: a modem setting one is telling
+   us something this table does not know yet */
+eq(fmt.fmtDataSubclass(1 << 20), '0x100000', 'subclass: an unknown bit is reported as itself');
+eq(fmt.fmtDataSubclass(0), null, 'subclass: zero means the modem said nothing');
+eq(fmt.fmtDataSubclass(null), null, 'subclass: ...and so does an absent field');
+
+/* SPELLED OUT by default: "FR1" is 3GPP's name and means nothing to a reader
+   who has not looked it up, and the whole reason to show the row is that the
+   two ranges behave completely differently. */
+eq(fmt.fmtFrequencyRange(1), 'FR1 (sub-6 GHz)', 'range: FR1 is resolved, not left as a code');
+eq(fmt.fmtFrequencyRange(2), 'FR2 (mmWave, 24 GHz and above)', 'range: ...and so is FR2');
+eq(fmt.fmtFrequencyRange(3), 'FR1 (sub-6 GHz) + FR2 (mmWave, 24 GHz and above)',
+   'range: aggregation can span both');
+/* the bare form stays available for places with no room for the gloss */
+eq(fmt.fmtFrequencyRange(1, false), 'FR1', 'range: the short form is still reachable');
+eq(fmt.fmtFrequencyRange(1 << 5), '0x20', 'range: an unknown bit is reported as itself');
+eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
+eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
+
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);
