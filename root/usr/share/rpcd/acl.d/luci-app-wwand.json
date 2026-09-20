@@ -47,6 +47,7 @@
 					"modem_set_network_selection",
 					"modem_set_protocol",
 					"modem_set_settings",
+					"set_log_level",
 					"modem_sim_pin_lock",
 					"modem_sim_pin_verify",
 					"modem_sim_puk",

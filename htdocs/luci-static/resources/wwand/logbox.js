@@ -2,6 +2,7 @@
 'require baseclass';
 'require dom';
 'require rpc';
+'require wwand.rpc as wrpc';
 'require ui';
 
 /* The wwand log, on the status page, with the filters the log's own structure
@@ -210,6 +211,16 @@ return baseclass.extend({
 		};
 
 		const reload = () => {
+			/* RE-READ THE DAEMON'S LEVEL HERE, not only at first render. A
+			   daemon that was down when the page opened left the control
+			   disabled and the note stale, and nothing ever asked again — so
+			   starting wwand meant reloading the browser page to get the
+			   control back. Every path that refreshes the log (the button, the
+			   auto-refresh tick, the page's modem switch) comes through this
+			   function, which is exactly when the answer may have changed.
+			   Raised by review, 2026-09-20. */
+			readDaemonLevel();
+
 			return callLogRead(FETCH[count.value] || 600, false, true).then((entries) => {
 				fetched = entries.length;
 				rows = [];
@@ -288,6 +299,59 @@ return baseclass.extend({
 				}, 5000);
 		});
 
+		/* THE DAEMON'S OWN LEVEL, and deliberately not next to the filters.
+		   Everything in the row above narrows what is SHOWN from lines already
+		   fetched; this one changes what the daemon WRITES. Putting them side
+		   by side would read as one more filter, and the difference matters:
+		   raising this one to debug costs the box log volume, and lowering it
+		   throws away lines nothing can get back.
+
+		   RUNTIME ONLY, on purpose. `set_log_level` does not touch uci
+		   (wwand main.uc), so a daemon restart or a config reload returns to
+		   the configured level — which is what you want from a debugging
+		   switch: it cannot be left on by accident for the life of the box. */
+		const daemonLevel = E('select', { 'class': 'cbi-input-select' },
+			SEVERITY.slice(3).map((s) => E('option', { 'value': s }, [ s ])));
+		const daemonNote = E('span', { 'style': 'color:#666' }, [ '' ]);
+
+		/* NO ANSWER IS ITS OWN ANSWER. `resolveDefault` turns a refusal or a
+		   dead daemon into `{}`, and a control that silently keeps showing the
+		   first option would claim the daemon logs at `err` when nothing is
+		   running at all. So an unreadable level disables the control and says
+		   why — and a pending change that never confirms says so too, rather
+		   than leaving "applying…" on screen for good. */
+		const readDaemonLevel = () => L.resolveDefault(wrpc.globals(), {})
+			.then((g) => {
+				const ok = !!(g && g.log_level);
+
+				daemonLevel.disabled = !ok;
+
+				if (ok) {
+					daemonLevel.value = g.log_level;
+					daemonNote.textContent = '';
+				} else {
+					daemonNote.textContent = _('daemon not answering');
+				}
+
+				return ok;
+			});
+
+		daemonLevel.addEventListener('change', () => {
+			const want = daemonLevel.value;
+
+			daemonNote.textContent = _('applying…');
+
+			/* read back rather than trust the reply: the daemon is the only
+			   thing that knows what it ended up at, and a refused level must
+			   not leave the control showing a lie */
+			L.resolveDefault(wrpc.setLogLevel(want), {})
+				.then(() => readDaemonLevel())
+				.then((ok) => {
+					if (ok && daemonLevel.value != want)
+						daemonNote.textContent = _('refused');
+				});
+		});
+
 		const node = E('div', { 'class': 'cbi-section' }, [
 			E('h3', {}, [ _('wwand log') ]),
 			E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:.5em;align-items:center;margin-bottom:.5em' }, [
@@ -295,10 +359,21 @@ return baseclass.extend({
 				E('label', { 'style': 'display:flex;align-items:center;gap:.3em;cursor:pointer' },
 					[ liveBox, _('auto-refresh') ]),
 			]),
+			E('div', { 'style': 'display:flex;flex-wrap:wrap;gap:.4em;align-items:center;margin-bottom:.6em' }, [
+				E('span', { 'style': 'color:#666' }, [ _('Daemon writes at') ]),
+				daemonLevel,
+				E('span', {
+					'title': _('The level the wwand PROCESS logs at — not a display filter. Takes effect at once and is NOT written to the configuration: a restart or a config reload returns to the configured level.'),
+					'style': 'cursor:help;text-decoration:underline dotted',
+				}, [ _('(runtime only)') ]),
+				daemonNote,
+			]),
 			out,
 			foot,
 		]);
 
+		/* reload() reads the daemon level itself (see there), so the first
+		   render needs no separate call */
 		reload();
 
 		return {

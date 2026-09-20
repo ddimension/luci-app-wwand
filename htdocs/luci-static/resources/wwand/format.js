@@ -540,9 +540,23 @@ return baseclass.extend({
 			if (srv.nr.bandwidth_mhz != null) { bw.nr = srv.nr.bandwidth_mhz; haveBw.nr = true; }
 		}
 
+		/* STACKED, not side by side. The second series is the TOTAL — LTE plus
+		   5G — so the picture reads as one link: the lower line is what the
+		   anchor carries, the upper one where the whole aggregate sits, and the
+		   gap between them is the 5G contribution. Drawn absolutely, "LTE 2 +
+		   5G 1" put lines at 2 and 1, which invites reading the 5G leg as the
+		   smaller half of a link carrying 2 rather than the third carrier of a
+		   link carrying 3.
+
+		   The total series stays null while no 5G carrier serves, so a
+		   single-RAT link draws one line instead of two identical ones. Same
+		   for bandwidth. */
+		var caTotal = n.nr ? (n.lte + n.nr) : null;
+		var bwTotal = (haveBw.nr && n.nr) ? (bw.lte + bw.nr) : null;
+
 		return {
-			ca: [ n.lte || null, n.nr || null ],
-			bw: [ haveBw.lte ? bw.lte : null, haveBw.nr ? bw.nr : null ],
+			ca: [ n.lte || null, caTotal ],
+			bw: [ haveBw.lte ? bw.lte : null, bwTotal ],
 		};
 	},
 

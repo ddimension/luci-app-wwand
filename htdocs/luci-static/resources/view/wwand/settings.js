@@ -356,6 +356,7 @@ return view.extend({
 				   without an eSIM section, so the only trace was two ubus round
 				   trips per page load that could never succeed. Found by
 				   review, 2026-09-20. */
+				var euicc = fmt.euiccSlot(slots);
 				var slot = euicc ? euicc.physical : null;
 
 				return Promise.all([
@@ -772,7 +773,7 @@ return view.extend({
 				_('A single 5G SA cell as "pci:arfcn:scs:band".')),
 			row(_('Persist in modem'),
 				E('label', { 'style': 'font-weight:normal' }, [ persistChk, ' ' + _('Store the lock in modem non-volatile memory') ]),
-				null),
+				_('Without this the lock is lost on the next modem reset — which is the safer default: a persisted lock survives a reboot, so a cell that disappears leaves the modem searching for it with no obvious way back short of clearing the lock by hand.')),
 			/* the daemon's live read-back: what the modem ACTUALLY has locked */
 			(function() {
 				var lockTxt = fmt.fmtLocks((data.info || {}).locks);
@@ -998,7 +999,9 @@ return view.extend({
 					E('label', { 'class': 'cbi-value-title' }, _('Storage')),
 					E('div', { 'class': 'cbi-value-field' }, [ storageSel, ' ',
 						E('button', { 'class': 'btn cbi-button cbi-button-action',
-							click: ui.createHandlerFn(self, load) }, _('Load')) ]),
+							click: ui.createHandlerFn(self, load) }, _('Load')),
+						E('div', { 'class': 'cbi-value-description' },
+							_('Which store to list and delete from — the SIM card or the modem\'s own memory. They are read one at a time, so a message you expect and cannot see may simply be in the other one. A full store silently stops accepting new messages.')) ]),
 				]),
 				body,
 			]),
@@ -1051,10 +1054,14 @@ return view.extend({
 			};
 		};
 
-		var row = function(label, node) {
+		/* same signature as the cell-lock row() above — these six controls
+		   carried no explanation at all, and a band picker is exactly the kind
+		   of thing where "what happens if I leave it empty" is the question */
+		var row = function(label, node, hint) {
 			return E('div', { 'class': 'cbi-value' }, [
 				E('label', { 'class': 'cbi-value-title' }, label),
-				E('div', { 'class': 'cbi-value-field' }, [ node ]),
+				E('div', { 'class': 'cbi-value-field' },
+					hint ? [ node, E('div', { 'class': 'cbi-value-description' }, hint) ] : [ node ]),
 			]);
 		};
 
@@ -1103,12 +1110,18 @@ return view.extend({
 			modemSel,
 			warns || '',
 			E('div', { 'class': 'cbi-section' }, [
-				row(_('Radio technologies'), E('div', {}, modeBoxes)),
-				row(_('UE usage'), usageSel),
-				row(_('Roaming'), roamSel),
-				row(_('LTE bands'), ltePicker),
-				row(_('NR5G SA bands'), saPicker),
-				row(_('NR5G NSA bands'), nsaPicker),
+				row(_('Radio technologies'), E('div', {}, modeBoxes),
+					_('Which generations the modem may use. Unchecking one stops it being used at all — a modem restricted to 5G will not fall back to LTE where 5G is absent, so leave everything the network offers checked unless you are deliberately pinning a technology.')),
+				row(_('UE usage'), usageSel,
+					_('The 3GPP usage setting the modem reports to the network: whether this device is here for data or for voice. It is a preference, not a command — what the network then does about voice continuity is its decision. Data centric is what a router wants.')),
+				row(_('Roaming'), roamSel,
+					_('Which networks the modem may register on. "Home only" refuses roaming partners outright — useful against accidental cross-border charges, and the reason a SIM that works elsewhere may show "no service" here.')),
+				row(_('LTE bands'), ltePicker,
+					_('Restrict LTE to these bands. Leave everything unchecked to let the modem use all bands it supports — a narrowed list is a way to pin a known-good band, not a way to improve a working link.')),
+				row(_('NR5G SA bands'), saPicker,
+					_('5G bands for standalone operation, where the modem talks 5G only with no LTE anchor.')),
+				row(_('NR5G NSA bands'), nsaPicker,
+					_('5G bands for non-standalone operation, where a 5G carrier rides on an LTE anchor. Which of the two lists applies depends on the network: the Status page names the mode the modem is actually in.')),
 				E('p', { 'style': 'margin:6px 0 0;color:var(--fg-color-2,#666)' }, E('em', {},
 					_('Leave every band unchecked (and the fallback empty) to let the modem use all supported bands.'))),
 			]),

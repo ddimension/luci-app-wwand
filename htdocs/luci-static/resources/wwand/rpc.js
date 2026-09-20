@@ -20,6 +20,11 @@ return baseclass.extend({
 	   board …) — wwand.modemopts needs .board/.modems;
 	   `contexts` unwraps the contexts map (status page connection cards). */
 	status:     rpc.declare({ object: 'wwand', method: 'status', expect: { modems: {} } }),
+	/* the daemon's globals block — carries the level the PROCESS logs at, which
+	   the configured value does not tell you once it has been overridden */
+	globals:    rpc.declare({ object: 'wwand', method: 'status', expect: { globals: {} } }),
+	setLogLevel: rpc.declare({ object: 'wwand', method: 'set_log_level',
+	                           params: [ 'level' ], expect: {} }),
 	statusRaw:  rpc.declare({ object: 'wwand', method: 'status', expect: { '': {} } }),
 	contexts:   rpc.declare({ object: 'wwand', method: 'status', expect: { contexts: {} } }),
 

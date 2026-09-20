@@ -131,8 +131,13 @@ return view.extend({
 		   the live status columns added below */
 		s.children.forEach(function(o) { o.modalonly = true; });
 
-		var col = function(name, title, fn) {
-			var o = s.option(form.DummyValue, name, title);
+		/* `hint` becomes the column header's tooltip, via the same fmt.term()
+		   the Status page uses for its row labels. A grid column has room for
+		   one or two words and no room to say what they mean, which is why
+		   these seven headers carried no explanation at all. */
+		var col = function(name, title, fn, hint) {
+			var o = s.option(form.DummyValue, name,
+				hint ? fmt.term(title, hint) : title);
 			o.modalonly = false;
 			o.write = function() {};
 			o.remove = function() {};
@@ -144,20 +149,27 @@ return view.extend({
 			var mi = status[sid];
 			var dev = (mi && mi.netdev) || uci.get('network', sid, 'device') || '?';
 			return dev + ((mi && mi.model) ? ' (' + mi.model + ')' : '');
-		});
+		},
+			_('The kernel network device the modem\'s data runs on, with the model behind it. A muxed connection names the child device (wwan0m1), not the parent.'));
 		col('_backend', _('Backend'), function(sid) {
 			var mi = status[sid];
 			return (mi && mi.protocol) ? mi.protocol.toUpperCase() : '—';
-		});
+		},
+			_('The control protocol wwand speaks to this modem: QMI, MBIM or NCM. Set by `option protocol`, or detected from the control device.'));
 		col('_conns', _('Connections'), function(sid) {
 			var c = conns[sid];
 			if (!c || !c.total) return '—';
 			return (c.up == c.total) ? '%d'.format(c.up) : '%d / %d'.format(c.up, c.total);
-		});
-		col('_state', _('State'), function(sid) { return fmtState(status[sid]); });
-		col('_sim', _('SIM'), function(sid) { return fmtSim(status[sid], simSlots[sid]); });
-		col('_reg', _('Registration'), function(sid) { return fmtReg(status[sid]); });
-		col('_sig', _('Signal'), function(sid) { return fmtSignal(signals[sid]); });
+		},
+			_('How many configured interfaces use this modem. Several can share one modem through different mux channels.'));
+		col('_state', _('State'), function(sid) { return fmtState(status[sid]); },
+			_('Where the modem is in its bring-up: from ABSENT through SIM_UNLOCK and REGISTERING to READY. A state that does not advance is what the log explains.'));
+		col('_sim', _('SIM'), function(sid) { return fmtSim(status[sid], simSlots[sid]); },
+			_('The card the modem is using: its readiness, which physical slot is live, and whether that slot holds an eUICC (eSIM).'));
+		col('_reg', _('Registration'), function(sid) { return fmtReg(status[sid]); },
+			_('The network the modem is registered on, or why it is not. A reject cause here is the network refusing, not the modem failing.'));
+		col('_sig', _('Signal'), function(sid) { return fmtSignal(signals[sid]); },
+			_('The current signal, per radio technology. RSRP is reception strength, RSRQ quality, SNR the noise margin — RSRP alone does not say whether the link is good.'));
 
 		/* the currently-used dial params + PIN for a modem, reconstructed from
 		   UCI (the effective config is resolved only at dial time and is not on

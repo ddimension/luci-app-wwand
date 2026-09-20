@@ -365,5 +365,54 @@ eq(fmt.fmtFrequencyRange(5), 'FR1 (sub-6 GHz) + 0x4',
 eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
 eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
 
+/* --- carrierSample: the aggregation picture is STACKED ---------------------
+ *
+ * The second series is the TOTAL, not the 5G count on its own. Drawn
+ * absolutely, "LTE 2 + 5G 1" put lines at 2 and 1, which reads as the 5G leg
+ * being the smaller half of a link carrying 2 — rather than the third carrier
+ * of a link carrying 3.
+ */
+(function () {
+	/* EN-DC: two LTE carriers plus one 5G carrier on the same link */
+	var ca = fmt.carrierSample({
+		ca: [ { role: 'PCC', bandwidth_mhz: 20 },
+		      { role: 'SCC', state: 2, bandwidth_mhz: 10 },
+		      { role: 'PCC', rat: 'nr', bandwidth_mhz: 100 } ],
+		dsd: { nr: true },
+	});
+	eq(ca.ca, [ 2, 3 ], 'carrierSample: LTE 2, total 3 — the upper line is the sum');
+	eq(ca.bw, [ 30, 130 ], 'carrierSample: ...and the bandwidth stacks the same way');
+
+	/* LTE only: ONE line, not two identical ones. A total that merely repeats
+	   the anchor says nothing and doubles the ink. */
+	var lte = fmt.carrierSample({
+		ca: [ { role: 'PCC', bandwidth_mhz: 20 } ],
+	});
+	eq(lte.ca, [ 1, null ], 'carrierSample: with no 5G leg the total line is absent');
+	eq(lte.bw, [ 20, null ], 'carrierSample: ...for bandwidth too');
+
+	/* A 5G band that is VISIBLE but not serving must not draw a line — the
+	   RG502QEA reports a neighbouring NR band while parked on LTE
+	   (format.js, HW note 2026-09-12). `dsd.nr` is the gate. */
+	var parked = fmt.carrierSample({
+		serving: { lte: { bandwidth_mhz: 10 }, nr: { bandwidth_mhz: 100 } },
+		dsd: { nr: false },
+	});
+	eq(parked.ca, [ 1, null ], 'carrierSample: a visible-but-not-serving 5G band draws nothing');
+
+	/* ...and when it IS serving, the serving cell supplies the floor */
+	var serving = fmt.carrierSample({
+		serving: { lte: { bandwidth_mhz: 10 }, nr: { bandwidth_mhz: 100 } },
+		dsd: { nr: true },
+	});
+	eq(serving.ca, [ 1, 2 ], 'carrierSample: a serving 5G leg lifts the total to 2');
+
+	/* a deconfigured SCC is not a carrier (QmiNasScellState 0/1) */
+	var deconf = fmt.carrierSample({
+		ca: [ { role: 'PCC' }, { role: 'SCC', state: 0 } ],
+	});
+	eq(deconf.ca, [ 1, null ], 'carrierSample: an unactivated SCC is still not counted');
+})();
+
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);

@@ -109,7 +109,7 @@ const SCALES = {
 	   one of them flat against an edge. */
 	ca: { min: 0, max: 6, minmax: 2, autoscale: true, unit: '', integral: true,
 	      title: _('Aggregated carriers'),
-	      hint: _('How many downlink carriers the modem is aggregating, one line per radio technology — under EN-DC the LTE anchor and the 5G carriers are counted separately, so both lines are present at once. A secondary carrier that is configured but not activated is not counted: it carries no data. A modem that reports no carrier list at all still shows its serving cell as one carrier. The 5G line appears only while a 5G carrier is actually serving, not merely visible.') },
+	      hint: _('How many downlink carriers the modem is aggregating. The lower line is the LTE anchor; the upper one is the total including 5G, so the gap between them is what the 5G leg contributes — under EN-DC both legs serve one link, and stacking them says that better than two separate counts. A secondary carrier that is configured but not activated is not counted: it carries no data. A modem that reports no carrier list at all still shows its serving cell as one carrier. The total line appears only while a 5G carrier is actually serving, not merely visible.') },
 	bw: { min: 0, max: 100, minmax: 20, autoscale: true, unit: 'MHz',
 	      title: _('Aggregate bandwidth'),
 	      hint: _('The downlink bandwidth of the aggregated carriers added up, per radio technology — the width of the pipe, which is what carrier aggregation is for. It moves independently of the carrier count: three 10 MHz carriers are less than one 20 MHz carrier. Drawn only where the modem reports a width per carrier. The 5G line is usually absent for that reason: the 5G rows of the carrier list carry a bandwidth whose unit this tree has not verified against hardware, and a confidently wrong 100 MHz is worse than a gap.') },
@@ -159,10 +159,10 @@ const SERIES = {
 	   present is EN-DC. That is the "switched technologies" half of
 	   ddimension/wwand#14 — visible in the picture, without a RAT graph whose
 	   y-axis would have to invent an order for 2G/3G/4G/5G. */
-	ca:   [ { label: _('LTE carriers'), colour: RAT.lte },
-	        { label: _('5G carrier'),   colour: RAT.nr } ],
-	bw:   [ { label: _('LTE'),          colour: RAT.lte },
-	        { label: _('5G NR'),        colour: RAT.nr } ],
+	ca:   [ { label: _('LTE carriers'),     colour: RAT.lte },
+	        { label: _('total (LTE + 5G)'), colour: RAT.nr } ],
+	bw:   [ { label: _('LTE'),              colour: RAT.lte },
+	        { label: _('total (LTE + 5G)'), colour: RAT.nr } ],
 };
 
 /* ONE definition of how a series is stroked, used by the line in the graph and
