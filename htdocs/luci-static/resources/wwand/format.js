@@ -651,6 +651,11 @@ return baseclass.extend({
 	   :1867-1872). A BITMASK, so more than one bit can be set; the names are
 	   3GPP's own spellings of how 5G is attached.
 
+	   THE SAME TWO TABLES LIVE IN wwand's src-ucode/wwandctl_fmt.uc, because a
+	   ucode module and a browser module cannot share one. The words must match:
+	   a page and a CLI that disagree about the same value are worse than either
+	   alone, and they drifted once already. Change one, change both.
+
 	   This is the authoritative answer to NSA-vs-SA. Everywhere else on this
 	   page that distinction is INFERRED — from whether a 5G cell sits beside an
 	   LTE anchor — which is a good guess and still a guess. MBIMEx v3 has the
@@ -668,15 +673,21 @@ return baseclass.extend({
 		if (v == null || v === 0)
 			return null;
 
-		var out = [];
+		var out = [], rest = v;
 
 		this.DATA_SUBCLASS.forEach(function(p) {
-			if (v & p[0]) out.push(p[1]);
+			if (v & p[0]) { out.push(p[1]); rest &= ~p[0]; }
 		});
 
-		/* an unknown bit is reported as itself rather than dropped: a modem
-		   setting one is telling us something this table does not know yet */
-		return out.length ? out.join(' + ') : ('0x' + Number(v).toString(16));
+		/* AN UNKNOWN BIT IS REPORTED, INCLUDING BESIDE KNOWN ONES. The first
+		   version fell back to hex only when NOTHING was recognised, so 0x21
+		   came back as a bare "ENDC" and the bit this table does not know was
+		   dropped silently — the one case where saying nothing is worst, since
+		   a modem setting it is telling us something new. Found by review,
+		   2026-09-20. */
+		if (rest) out.push('0x' + Number(rest).toString(16));
+
+		return out.length ? out.join(' + ') : null;
 	},
 
 	/* MbimFrequencyRange (libmbim 1.32.0 mbim-enums.h:1627-1629), spelled out.
@@ -697,17 +708,20 @@ return baseclass.extend({
 		if (v == null || v === 0)
 			return null;
 
-		var out = [];
+		var out = [], rest = v;
 
 		this.FREQUENCY_RANGE.forEach(function(p) {
-			if (v & p[0])
+			if (v & p[0]) {
 				out.push(verbose === false ? p[1] : '%s (%s)'.format(p[1], p[2]));
+				rest &= ~p[0];
+			}
 		});
 
-		/* an unknown bit is reported rather than dropped, as with the data
-		   subclass: a modem setting one is saying something this table does
-		   not know */
-		return out.length ? out.join(' + ') : ('0x' + Number(v).toString(16));
+		/* same rule as the subclass above, and the same bug it had: a bit
+		   outside FR1/FR2 is carried, not swallowed by the two recognised */
+		if (rest) out.push('0x' + Number(rest).toString(16));
+
+		return out.length ? out.join(' + ') : null;
 	},
 
 	/* The SIM column of the modem list. `slots` is the modem_sim_slots reply

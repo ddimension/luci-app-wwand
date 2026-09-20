@@ -342,6 +342,11 @@ eq(fmt.fmtDataSubclass((1 << 0) | (1 << 3)), 'ENDC + ELTE',
 /* an unknown bit says so rather than vanishing: a modem setting one is telling
    us something this table does not know yet */
 eq(fmt.fmtDataSubclass(1 << 20), '0x100000', 'subclass: an unknown bit is reported as itself');
+/* ...INCLUDING BESIDE A KNOWN ONE. The first version fell back to hex only when
+ * nothing was recognised, so 0x21 came back as a bare "ENDC" and the bit this
+ * table does not know vanished — the one case where silence is worst. */
+eq(fmt.fmtDataSubclass(0x21), 'ENDC + 0x20',
+   'subclass: an unknown bit survives next to a known one');
 eq(fmt.fmtDataSubclass(0), null, 'subclass: zero means the modem said nothing');
 eq(fmt.fmtDataSubclass(null), null, 'subclass: ...and so does an absent field');
 
@@ -355,6 +360,8 @@ eq(fmt.fmtFrequencyRange(3), 'FR1 (sub-6 GHz) + FR2 (mmWave, 24 GHz and above)',
 /* the bare form stays available for places with no room for the gloss */
 eq(fmt.fmtFrequencyRange(1, false), 'FR1', 'range: the short form is still reachable');
 eq(fmt.fmtFrequencyRange(1 << 5), '0x20', 'range: an unknown bit is reported as itself');
+eq(fmt.fmtFrequencyRange(5), 'FR1 (sub-6 GHz) + 0x4',
+   'range: ...and survives next to a known one');
 eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
 eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
 
