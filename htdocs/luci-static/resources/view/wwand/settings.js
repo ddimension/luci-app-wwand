@@ -268,9 +268,10 @@ function plmnEditRow(e, noRat) {
 	];
 	/* the forbidden list (EF_FPLMN) has no per-RAT flags — just MCC/MNC */
 	if (!noRat)
-		cells.push(E('td', { 'class': 'td' }, [
-			plmnRatBox(e, 'gsm', '2G'), plmnRatBox(e, 'utran', '3G'),
-			plmnRatBox(e, 'eutran', '4G'), plmnRatBox(e, 'ngran', '5G') ]));
+		cells.push(E('td', { 'class': 'td' },
+			/* built from the same table the read-only list reads, so the two
+			   ends of this page cannot drift apart again */
+			fmt.PLMN_RATS.map(function(r) { return plmnRatBox(e, r.key, r.label); })));
 	cells.push(E('td', { 'class': 'td', 'style': 'width:1%' }, E('button', {
 		'class': 'btn cbi-button cbi-button-remove',
 		'click': function(ev) { var tr = ev.target.parentNode.parentNode; tr.parentNode.removeChild(tr); } }, '✕')));
@@ -282,9 +283,14 @@ function plmnTable(title, list, absentHint) {
 			(absentHint ? ' — ' + absentHint : '') ]) ]);
 
 	var rows = list.map(function(e) {
-		var rats = [ 'gsm', 'utran', 'eutran', 'ngran' ]
-			.filter(function(k) { return e[k] })
-			.map(function(k) { return k.toUpperCase() }).join(' ');
+		/* the SAME words the editor below uses. Upper-casing the internal key
+		   put "GSM UTRAN" here and "2G 3G" twelve lines further down, for the
+		   same two flags (ddimension/luci-app-wwand#10, 2026-09-21). */
+		/* '—' like the name column beside it: a record with no AcT field is a
+		   real state (an old SIM writes EF_PLMNsel, which has none), and an
+		   empty cell leaves the reader to guess whether it means "none" or
+		   "not read". Raised by Codex review, 2026-09-21. */
+		var rats = fmt.plmnRatLabels(e).join(' ') || '—';
 		return E('tr', { 'class': 'tr' }, [
 			E('td', { 'class': 'td' }, [ fmt.fmtPlmn(e.mcc, e.mnc, e.mnc_digits) ]),
 			/* the modem's own name last: a record with no numeric id is not

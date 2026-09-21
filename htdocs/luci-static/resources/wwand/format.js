@@ -499,6 +499,36 @@ return baseclass.extend({
 	   serving.nr band n1 while dsd said mode LTE, nr false), and taking that as
 	   a carrier would draw a 5G line for a leg carrying nothing. `dsd.nr` is
 	   the thing that says the 5G leg is up. */
+	/* The four access technologies a PLMN entry can carry, in the words a
+	   reader uses — ONE vocabulary, in ONE place.
+
+	   The keys are the 3GPP names for the radio access network (EF_PLMNwAcT
+	   carries them as bits; sim_plmn.uc:68 names them), and they are what the
+	   daemon speaks. They are NOT labels: the read-only list rendered them by
+	   upper-casing the key, so a SIM entry read "GSM UTRAN" twelve lines under
+	   an editor that labels the very same flags "2G 3G" (ddimension/luci-app-wwand#10,
+	   2026-09-21). Both ends of that page come from here now.
+
+	   Order is generational and fixed, not the order the flags happen to be
+	   set in: "2G 4G" and "4G 2G" are the same entry and should read alike. */
+	PLMN_RATS: [
+		{ key: 'gsm',    label: '2G' },
+		{ key: 'utran',  label: '3G' },
+		{ key: 'eutran', label: '4G' },
+		{ key: 'ngran',  label: '5G' },
+	],
+
+	/* the labels an entry actually carries, oldest first; [] when it carries
+	   none — which is a real state for a SIM record with no AcT field, and
+	   reads as "—" rather than as an empty column the reader has to interpret */
+	plmnRatLabels: function(e) {
+		if (!e)
+			return [];
+
+		return this.PLMN_RATS.filter(function(r) { return e[r.key]; })
+			.map(function(r) { return r.label; });
+	},
+
 	/* The GNSS reply, normalised — TWO daemon shapes, because the daemon and
 	   this app are pinned separately in the feed and a box can run either
 	   pairing.

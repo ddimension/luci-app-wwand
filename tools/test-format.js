@@ -578,5 +578,38 @@ eq(two_bands[1].snr, 40, 'gnss: ...and a satellite is shown at its BEST band');
 eq(two_bands[2].talker, 'GL',
    'gnss: PRN 18 on another constellation is a different satellite and stays');
 
+/* --- PLMN access technologies: ONE vocabulary -------------------------------
+ *
+ * The keys are the 3GPP names for the radio access network, and they are what
+ * the daemon speaks (EF_PLMNwAcT bits; sim_plmn.uc:68). They are not labels.
+ * The read-only SIM list rendered them by upper-casing the key, so an entry
+ * read "GSM UTRAN" twelve lines under an editor that labels the very same two
+ * flags "2G 3G" (ddimension/luci-app-wwand#10, 2026-09-21).
+ */
+eq(fmt.plmnRatLabels({ gsm: true, utran: true }), [ '2G', '3G' ],
+   'plmn rats: the words a reader uses, not GSM and UTRAN');
+eq(fmt.plmnRatLabels({ eutran: true, ngran: true }), [ '4G', '5G' ],
+   'plmn rats: ...and not EUTRAN and NGRAN either');
+
+/* generational order, not the order the flags happen to be written in: the
+ * same entry must read the same way whoever built the object */
+eq(fmt.plmnRatLabels({ ngran: true, gsm: true, eutran: true }), [ '2G', '4G', '5G' ],
+   'plmn rats: oldest first, whatever order the flags came in');
+
+eq(fmt.plmnRatLabels({}), [], 'plmn rats: an entry with no AcT flags carries none');
+eq(fmt.plmnRatLabels(null), [], 'plmn rats: and nothing in is nothing out');
+
+/* a flag that is present but false is not set — `e[key]` must be truthy, not
+ * merely defined, or every entry would claim every technology */
+eq(fmt.plmnRatLabels({ gsm: true, utran: false, eutran: false, ngran: false }), [ '2G' ],
+   'plmn rats: a false flag is not a technology');
+
+/* the table the editor builds its checkboxes from is the same one */
+eq(fmt.PLMN_RATS.map(function(r) { return r.key; }),
+   [ 'gsm', 'utran', 'eutran', 'ngran' ],
+   'plmn rats: the editor and the list read one table');
+eq(fmt.PLMN_RATS.map(function(r) { return r.label; }), [ '2G', '3G', '4G', '5G' ],
+   'plmn rats: ...with one set of labels');
+
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);
