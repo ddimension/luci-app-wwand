@@ -40,14 +40,21 @@ var callContexts = wrpc.contexts;
 var fmtReg = fmt.fmtRegistration.bind(fmt);
 var fmtSim = fmt.fmtSim.bind(fmt);
 
+/* An RSRP is whole dBm as it comes off the QMI signal TLV, but carries one
+   decimal once the daemon has overlaid the serving cell's own measurement
+   (wwand modem_common.overlay_serving_signal, 2026-09-21). `%d` floors — it
+   would render -60.9 as -61 and quietly throw the finer reading away
+   (cbi.js:753-754), so the value is printed to whatever precision it has. */
+function dbm(v) { return (v == Math.trunc(v)) ? String(v) : v.toFixed(1); }
+
 function fmtSignal(sig) {
 	var parts = [];
 
 	if (sig && sig.lte && fmt.hasSignal(sig.lte.rsrp))
-		parts.push('LTE %d dBm'.format(sig.lte.rsrp));
+		parts.push('LTE %s dBm'.format(dbm(sig.lte.rsrp)));
 
 	if (sig && sig.nr5g && fmt.hasSignal(sig.nr5g.rsrp))
-		parts.push('NR %d dBm'.format(sig.nr5g.rsrp));
+		parts.push('NR %s dBm'.format(dbm(sig.nr5g.rsrp)));
 
 	return parts.length ? parts.join(' / ') : '-';
 }
