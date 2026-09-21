@@ -23,13 +23,21 @@ var callSignal = wrpc.signal;
 var callSlots = wrpc.slots;
 var callContexts = wrpc.contexts;
 
-/* compact registration/SIM mappings live in the shared wwand.format module */
-var fmtReg = fmt.fmtRegistration;
-/* BOUND, not a bare reference. The other aliases in this block are standalone
-   functions, but fmtSim composes two siblings through `this` — and a detached
-   method in a strict-mode module gets `this === undefined`, so the column would
-   throw on every render rather than degrade. The alias style is fine; it just
-   has to survive a method that is not standalone. */
+/* compact registration/SIM mappings live in the shared wwand.format module.
+   BOUND, not bare references. Both of these compose siblings through `this`
+   — and a detached method in a strict-mode module gets `this === undefined`,
+   so the column throws instead of degrading. The alias style is fine; it just
+   has to survive a method that is not standalone.
+   fmtReg was NOT bound and shipped that way. It does not throw for everyone,
+   which is why it lasted: fmtRegistration only reaches `this.fmtMnc(...)` for
+   a registered numeric PLMN with no usable description — so a network that
+   reports its name renders fine, and the Registration column of one that does
+   not throws on every draw (openwrt/packages#37, format.js:651, 2026-09-21).
+   The unit tests missed it because they call fmt.fmtRegistration() WITH a
+   receiver, which the view does not. `tools/check-detached-methods.js` now
+   refuses this shape, because this comment alone already failed to prevent it
+   once — it sat directly below the defect it describes. */
+var fmtReg = fmt.fmtRegistration.bind(fmt);
 var fmtSim = fmt.fmtSim.bind(fmt);
 
 function fmtSignal(sig) {

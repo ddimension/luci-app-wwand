@@ -263,6 +263,40 @@ eq(fmt.fmtRegistration({ registration: { registration: 1,
 	plmn: { mcc: 262, mnc: 1 } } }),
    '262/01', 'fmtRegistration: and a 2-digit MNC still pads');
 
+/* The reporter's own payload, verbatim from the ubus reply in
+ * openwrt/packages#37 (2026-09-21): a description of null is what forces the
+ * branch through fmtMnc, and every check above happens to take it too. Pinned
+ * separately anyway, because it is the shape the field produced. */
+var xlsmart = { registration: { registration: 1, roaming: false,
+	plmn: { mcc: 510, mnc: 11, mnc_digits: 2, description: null } } };
+
+eq(fmt.fmtRegistration(xlsmart), '510/11',
+   'fmtRegistration: XLSmart, the payload from #37');
+
+/* WITNESS, not a preference: every check above passes a receiver, which is
+ * exactly why a view that aliased this method bare shipped a column that threw
+ * on every draw of it. The hazard is a property of the method, so it is
+ * asserted here; tools/check-detached-methods.js asserts that no caller walks
+ * into it.
+ *
+ * TWO assertions, because "it throws" on its own would be satisfied by a typo
+ * in the payload just as well: the error has to NAME the sibling it could not
+ * reach, and the method has to demonstrably route through whatever receiver it
+ * is handed. If format.js is ever made receiver-free both fail -- correctly,
+ * and the checker's receiver-dependent set shrinks with them. */
+var bare = fmt.fmtRegistration, err = null;
+
+try { bare(xlsmart); } catch (e) { err = e; }
+
+eq(err instanceof TypeError && /fmtMnc/.test(String(err)), true,
+   'fmtRegistration: detached, it throws naming the sibling it cannot reach');
+
+var stub = Object.create(fmt);
+stub.fmtMnc = function() { return 'SENTINEL'; };
+
+eq(fmt.fmtRegistration.call(stub, xlsmart), '510/SENTINEL',
+   'fmtRegistration: ...and given a receiver, the MNC goes through it');
+
 /* --- the one eUICC rule ---------------------------------------------------
  *
  * Three call sites used to answer "which slot's eSIM can be read" for
