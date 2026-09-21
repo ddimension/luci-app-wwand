@@ -173,76 +173,128 @@ function capsBadges(caps) {
    the status page, and send them this router's position to do it. A link is
    the user's own choice, taken in their own browser, at the moment they make
    it. */
-function renderGps(g) {
-	if (!g || g.error || (!g.port && !g.reader))
+/* Not a word about which daemon answered: fmt.gnss() normalises the two
+   shapes (ugps passed through, and wwand's own reader) into one record, and
+   the seam between them is pinned in tools/test-format.js. Rendering the new
+   shape with a reader written for the old one put "ugps is not answering"
+   beside a live fix, and a row of [object Object] where the satellites go, on
+   a real router (NR7101, 2026-09-21). */
+const GNSS_REASON = {
+	no_gps_port:       _('the modem reports no NMEA port'),
+	gnss_not_enabled:  _('`option gnss` is not set, so the receiver was never started'),
+	reader_not_running: _('nothing is reading the port'),
+};
+
+function renderGps(raw) {
+	var g = fmt.gnss(raw);
+
+	if (!g)
 		return null;
 
 	var term = fmt.term;
 	var rows = [];
 
-	/* ugps ANSWERS IN STRINGS and uses an EMPTY one for a field it has no value
-	   for — "elevation": "", "satellites": "" (measured on a GL-X3000,
-	   2026-09-20). `!= null` would let every one of those through and render
-	   `+"" = 0` as "0.0 m", which reads as a measurement rather than as the
-	   absence of one. */
-	function have(k) {
-		var v = g[k];
-		return (v != null && v !== '') ? v : null;
-	}
-
-	if (g.port)
-		rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration and never opens it — it is reported so a reader can be pointed at it, and wwand-gps does exactly that for ugps.')),
-			g.port ]);
+	rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration; with wwand-gps installed it also reads it.')),
+		g.port || E('span', { 'style': 'color:#888' }, [ _('none reported') ]) ]);
 
 	rows.push([ term(_('Receiver'), _('Whether the modem\'s own GNSS engine has been switched on. wwand starts it with the vendor AT command when `option gnss` is set; without that the port exists and nothing is sent on it.')),
 		g.receiver_started ? _('running')
-			: (g.receiver ? _('requested, not started') : _('off')) ]);
+			: (g.configured ? _('requested, not started') : _('off')) ]);
 
-	if (!g.reader)
-		rows.push([ term(_('Reader'), _('ugps is what parses the NMEA and publishes a position. Not answering means it is not running — which is a different thing from having no fix.')),
-			E('span', { 'style': 'color:#da3' }, [ _('ugps is not answering') ]) ]);
+	if (!g.reading)
+		rows.push([ term(_('Reader'), _('What parses the NMEA and publishes a position. Not reading is a different thing from having no fix — the receiver may be perfectly happy and nobody listening.')),
+			E('span', { 'style': 'color:#da3' }, [
+				g.legacy ? _('ugps is not answering')
+					: (GNSS_REASON[g.reason] || _('not reading')) ]) ]);
 
-	if (g.fix) {
-		var lat = +have('latitude'), lon = +have('longitude');
+	/* the fix TYPE is the new shape's own: 2D means a position without a
+	   usable height, which is worth knowing before trusting the elevation */
+	if (g.valid && g.fix_type)
+		rows.push([ term(_('Fix'), _('2D is a position without a reliable height; 3D has one. Reported by the receiver itself (NMEA GSA), and on a multi-constellation receiver it is the best of them.')),
+			g.fix_type.toUpperCase() ]);
 
-		rows.push([ term(_('Position'), _('Latitude and longitude as ugps last parsed them.')),
+	if (g.valid && g.latitude != null && g.longitude != null) {
+		rows.push([ term(_('Position'), _('Latitude and longitude as the receiver last reported them.')),
 			E('span', {}, [
-				'%.5f, %.5f'.format(lat, lon), ' ',
+				'%.5f, %.5f'.format(g.latitude, g.longitude), ' ',
 				/* geo: is the RFC 5870 URI — the browser hands it to whatever
 				   map the user actually has, rather than this page choosing
 				   one for them. The OSM link is the fallback for a desktop
 				   browser with no geo: handler. */
-				E('a', { 'href': 'geo:%f,%f'.format(lat, lon) }, [ _('open in map') ]),
+				E('a', { 'href': 'geo:%f,%f'.format(g.latitude, g.longitude) }, [ _('open in map') ]),
 				' · ',
-				E('a', { 'href': 'https://www.openstreetmap.org/?mlat=%f&mlon=%f#map=15/%f/%f'.format(lat, lon, lat, lon),
+				E('a', { 'href': 'https://www.openstreetmap.org/?mlat=%f&mlon=%f#map=15/%f/%f'.format(g.latitude, g.longitude, g.latitude, g.longitude),
 				         'target': '_blank', 'rel': 'noreferrer noopener' }, [ 'OpenStreetMap' ])
 			]) ]);
 
-		if (have('elevation') != null)
-			rows.push([ _('Elevation'), '%.1f m'.format(+have('elevation')) ]);
-		if (have('course') != null)
-			rows.push([ _('Course'), '%.0f°'.format(+have('course')) ]);
-		if (have('speed') != null)
-			rows.push([ term(_('Speed'), _('Ground speed as reported by the receiver, in knots — that is the NMEA unit and ugps passes it through.')),
-				'%.1f kn'.format(+have('speed')) ]);
+		if (g.elevation != null)
+			rows.push([ _('Elevation'), '%.1f m'.format(g.elevation) ]);
+		if (g.course != null)
+			rows.push([ _('Course'), '%.0f°'.format(g.course) ]);
+		/* NOT `?? 0`. A reply with km/h and no knots would have rendered
+		   "12.3 km/h (0.0 kn)", which is not a missing value, it is a wrong
+		   one. Raised by Codex review, 2026-09-21. */
+		if (g.speed_kmh != null || g.speed_knots != null)
+			rows.push([ term(_('Speed'), _('Ground speed. NMEA reports knots; both are shown when both are known, so neither unit has to be converted in your head.')),
+				(g.speed_kmh != null && g.speed_knots != null)
+					? '%.1f km/h (%.1f kn)'.format(g.speed_kmh, g.speed_knots)
+					: ((g.speed_kmh != null) ? '%.1f km/h'.format(g.speed_kmh)
+					                         : '%.1f kn'.format(g.speed_knots)) ]);
 		/* how old the fix is. A receiver that lost sky keeps answering with the
 		   last position it had, so "where" without "when" is the half that
 		   misleads. */
-		if (have('age') != null)
-			rows.push([ term(_('Fix age'), _('Seconds since ugps last parsed a position. A receiver that has lost the sky keeps reporting the last fix it had, so the age is what says whether it is still current.')),
-				'%d s'.format(+have('age')) ]);
+		if (g.age != null)
+			rows.push([ term(_('Fix age'), _('Seconds since the last position was parsed. A receiver that has lost the sky keeps reporting the last fix it had, so the age is what says whether it is still current.')),
+				'%d s'.format(g.age) ]);
 	}
-	else if (g.reader) {
+	else if (g.reading) {
+		/* "yet" is only true before the first one. A receiver that HAD a fix
+		   and lost it still reports the last position and its age, and the
+		   age is the thing that says which of the two this is. Raised by
+		   Codex review, 2026-09-21. */
 		rows.push([ _('Position'), E('span', { 'style': 'color:#888' },
-			[ _('no fix yet') ]) ]);
+			[ (g.age != null)
+				? _('no current fix — last one %d s ago').format(g.age)
+				: _('no fix yet') ]) ]);
 	}
 
-	if (have('satellites') != null)
-		rows.push([ term(_('Satellites'), _('How many satellites the receiver is currently using. A cold start outdoors typically needs a minute or two; indoors it may never reach a fix.')),
-			'' + have('satellites') ]);
-	if (have('HDOP') != null)
-		rows.push([ term(_('HDOP'), _('Horizontal dilution of precision: how favourably the satellites in use are spread. Lower is better — under 2 is good, over 5 means the position is only roughly right.')),
-			'' + have('HDOP') ]);
+	/* IN USE and IN VIEW are different numbers and the difference is the
+	   diagnosis: none in view is an antenna problem, plenty in view and none
+	   in use is a sky or almanac problem. ugps only ever had the first. */
+	/* IN USE and IN VIEW are different numbers and the difference is the
+	   diagnosis. Neither is filled in for the other when it is missing: an
+	   absent in-use count rendered as "0 in use of 13 in view" would be a
+	   claim, not a gap. Raised by Codex review, 2026-09-21. */
+	if (g.sats_used != null || g.sats_view != null)
+		rows.push([ term(_('Satellites'), _('In use / in view. Nothing in view is usually the antenna, though a cold receiver or a blocked sky looks the same; many in view with none in use means it can hear them but not yet solve a position, which outdoors typically takes a minute or two.')),
+			(g.sats_used != null && g.sats_view != null)
+				? '%d %s %d %s'.format(g.sats_used, _('in use of'), g.sats_view, _('in view'))
+				: ((g.sats_used != null) ? '%d %s'.format(g.sats_used, _('in use'))
+				                         : '%d %s'.format(g.sats_view, _('in view'))) ]);
+
+	var dop = [];
+	if (g.hdop != null) dop.push('H %.1f'.format(g.hdop));
+	if (g.pdop != null) dop.push('P %.1f'.format(g.pdop));
+	if (g.vdop != null) dop.push('V %.1f'.format(g.vdop));
+
+	if (dop.length)
+		rows.push([ term(_('Dilution of precision'), _('How favourably the satellites in use are spread: horizontal, positional and vertical. Lower is better — under 2 is good, over 5 means the position is only roughly right.')),
+			dop.join(' · ') ]);
+
+	/* the strongest few, because thirty rows is not a panel */
+	var top = fmt.gnssTopSats(g.sats, 6);
+
+	if (top.length)
+		rows.push([ term(_('Strongest signals'), _('Per satellite: the constellation, its number, and the carrier-to-noise it is received at. A satellite listed without a figure is one the receiver can place but not hear.')),
+			top.map(function(sv) {
+				return '%s%d %s'.format(sv.talker || '', sv.prn,
+					(sv.snr != null) ? '%d dB'.format(sv.snr) : '—');
+			}).join(' · ') ]);
+
+	if (g.counters && g.counters.sentences != null)
+		rows.push([ term(_('NMEA stream'), _('Sentences understood since the reader opened the port, and how many it could not parse. A climbing "unparsed" means the port is carrying something that is not NMEA.')),
+			'%d %s, %d %s'.format(g.counters.sentences, _('parsed'),
+				g.counters.unparsed ?? 0, _('not')) ]);
 
 	return E('div', { 'class': 'cbi-section' }, [
 		E('h3', {}, _('GNSS')), tbl(rows)

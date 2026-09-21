@@ -53,6 +53,7 @@ String.prototype.format = function () {
 	});
 };
 
+const length_of = (a) => (a && a.length) || 0;
 const baseclass = { extend: (o) => o };
 const _ = (s) => s;                       /* i18n passthrough */
 const E = () => ({});                     /* no DOM here */
@@ -447,6 +448,135 @@ eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
 	});
 	eq(deconf.ca, [ 1, null ], 'carrierSample: an unactivated SCC is still not counted');
 })();
+
+/* --- GNSS: two daemon shapes, one record -----------------------------------
+ *
+ * The daemon and this app are pinned separately in the feed, so a box can run
+ * either pairing. wwand <= 1.6.7_p58 passed ugps' own reply through — strings,
+ * with the EMPTY string for an absent value — and wwand > p58 reads the port
+ * itself and answers in numbers. Rendering the second with a reader written
+ * for the first put "ugps is not answering" and a row of [object Object] on
+ * the status page of a real router (NR7101, 2026-09-21); this is the seam that
+ * went unguarded.
+ */
+
+/* the OLD shape, as ugps actually answered (GL-X3000, 2026-09-20) */
+var g_old = fmt.gnss({
+	ok: true, port: '/dev/ttyUSB1', receiver: true, receiver_started: true,
+	reader: true, fix: true, age: 3,
+	latitude: '52.143559', longitude: '8.964249', elevation: '103.4',
+	course: '', speed: '0.0', satellites: '08', HDOP: '0.5',
+});
+
+eq(g_old.legacy, true, 'gnss: the old shape is recognised as such');
+eq(g_old.reading, true, 'gnss: ugps answering IS the reader running');
+eq(g_old.valid, true, 'gnss: its boolean fix means there is a solution');
+eq(g_old.fix_type, null, 'gnss: ...but it never said 2D or 3D, so neither do we');
+eq(g_old.latitude, 52.143559, 'gnss: strings become numbers');
+eq(g_old.sats_used, 8, 'gnss: "08" is eight, not a string');
+eq(g_old.sats_view, null, 'gnss: ugps had no notion of satellites in VIEW');
+eq(g_old.hdop, 0.5, 'gnss: its upper-case HDOP lands in the same field');
+eq(g_old.pdop, null, 'gnss: it had no PDOP at all');
+eq(g_old.course, null, 'gnss: an EMPTY string is absent — `+""` would be a bearing of 0');
+eq(g_old.speed_knots, 0, 'gnss: ...but a real 0.0 is a real zero');
+eq(g_old.speed_kmh, 0, 'gnss: knots are converted so the panel need not know which shape it got');
+eq(g_old.sats, null, 'gnss: no per-satellite data existed');
+
+/* the NEW shape, verbatim from the NR7101 (2026-09-21) */
+var g_new = fmt.gnss({
+	ok: true, modem: 'wwmodem0', port: '/dev/ttyUSB1',
+	receiver_started: true, configured: true, reading: true,
+	valid: true, fix: '3d', quality: 1,
+	latitude: 52.14355698, longitude: 8.96424958, elevation: 103.3,
+	speed_kmh: 0, speed_knots: 0, course: null,
+	satellites_used: 8, satellites_in_view: 13,
+	satellites: [ { talker: 'GP', signal: '1', prn: 9, elevation: 22, azimuth: 95, snr: 27 },
+	              { talker: 'GP', signal: '1', prn: 11, elevation: 14, azimuth: 219, snr: 35 },
+	              { talker: 'GP', signal: '8', prn: 14, elevation: 20, azimuth: 154, snr: null } ],
+	hdop: 0.5, pdop: 0.8, vdop: 0.6, epoch: 1789991209, age: 1,
+	lines: 4196, sentences: 4196, unparsed: 1,
+});
+
+eq(g_new.legacy, false, 'gnss: the new shape is not the old one');
+eq(g_new.reading, true, 'gnss: `reading`, not `reader` — this is what said "ugps is not answering"');
+eq(g_new.valid, true, 'gnss: there is a solution');
+eq(g_new.fix_type, '3d', 'gnss: ...and it is three-dimensional, which the old shape could not say');
+eq(g_new.sats_used, 8, 'gnss: satellites in use');
+eq(g_new.sats_view, 13, 'gnss: and in view, which is the number that says the antenna can see');
+eq([ g_new.pdop, g_new.vdop ], [ 0.8, 0.6 ], 'gnss: PDOP and VDOP come through');
+eq(length_of(g_new.sats), 3, 'gnss: the satellite list is a LIST, not a string');
+eq(g_new.counters.unparsed, 1, 'gnss: the counters say how much of the stream was understood');
+
+/* a fix type the receiver never stated is null, not "none" — a GGA-only
+   stream makes exactly that, and "none" would claim it said so */
+eq(fmt.gnss({ port: '/dev/x', reading: true, valid: true, fix: null }).fix_type, null,
+   'gnss: an unstated fix type stays unstated');
+eq(fmt.gnss({ port: '/dev/x', reading: true, valid: false, fix: 'none' }).fix_type, null,
+   'gnss: and "none" is not a TYPE either — `valid` already carries that');
+
+/* nothing to read is an answer with a reason, not an empty panel */
+var g_off = fmt.gnss({ ok: true, port: null, configured: false, reading: false,
+                       reason: 'no_gps_port', receiver_started: false });
+
+eq(g_off, null, 'gnss: no port, nothing reading and nobody asked — no panel at all');
+
+/* ...but a modem that WAS asked and has no port is the case most worth saying
+ * out loud, and suppressing it made the no_gps_port wording unreachable.
+ * Raised by Codex review, 2026-09-21. */
+var g_asked = fmt.gnss({ ok: true, port: null, configured: true, reading: false,
+                         reason: 'no_gps_port', receiver_started: false });
+
+eq(g_asked != null, true, 'gnss: `option gnss` set and no port DOES get a panel');
+eq(g_asked.reason, 'no_gps_port', 'gnss: ...whose whole purpose is to say why');
+eq(g_asked.port, null, 'gnss: with no port to name');
+
+/* A value the receiver did not report must not become a zero. "12.3 km/h
+ * (0.0 kn)" is not a gap, it is a wrong reading. */
+var g_half = fmt.gnss({ ok: true, port: '/dev/x', reading: true, valid: true,
+                        speed_kmh: 12.3, speed_knots: null,
+                        satellites_in_view: 13, satellites_used: null });
+
+eq(g_half.speed_knots, null, 'gnss: an unreported knots value stays unreported');
+eq(g_half.speed_kmh, 12.3, 'gnss: ...while the one that was reported stands');
+eq(g_half.sats_used, null, 'gnss: and an unreported in-use count is not zero either');
+eq(g_half.sats_view, 13, 'gnss: with the in-view count still there');
+
+var g_idle = fmt.gnss({ ok: true, port: '/dev/ttyUSB1', configured: true,
+                        reading: false, reason: 'reader_not_running',
+                        receiver_started: true });
+
+eq(g_idle.reading, false, 'gnss: a port with no reader still gets a panel');
+eq(g_idle.reason, 'reader_not_running', 'gnss: ...and says why');
+
+eq(fmt.gnss(null), null, 'gnss: nothing in, nothing out');
+eq(fmt.gnss({ error: 'package_not_installed' }), null, 'gnss: an error is not a panel');
+
+/* the strongest few, for a panel that cannot show thirty rows */
+var top = fmt.gnssTopSats(g_new.sats, 2);
+
+eq(top.length, 2, 'gnss: the list is trimmed');
+eq(top[0].snr, 35, 'gnss: strongest first');
+eq(fmt.gnssTopSats(g_new.sats, 9).length, 3, 'gnss: asking for more than there are is fine');
+eq(fmt.gnssTopSats(g_new.sats, 9)[2].snr, null,
+   'gnss: a satellite in view but unheard sorts last, rather than as a strong one');
+eq(fmt.gnssTopSats(null, 3).length, 0, 'gnss: no list, no rows');
+
+/* ONE ROW PER SATELLITE, not per signal. The list carries an entry per band,
+ * so PRN 18 heard on L1 and on a second band appeared twice — "GP18 40 dB ·
+ * GP18 39 dB", which reads as a bug rather than as two bands (NR7101,
+ * 2026-09-21). The best band is what the row is about. */
+var two_bands = fmt.gnssTopSats([
+	{ talker: 'GP', signal: '1', prn: 18, snr: 40 },
+	{ talker: 'GP', signal: '8', prn: 18, snr: 39 },
+	{ talker: 'GP', signal: '1', prn: 23, snr: 44 },
+	{ talker: 'GL', signal: '1', prn: 18, snr: 20 },
+], 6);
+
+eq(two_bands.length, 3, 'gnss: one row per satellite, not one per band');
+eq(two_bands[0].prn, 23, 'gnss: strongest still first');
+eq(two_bands[1].snr, 40, 'gnss: ...and a satellite is shown at its BEST band');
+eq(two_bands[2].talker, 'GL',
+   'gnss: PRN 18 on another constellation is a different satellite and stays');
 
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);

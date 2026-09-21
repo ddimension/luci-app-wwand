@@ -499,6 +499,145 @@ return baseclass.extend({
 	   serving.nr band n1 while dsd said mode LTE, nr false), and taking that as
 	   a carrier would draw a 5G line for a leg carrying nothing. `dsd.nr` is
 	   the thing that says the 5G leg is up. */
+	/* The GNSS reply, normalised — TWO daemon shapes, because the daemon and
+	   this app are pinned separately in the feed and a box can run either
+	   pairing.
+
+	     OLD (wwand <= 1.6.7_p58): wwand-gps pointed ugps at the NMEA port and
+	     passed ugps' own ubus reply through. Every value is a STRING and an
+	     absent one is the EMPTY string — "elevation": "", "satellites": ""
+	     (measured on a GL-X3000, 2026-09-20). `reader` said whether ugps
+	     answered; `fix` was a boolean.
+
+	     NEW (wwand > 1.6.7_p58): wwand reads the port itself. Values are
+	     numbers and absent is null; `reading` says whether the reader is
+	     running and `fix` is the TYPE as a word ('2d'/'3d'/'none'/null). It
+	     also carries what ugps never had: satellites in view with their SNR,
+	     PDOP/VDOP, and a reason when there is nothing to read.
+
+	   `reading` is the discriminator — absent (or null) means the old shape.
+	   The new shape sets it on BOTH of its branches, as a boolean, and the old
+	   shape has no such key, so the two cannot be confused.
+
+	   Returns null when there is nothing to show at all, so the caller can
+	   drop the panel rather than render an empty one. */
+	gnss: function(g) {
+		if (!g || g.error)
+			return null;
+
+		/* Nothing to say at all: no port, nothing reading, and nobody asked.
+		   A modem with `option gnss` set and NO port is a different case and
+		   does get a panel — "you asked for this and there is no port" is the
+		   most useful thing the page can say, and suppressing it made the
+		   no_gps_port wording unreachable. Raised by Codex review,
+		   2026-09-21. */
+		if (!g.port && !g.reader && !g.reading && !g.receiver && !g.configured)
+			return null;
+
+		var legacy = (g.reading == null);
+
+		/* ugps' empty string is an ABSENT value, not a zero: `+""` is 0 and an
+		   unset elevation would render as "0.0 m", which reads as a
+		   measurement rather than as the lack of one. */
+		function old(k) {
+			var v = g[k];
+			return (v != null && v !== '') ? +v : null;
+		}
+		function num(v) { return (v != null && v !== '') ? +v : null; }
+
+		var out = {
+			legacy: legacy,
+			port: g.port || null,
+			receiver_started: !!g.receiver_started,
+			configured: legacy ? !!g.receiver : !!g.configured,
+			reading: legacy ? !!g.reader : !!g.reading,
+			reason: legacy ? null : (g.reason || null),
+			age: legacy ? old('age') : num(g.age),
+			latitude: legacy ? old('latitude') : num(g.latitude),
+			longitude: legacy ? old('longitude') : num(g.longitude),
+			elevation: legacy ? old('elevation') : num(g.elevation),
+			course: legacy ? old('course') : num(g.course),
+			hdop: legacy ? old('HDOP') : num(g.hdop),
+			pdop: legacy ? null : num(g.pdop),
+			vdop: legacy ? null : num(g.vdop)
+		};
+
+		/* a fix at all, and separately WHAT KIND. The old shape only ever knew
+		   the first; the new one reports 'none' for "no solution" and null for
+		   "the receiver never said", which are different and a GGA-only
+		   receiver makes the second. */
+		out.valid = legacy ? !!g.fix : !!g.valid;
+		out.fix_type = legacy ? null
+			: ((g.fix === '2d' || g.fix === '3d') ? g.fix : null);
+
+		/* ugps reported ONE count, GGA's satellites-in-use. The new shape has
+		   that and the number in VIEW, which is the one that says whether the
+		   antenna can see anything at all. */
+		out.sats_used = legacy ? old('satellites') : num(g.satellites_used);
+		out.sats_view = legacy ? null : num(g.satellites_in_view);
+
+		/* ugps had no per-satellite data. Rendering the array as a string is
+		   what produced a row of [object Object] on a box whose daemon had
+		   moved ahead of this app (seen on the NR7101, 2026-09-21). */
+		out.sats = (!legacy && Array.isArray(g.satellites) && g.satellites.length)
+			? g.satellites : null;
+
+		/* knots is the NMEA unit; the new shape converts as well, and a
+		   consumer should not have to know which one it got. */
+		if (legacy) {
+			out.speed_knots = old('speed');
+			out.speed_kmh = (out.speed_knots != null)
+				? Math.round(out.speed_knots * 1.852 * 10) / 10 : null;
+		}
+		else {
+			out.speed_knots = num(g.speed_knots);
+			out.speed_kmh = num(g.speed_kmh);
+		}
+
+		out.counters = (!legacy && g.sentences != null)
+			? { lines: num(g.lines), sentences: num(g.sentences),
+			    unparsed: num(g.unparsed) } : null;
+
+		return out;
+	},
+
+	/* The strongest few satellites, for a panel that cannot show thirty rows.
+	   Sorted by SNR with the unheard ones last: a satellite in view with no
+	   SNR is one the receiver can place but not hear, which is worth seeing
+	   but not worth the top of the list.
+
+	   ONE ROW PER SATELLITE. The list carries an entry per SIGNAL, so a
+	   receiver hearing a satellite on two bands lists it twice — which
+	   rendered as "GP18 40 dB · GP18 39 dB" and reads as a bug rather than as
+	   two bands (seen on the NR7101, 2026-09-21). The best band is what the
+	   row is about; the number of bands is not what this line is for. */
+	gnssTopSats: function(sats, n) {
+		if (!Array.isArray(sats) || !sats.length)
+			return [];
+
+		var best = {};
+
+		for (var i = 0; i < sats.length; i++) {
+			var sv = sats[i];
+
+			if (!sv || sv.prn == null)
+				continue;
+
+			var k = (sv.talker || '') + '/' + sv.prn;
+			var cur = best[k];
+
+			if (!cur || ((sv.snr != null ? sv.snr : -1) > (cur.snr != null ? cur.snr : -1)))
+				best[k] = sv;
+		}
+
+		return Object.keys(best).map(function(k) { return best[k]; })
+			.sort(function(a, b) {
+				var x = (a.snr != null) ? a.snr : -1;
+				var y = (b.snr != null) ? b.snr : -1;
+				return y - x;
+			}).slice(0, n || 6);
+	},
+
 	carrierSample: function(cells) {
 		cells = cells || {};
 
