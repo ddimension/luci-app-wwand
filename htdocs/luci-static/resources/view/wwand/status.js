@@ -931,7 +931,7 @@ function renderLive(name, modem, graphs, board) {
 					profiles: (probedSlot && probedSlot.physical === sl.physical)
 						? (res[6] || null) : null,
 					showLogical: showLogical,
-					buttons: (!sl.active && sl.card == 'present') ? [
+					buttons: fmt.slotSwitchable(sl) ? [
 						E('button', { 'class': 'btn cbi-button cbi-button-apply',
 							'style': 'margin-left:.5em',
 							'click': ui.createHandlerFn(null, function() {
@@ -1114,6 +1114,30 @@ return view.extend({
 		try { current = new URLSearchParams(window.location.search).get('modem'); } catch(e) {}
 		var selWrap = E('span', {});   // filled with a modem selector when >1
 
+		/* ...and the row it sits in, which has to vanish with it. A
+		   `cbi-section` is chrome in its own right — the bootstrap theme gives
+		   it a background and a border — so a section holding one empty span
+		   draws an empty bar the width of the page. That is the SINGLE-MODEM
+		   case, which is most boxes; it was only invisible because the default
+		   theme draws that class flat. Reported by obsy with the inspector
+		   open on the offending node (ddimension/luci-app-wwand#13,
+		   2026-09-22).
+
+		   The display is set directly rather than through `hidden` so that one
+		   function owns both halves: what goes into the selector and whether
+		   its row is drawn were previously three separate dom.content() calls
+		   and a section that knew about none of them. (I first wrote here that
+		   `hidden` could not work against the inline `display:flex`; whether
+		   the UA rule carries `!important` is browser-dependent and I have not
+		   checked it, so that is not the reason — Codex review, 2026-09-22.) */
+		var selBox = E('div', { 'class': 'cbi-section',
+			'style': 'display:none;gap:12px;align-items:center' }, [ selWrap ]);
+
+		function setSelector(content) {
+			dom.content(selWrap, content);
+			selBox.style.display = (content == null || content === '') ? 'none' : 'flex';
+		}
+
 		/* THREE PERSISTENT BOXES, then the per-tick one. Everything the poll
 		   rebuilds wholesale lives in `live`; the warnings and the graphs sit
 		   above it and are updated IN PLACE, because a graph rebuilt every
@@ -1190,7 +1214,7 @@ return view.extend({
 		function buildSelector(ms) {
 			var names = Object.keys(ms || {});
 			if (names.length < 2) {
-				if (selWrap._sig !== '') { dom.content(selWrap, ''); selWrap._sig = ''; }
+				if (selWrap._sig !== '') { setSelector(''); selWrap._sig = ''; }
 				return;
 			}
 			var sig = names.map(function(n){
@@ -1206,7 +1230,7 @@ return view.extend({
 						'selected': (n == current) ? 'selected' : null },
 						[ '%s (%s)'.format(m.netdev || n, m.model || '?') ]);
 				}));
-			dom.content(selWrap, [ _('Modem') + ': ', sel ]);
+			setSelector([ _('Modem') + ': ', sel ]);
 		}
 
 		/* the poll must never die or pile up: skip a tick while the previous one
@@ -1230,7 +1254,7 @@ return view.extend({
 
 				if (!names.length) {
 					current = null;
-					dom.content(selWrap, '');
+					setSelector('');
 					dom.content(warnBox, ''); warnBox._sig = null;
 					dom.content(graphBox, ''); graphBox._for = null;
 					dom.content(el, E('em', {}, _('wwand is not running or no modem present yet.')));
@@ -1273,8 +1297,7 @@ return view.extend({
 			E('h2', {}, _('Modem Status')),
 			E('div', { 'class': 'cbi-map-descr' },
 				_('Live cellular signal and cell environment — updates about once per second. Aim the antenna for the highest RSRP / SINR: the graphs keep the last few minutes in the browser, so you can see what turning it did. The history is not stored on the router and starts empty after a reload.')),
-			E('div', { 'class': 'cbi-section', 'style': 'display:flex;gap:12px;align-items:center' },
-				[ selWrap ]),
+			selBox,
 			warnBox,
 			graphBox,
 			live,

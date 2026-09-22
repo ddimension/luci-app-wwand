@@ -368,6 +368,39 @@ eq(fmt.slotEnumerated({ physical: 2, active: false }),
    true, 'enumerated: a reported row is');
 eq(fmt.slotEnumerated(null), false, 'enumerated: and no row is not either');
 
+/* slotPinnable: may this slot be written to `option sim_slot`. The status
+   page's switch button has always required a card; the tools page's "Set as
+   primary" sat on the same rows and did not (ddimension/luci-app-wwand#12). */
+eq(fmt.slotPinnable({ physical: 1, card: 'present', active: true }),
+   true, 'pinnable: the slot in use is the obvious thing to pin');
+eq(fmt.slotPinnable({ physical: 2, card: 'present', active: false }),
+   true, 'pinnable: ...and so is the other one, if it holds a card');
+eq(fmt.slotPinnable({ physical: 2, card: 'absent', active: false }),
+   false, 'pinnable: an empty slot would ask the modem to boot on nothing');
+eq(fmt.slotPinnable({ physical: 2, card: 'unknown', active: false }),
+   false, 'pinnable: ...and an unread one is not known to hold anything');
+eq(fmt.slotPinnable({ physical: 1, card: 'present', active: true, inferred: true }),
+   false, 'pinnable: an inferred row names no slot to pin');
+eq(fmt.slotPinnable(null), false, 'pinnable: and no row, nothing to pin');
+
+/* slotSwitchable: the third policy, previously spelled out in two renderers */
+eq(fmt.slotSwitchable({ card: 'present', active: false }),
+   true, 'switchable: an idle slot with a card can be switched to');
+eq(fmt.slotSwitchable({ card: 'present', active: true }),
+   false, 'switchable: ...but switching to the one you are on does nothing');
+eq(fmt.slotSwitchable({ card: 'absent', active: false }),
+   false, 'switchable: ...and there is nothing to switch to in an empty slot');
+eq(fmt.slotSwitchable(null), false, 'switchable: and no row is not a slot');
+
+/* cardText: one word per state, because there were two — simSlotRow printed
+   the daemon's identifier while simSlotCard said "empty" for the same slot. */
+eq(fmt.cardText('present'), 'card present', 'cardtext: a card is a card');
+eq(fmt.cardText('absent'), 'empty', 'cardtext: absent reads as empty');
+eq(fmt.cardText('error'), 'card error', 'cardtext: an error is not an emptiness');
+eq(fmt.cardText('unknown'), 'not read',
+   'cardtext: ...and neither is a slot the modem would not talk about');
+eq(fmt.cardText(undefined), 'not read', 'cardtext: a missing state is unread, not empty');
+
 /* euiccConfirmed: evidence beats inference. On an inferred slot the label and
    the profile list follow the answer that came back, not the null. */
 var inferred = { is_euicc: null, active: true, card: 'present', physical: 1 };

@@ -139,8 +139,19 @@ return baseclass.extend({
 			   in that row is the daemon's placeholder, not a slot anybody
 			   read — persisting it would record a topology decision on no
 			   evidence. See fmt.slotEnumerated. Raised by Codex review,
-			   2026-09-22. */
-			var primaryBtn = fmt.slotEnumerated(sl)
+			   2026-09-22.
+
+			   AND NOT ON A SLOT WITH NO CARD IN IT. Pinning a boot preference
+			   to an empty slot asks the modem to come up on nothing; the
+			   status page's "Switch now" has always required a card
+			   (status.js) and this one, on the same rows, offered itself
+			   regardless. `extras` are appended before simSlotRow's own
+			   presence gate, so the renderer never had a say. Reported by obsy
+			   (ddimension/luci-app-wwand#12, 2026-09-22).
+
+			   Presence, not activity: making the ACTIVE slot the persistent
+			   choice is exactly what somebody would want this button for. */
+			var primaryBtn = fmt.slotPinnable(sl)
 				? E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
 					'click': ui.createHandlerFn(self, function() {
 						return ctx.simSlotUci(sl.physical).then(function() {

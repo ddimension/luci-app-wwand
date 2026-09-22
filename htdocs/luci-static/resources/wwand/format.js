@@ -253,6 +253,39 @@ return baseclass.extend({
 		return !!(sl && !sl.inferred);
 	},
 
+	/* MAY THIS SLOT BE RECORDED AS THE BOOT PREFERENCE (`option sim_slot`).
+	   Two conditions, and they answer different objections:
+
+	   - it must be a slot the MODEM named, not one the daemon inferred for a
+	     firmware that cannot enumerate (slotEnumerated) — pinning a
+	     placeholder records a topology decision on no evidence;
+	   - and it must hold a card. Pinning an empty slot asks the modem to come
+	     up on nothing. The status page's "Switch now" has always required a
+	     card; the tools page's "Set as primary" sat on the same rows and did
+	     not, which is what obsy found (ddimension/luci-app-wwand#12,
+	     2026-09-22).
+
+	   Deliberately NOT conditioned on `active`: making the slot that is
+	   currently in use the persistent choice is the main thing anyone wants
+	   this for. That is the difference from the switch button, which is only
+	   meaningful for a slot you are not on. */
+	slotPinnable: function(sl) {
+		return !!(sl && this.slotEnumerated(sl) && sl.card == 'present');
+	},
+
+	/* MAY THIS SLOT BE SWITCHED TO. The third slot policy, and the last one
+	   that was written out twice: the status card and the compact row each
+	   carried `!sl.active && sl.card == 'present'` in their own words. Two
+	   copies of one rule is how the "Set as primary" button came to disagree
+	   with the switch button sitting on the same rows
+	   (ddimension/luci-app-wwand#12). Raised by Codex review, 2026-09-22.
+
+	   Not the same question as slotPinnable: switching to the slot you are
+	   already on does nothing, while pinning it is the ordinary case. */
+	slotSwitchable: function(sl) {
+		return !!(sl && !sl.active && sl.card == 'present');
+	},
+
 	euiccProbeSlot: function(slots) {
 		var known = this.euiccSlot(slots);
 
@@ -306,7 +339,8 @@ return baseclass.extend({
 			head.push(E('span', { 'style': 'margin-left:.5em;padding:0 .4em;border-radius:3px;'
 				+ 'background:#2c8a2c;color:#fff;font-size:85%' }, [ _('active') ]));
 		else if (sl.card != 'present')
-			head.push(E('span', { 'style': 'margin-left:.5em;color:#888;font-size:85%' }, [ _('empty') ]));
+			head.push(E('span', { 'style': 'margin-left:.5em;color:#888;font-size:85%' },
+				[ this.cardText(sl.card) ]));
 
 		(o.buttons || []).forEach(function(b) { head.push(b); });
 
@@ -414,13 +448,39 @@ return baseclass.extend({
 		]);
 	},
 
+	/* ONE WORD PER CARD STATE, because there were two. The daemon's vocabulary
+	   is an identifier set — 'present', 'absent', 'unknown', 'error'
+	   (wwand sim.uc CARD_STATES, mbim_backend SLOT_STATES) — and simSlotRow
+	   printed it verbatim while simSlotCard said "empty" for the same slot.
+	   One modem, two pages, two words for one fact: reported by obsy
+	   (ddimension/luci-app-wwand#12, 2026-09-22).
+
+	   'unknown' gets its own word rather than being folded into "empty". A
+	   slot the modem would not talk about is not a slot known to be empty, and
+	   the status page used to state the stronger of the two.
+
+	   The list is not closed: an unrecognised QMI card_status survives as its
+	   own number (wwand sim.uc:834), deliberately, so nothing is lost when the
+	   protocol grows. Anything outside the four lands on "not read", which is
+	   the honest reading of a state this side does not know. */
+	CARD_TEXT: {
+		present: _('card present'),
+		absent:  _('empty'),
+		error:   _('card error'),
+		unknown: _('not read'),
+	},
+
+	cardText: function(card) {
+		return this.CARD_TEXT[card] || this.CARD_TEXT.unknown;
+	},
+
 	/* the old single-line renderer, kept for the eSIM page's slot list until it
 	   moves over too — status.js uses simSlotCard */
 	simSlotRow: function(sl, onSwitch, extras) {
 		var line = [
 			E('strong', {}, [ _('Slot %d').format(sl.physical) +
 				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '') ]),
-			' \u2014 ' + sl.card + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
+			' \u2014 ' + this.cardText(sl.card) + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
 				(sl.eid ? (', EID ' + sl.eid) : '') +
 				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) —
 				   the inactive slot's PIN and service state matter when deciding
@@ -430,7 +490,7 @@ return baseclass.extend({
 				(sl.atr ? (', ATR ' + sl.atr) : '')
 		];
 		(extras || []).forEach(function(b) { line.push(b); });
-		if (!sl.active && sl.card == 'present' && onSwitch)
+		if (this.slotSwitchable(sl) && onSwitch)
 			line.push(E('button', { 'class': 'btn cbi-button cbi-button-apply',
 				'style': 'margin-left:4px',
 				'click': ui.createHandlerFn(null, function() {
