@@ -273,6 +273,52 @@ return baseclass.extend({
 		return !!(sl && this.slotEnumerated(sl) && sl.card == 'present');
 	},
 
+	/* THE MULTI-SIM SHAPE, IN WORDS — and with the slot count in them, which
+	   is the half that was missing. The row already said "one SIM active at a
+	   time (switching)" for a DSSA modem; what it did not say is how many
+	   slots the modem claims, so a reader looking at two slot rows on a
+	   single-slot board had nothing to connect them to. obsy asked exactly
+	   that: "the modem has one SIM slot, the status shows it as empty"
+	   (ddimension/luci-app-wwand#12, 2026-09-22) — his modem enumerates two
+	   slots and reports one executor. What the extra row means physically is
+	   not knowable from here; what IS knowable is whose statement it is.
+
+	   `slots` IS THE ROW COUNT THE SLOT BACKEND RETURNED and nothing more —
+	   sim.uc:877 takes it from the length of the list, while `exact`
+	   (sim.uc:910) says only that the executor and concurrency figures came
+	   from MBIM SYS_CAPS. Two earlier versions of this comment claimed more
+	   than that and both were wrong: first that the count carried SYS_CAPS
+	   provenance, then that it was in every case the modem's own answer. It is
+	   not — the Fibocom NCM recipe builds BOTH rows unconditionally from a
+	   GTDUALSIM reply that only names the active subscription
+	   (modem_ncm.uc:990-1001). So the count is shown whenever there is more
+	   than one, and the marker is put beside the mode it qualifies rather than
+	   trailing the line, where it read as qualifying all of it. Raised by
+	   Codex review, 2026-09-22.
+
+	   Returns null when nothing can be said about the mode — see the note at
+	   the call site about not printing a row that reads as a measurement and
+	   is not one. */
+	MULTISIM_MODE: {
+		dssa: _('one SIM active at a time (switching)'),
+		dsds: _('both registered, one carries data'),
+		dsda: _('both usable at once'),
+	},
+
+	multisimText: function(ms) {
+		if (!ms || (!ms.mode && !ms.mode_min))
+			return null;
+
+		var txt = ms.mode
+			? (this.MULTISIM_MODE[ms.mode] || ms.mode.toUpperCase())
+			: _('at least %s').format(ms.mode_min.toUpperCase());
+
+		if (ms.slots > 1)
+			txt = _('%d slots').format(ms.slots) + ' \u00b7 ' + txt;
+
+		return txt + (ms.exact ? '' : ' (' + _('inferred') + ')');
+	},
+
 	/* MAY THIS SLOT BE SWITCHED TO. The third slot policy, and the last one
 	   that was written out twice: the status card and the compact row each
 	   carried `!sl.active && sl.card == 'present'` in their own words. Two

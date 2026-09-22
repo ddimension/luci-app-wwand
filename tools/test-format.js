@@ -392,6 +392,37 @@ eq(fmt.slotSwitchable({ card: 'absent', active: false }),
    false, 'switchable: ...and there is nothing to switch to in an empty slot');
 eq(fmt.slotSwitchable(null), false, 'switchable: and no row is not a slot');
 
+/* multisimText: what the SIM-slot panel says about the modem's shape. The slot
+   COUNT is the half that was missing — obsy's modem reports two slots and one
+   executor on a board with one card reader, and the row gave him nothing to
+   connect the second (empty) slot row to (ddimension/luci-app-wwand#12). */
+eq(fmt.multisimText({ slots: 2, executors: 1, concurrency: 1,
+                      mode: 'dssa', mode_min: 'dssa', exact: true }),
+   '2 slots \u00b7 one SIM active at a time (switching)',
+   'multisim: the enumerated slot count is named alongside the mode');
+eq(fmt.multisimText({ slots: 2, executors: 2, concurrency: 2,
+                      mode: 'dsda', exact: true }),
+   '2 slots \u00b7 both usable at once', 'multisim: ...whatever the mode');
+
+/* `exact` qualifies the MODE, not the count: sim.uc:877 takes `slots` from the
+   length of the slot list either way, while :910 sets exact from whether the
+   executor figures came from SYS_CAPS. So the count appears in both cases and
+   the marker attaches to the mode. */
+eq(fmt.multisimText({ slots: 2, mode: null, mode_min: 'dsds', exact: false }),
+   '2 slots \u00b7 at least DSDS (inferred)',
+   'multisim: the marker sits beside the mode, not at the end of the line');
+
+/* one active logical slot supports no claim at all — that is a single-executor
+   modem and an under-observed dual-executor one alike, so the row says nothing
+   rather than something that reads as a measurement */
+eq(fmt.multisimText({ slots: 2, mode: null, mode_min: null, exact: false }),
+   null, 'multisim: no mode and no floor -> no row');
+eq(fmt.multisimText(null), null, 'multisim: and no report -> no row');
+
+/* a mode the daemon grows later must not vanish from the page */
+eq(fmt.multisimText({ slots: 1, mode: 'tsts', exact: true }),
+   'TSTS', 'multisim: an unknown mode is passed through, not dropped');
+
 /* cardText: one word per state, because there were two — simSlotRow printed
    the daemon's identifier while simSlotCard said "empty" for the same slot. */
 eq(fmt.cardText('present'), 'card present', 'cardtext: a card is a card');

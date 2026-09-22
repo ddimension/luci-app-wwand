@@ -960,20 +960,14 @@ function renderLive(name, modem, graphs, board) {
 			   nothing rather than something that reads as a measurement. */
 			var ms = (res[3] || {}).multisim, msNode = null;
 
-			if (ms && (ms.mode || ms.mode_min)) {
-				var msTxt = ms.mode
-					? (({
-						dssa: _('one SIM active at a time (switching)'),
-						dsds: _('both registered, one carries data'),
-						dsda: _('both usable at once'),
-					})[ms.mode] || ms.mode.toUpperCase())
-					: _('at least %s').format(ms.mode_min.toUpperCase());
+			var msTxt = fmt.multisimText(ms);
 
+			if (msTxt) {
 				msNode = E('div', { 'style': 'margin-top:6px;font-size:90%;color:#666' }, [
 					E('span', { 'title': ms.exact
-						? _('Reported by the modem (MBIM SYS_CAPS).')
+						? _('The radio-stack figures come from the modem itself (MBIM SYS_CAPS); the slot count is how many slots it enumerated. A modem can advertise more slots than the product actually gives you a card reader for, and may then report the extra one as empty — these protocols carry no signal that separates that from a reader you simply left empty.')
 						: _('Inferred from how many logical slots are in use. That is a lower bound: a modem with a second radio stack whose other slot is empty looks exactly like a single-stack one, so no definite mode can be stated.') },
-						[ msTxt + (ms.exact ? '' : ' · ' + _('inferred')) ]) ]);
+						[ msTxt ]) ]);
 			}
 
 			cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:320px' },
