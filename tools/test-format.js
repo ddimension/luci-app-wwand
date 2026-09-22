@@ -322,6 +322,66 @@ eq(fmt.euiccSlot([
 	{ is_euicc: false, active: true, card: 'present', physical: 1 },
 	{ is_euicc: true, active: true, card: 'present', physical: 2 },
 ]).physical, 2, 'euicc: the readable slot is found in a mixed list');
+
+/* euiccProbeSlot: the SEPARATE question "where is it worth asking". A modem
+   that cannot enumerate slots gets an inferred record with is_euicc null (wwand
+   sim.uc single_slot), and euiccReadable correctly says no — which is what hid
+   a perfectly readable eSIM on a MeiG SLM770A behind the panel's gate. */
+eq(fmt.euiccProbeSlot([ { is_euicc: null, active: true, card: 'present', physical: 1,
+                          inferred: true } ]).physical,
+   1, 'probe: an inferred single slot is worth asking about');
+eq(fmt.euiccProbeSlot([ { is_euicc: null, active: true, card: 'unknown', physical: 1,
+                          inferred: true } ]).physical,
+   1, 'probe: ...even before the card has been read');
+eq(fmt.euiccProbeSlot([ { is_euicc: false, active: true, card: 'present', physical: 1 } ]),
+   null, 'probe: a slot that SAID it is a plain SIM is not asked again');
+eq(fmt.euiccProbeSlot([ { is_euicc: null, active: false, card: 'present', physical: 1 } ]),
+   null, 'probe: an inactive slot has no open APDU channel');
+eq(fmt.euiccProbeSlot([ { is_euicc: null, active: true, card: 'absent', physical: 1 } ]),
+   null, 'probe: an empty slot has nothing to ask');
+
+/* AND THE CASE THE OLD FALLBACK GOT WRONG, which is why it was removed: with a
+   real two-slot list, slot 1 is a DIFFERENT card and asking about it answers
+   the wrong question. Two slots is never a probe. */
+eq(fmt.euiccProbeSlot([
+	{ is_euicc: null, active: true, card: 'present', physical: 1 },
+	{ is_euicc: null, active: false, card: 'present', physical: 2 },
+]), null, 'probe: a real multi-slot list is never guessed at');
+eq(fmt.euiccProbeSlot([
+	{ is_euicc: false, active: true, card: 'present', physical: 1 },
+	{ is_euicc: true, active: true, card: 'present', physical: 2 },
+]).physical, 2, 'probe: ...and a known eUICC still wins outright');
+eq(fmt.euiccProbeSlot([]), null, 'probe: no slots, nothing to ask');
+
+/* AND THE FLAG IS THE CONTRACT. A single row that merely LOOKS inferred —
+   because some future producer left is_euicc out — is not one, and guessing on
+   shape would quietly adopt it. */
+eq(fmt.euiccProbeSlot([ { is_euicc: null, active: true, card: 'present', physical: 1 } ]),
+   null, 'probe: an unmarked single row is not treated as an inference');
+
+/* slotEnumerated: reading an inferred row is fine, CHOOSING with it is not —
+   the sim_slot dropdown and the "set as primary" button persist a number the
+   daemon made up. Mirror of sim.enumerated() on the daemon side. */
+eq(fmt.slotEnumerated({ physical: 1, active: true, inferred: true }),
+   false, 'enumerated: an inferred row is not a slot to configure');
+eq(fmt.slotEnumerated({ physical: 2, active: false }),
+   true, 'enumerated: a reported row is');
+eq(fmt.slotEnumerated(null), false, 'enumerated: and no row is not either');
+
+/* euiccConfirmed: evidence beats inference. On an inferred slot the label and
+   the profile list follow the answer that came back, not the null. */
+var inferred = { is_euicc: null, active: true, card: 'present', physical: 1 };
+eq(fmt.euiccConfirmed(inferred, [ { iccid: '8988', state: 'enabled' } ]),
+   true, 'confirmed: a profile list proves the inferred slot is an eUICC');
+eq(fmt.euiccConfirmed(inferred, []),
+   true, 'confirmed: ...an empty list too — only an eUICC answers "none installed"');
+eq(fmt.euiccConfirmed(inferred, null),
+   false, 'confirmed: ...but an unread slot is not claimed to be one');
+eq(fmt.euiccConfirmed({ is_euicc: true, physical: 1 }, null),
+   true, 'confirmed: a modem that SAID eUICC needs no corroboration');
+eq(fmt.euiccConfirmed({ is_euicc: false, physical: 1 }, [ { iccid: '1' } ]),
+   false, 'confirmed: ...and one that said otherwise is believed over a stray read');
+eq(fmt.euiccConfirmed(null, null), false, 'confirmed: no slot, no claim');
 eq(fmt.euiccSlot([ { is_euicc: true, active: false, card: 'present', physical: 2 } ]),
    null, 'euicc: an unreachable eUICC yields null, not a slot to guess with');
 eq(fmt.euiccSlot([]), null, 'euicc: an empty slot list yields null');

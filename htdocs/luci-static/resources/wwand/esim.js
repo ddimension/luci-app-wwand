@@ -134,15 +134,23 @@ return baseclass.extend({
 		var slotRows = (data.slots || []).map(function(sl) {
 			/* shared row renderer (wwand.format); the persist-to-uci button is
 			   this panel's extra */
-			var primaryBtn = E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
-				'click': ui.createHandlerFn(self, function() {
-					return ctx.simSlotUci(sl.physical).then(function() {
-						ui.addNotification(null, E('p', [ _('Primary SIM set to slot %d (persisted).').format(sl.physical) ]), 'info');
-					});
-				}) }, _('Set as primary'));
+			/* NOT ON AN INFERRED ROW. This button writes `option sim_slot` to
+			   uci, and on a modem that cannot enumerate its slots the number
+			   in that row is the daemon's placeholder, not a slot anybody
+			   read — persisting it would record a topology decision on no
+			   evidence. See fmt.slotEnumerated. Raised by Codex review,
+			   2026-09-22. */
+			var primaryBtn = fmt.slotEnumerated(sl)
+				? E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:8px',
+					'click': ui.createHandlerFn(self, function() {
+						return ctx.simSlotUci(sl.physical).then(function() {
+							ui.addNotification(null, E('p', [ _('Primary SIM set to slot %d (persisted).').format(sl.physical) ]), 'info');
+						});
+					}) }, _('Set as primary'))
+				: null;
 			return fmt.simSlotRow(sl, function(physical) {
 				return callSwitchSlot(data.modem, physical);
-			}, [ primaryBtn ]);
+			}, primaryBtn ? [ primaryBtn ] : []);
 		});
 
 		out.push(E('div', { 'class': 'cbi-section' },

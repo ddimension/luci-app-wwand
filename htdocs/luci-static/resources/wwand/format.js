@@ -202,6 +202,78 @@ return baseclass.extend({
 		return (slots || []).filter(function(sl) { return self.euiccReadable(sl); })[0] || null;
 	},
 
+	/* THE SLOT WORTH ASKING ABOUT, which is not the same question as
+	   euiccSlot's. That one asks "which slot is a known eUICC"; this one asks
+	   "where could an eSIM be, such that asking is cheap and honest".
+
+	   They differ on exactly one shape: a slot record the daemon INFERRED
+	   because the modem cannot enumerate slots at all (wwand sim.uc
+	   single_slot — a QMI firmware answering 71/94, an MBIM device with no UIM
+	   client, or any AT modem whose vendor has no dual-SIM recipe, which today
+	   is every one but Fibocom). Such a record describes one addressable active
+	   card, NOT a physical slot map; it carries `is_euicc: null` — not known —
+	   and euiccReadable correctly says no, because it is not a KNOWN eUICC.
+
+	   Saying no there cost us the whole eSIM surface on a Cudy LT300 / MeiG
+	   SLM770A: `wwandctl esim eid` read the EID and the four profiles while
+	   this panel showed nothing at all, because the gate in front of the read
+	   had already decided (2026-09-22).
+
+	   The reasoning that removed an earlier slot-1 fallback still holds and is
+	   not being undone: with an eUICC in the INACTIVE slot of a dual-slot
+	   modem, slot 1 is a different card and asking about it answers the wrong
+	   question. That case is a slot list the modem actually reported, and it
+	   still goes through euiccReadable alone. Here there is no list to be wrong
+	   about — one addressable active card, and the APDU channel reaches it
+	   whatever integer rides along (sim.uc at_apdu_open ignores the slot
+	   argument entirely; only QMI-UIM uses it). */
+	/* IS THIS SLOT AN eUICC, given what came back. `is_euicc` is tri-state:
+	   true, false, or null when the record was inferred because the modem
+	   cannot enumerate slots at all (see euiccProbeSlot). On null the profile
+	   list settles it — only an eUICC answers one — and `profiles` is null
+	   unless a read actually came back, the caller keeping "none installed"
+	   apart from "not read" (status.js does that at res[6]). Evidence beats
+	   inference, and nothing here guesses: with no reading and no claim, the
+	   answer is no. */
+	euiccConfirmed: function(sl, profiles) {
+		if (!sl)
+			return false;
+
+		return (sl.is_euicc != null) ? !!sl.is_euicc : !!profiles;
+	},
+
+	/* MAY THIS SLOT BE OFFERED AS A TOPOLOGY CHOICE. The mirror of the
+	   daemon's sim.enumerated(): a row the daemon INFERRED because the modem
+	   cannot enumerate says one card is reachable, not where it sits, so it
+	   must not populate an `option sim_slot` dropdown or a "set as primary"
+	   button — those persist a slot number nobody read. Reading it is fine,
+	   which is what euiccProbeSlot is for; choosing with it is not.
+	   Raised by Codex review, 2026-09-22. */
+	slotEnumerated: function(sl) {
+		return !!(sl && !sl.inferred);
+	},
+
+	euiccProbeSlot: function(slots) {
+		var known = this.euiccSlot(slots);
+
+		if (known)
+			return known;
+
+		var list = slots || [];
+
+		if (list.length != 1)
+			return null;
+
+		var sl = list[0];
+
+		/* `inferred` is the contract, not the shape. Keying on "one row with a
+		   null is_euicc" would adopt any future producer that happens to look
+		   like that; the daemon marks the row it made up, so ask about that.
+		   Raised by Codex review, 2026-09-22. */
+		return (sl && sl.inferred && sl.is_euicc == null &&
+		        sl.active && sl.card != 'absent') ? sl : null;
+	},
+
 	/* One slot, as a labelled block rather than a comma-separated sentence.
 	   What it used to print was
 	     Slot 2 (eSIM) — present, ICCID 8988…95, EID 8903…64 [Switch now]
@@ -223,7 +295,8 @@ return baseclass.extend({
 		o = o || {};
 
 		var rows = [];
-		var kind = sl.is_euicc ? _('eUICC (eSIM)') : _('SIM card');
+		var isEuicc = this.euiccConfirmed(sl, o.profiles);
+		var kind = isEuicc ? _('eUICC (eSIM)') : _('SIM card');
 		var head = [
 			E('strong', {}, [ _('Slot %d').format(sl.physical) ]),
 			' \u00b7 ' + kind,
@@ -278,7 +351,7 @@ return baseclass.extend({
 		if (body.length)
 			out.push(E('table', { 'class': 'table', 'style': 'margin:0 0 .4em .8em' }, body));
 
-		if (sl.is_euicc && sl.card == 'present')
+		if (isEuicc && sl.card == 'present')
 			out.push(this.esimProfileList(o.profiles, sl.active));
 
 		return E('div', { 'style': 'margin-bottom:.8em' }, out);

@@ -3,6 +3,7 @@
 'require uci';
 'require form';
 'require ui';
+'require wwand.format as fmt';
 'require wwand.rpc as wrpc';
 'require wwand.modemsid as modemsid';
 
@@ -435,6 +436,11 @@ return baseclass.extend({
 					self.slotsOf = self.slotsOf || {};
 					self.slotsOf[section_id] = { '0': true };
 					((r && r.slots) || []).forEach(function(sl) {
+						/* an inferred row is not a slot the modem named, so it
+						   is not a slot to configure — see fmt.slotEnumerated.
+						   On such a modem the list correctly collapses to
+						   "leave as-is", which is the only truthful choice. */
+						if (!fmt.slotEnumerated(sl)) return;
 						if (sl.physical == null || seen[sl.physical]) return;
 						seen[sl.physical] = true;
 						self.slotsOf[section_id][String(sl.physical)] = true;

@@ -476,7 +476,7 @@ function renderLive(name, modem, graphs, board) {
 		   would open the wrong slot; MBIM and AT ignore the field, which is
 		   exactly what would have hidden it. The daemon's esim_ready handler
 		   passes eslot.physical for the same reason. */
-		var euicc = fmt.euiccSlot((res[3] || {}).slots);
+		var euicc = fmt.euiccProbeSlot((res[3] || {}).slots);
 
 		return (euicc
 			? cachedCall(name, 'profiles', 60, function() {
@@ -918,12 +918,18 @@ function renderLive(name, modem, graphs, board) {
 							: _('unlocked — this backend does not report whether a PIN is set')))
 					: null);
 
+			var probedSlot = fmt.euiccProbeSlot(slots);
 			var slotRows = slots.map(function(sl) {
 				return fmt.simSlotCard(sl, {
 					operator: sl.active ? iName : null,
 					imsi:     sl.active ? modem.imsi : null,
 					pin:      sl.active ? pinTxt : null,
-					profiles: fmt.euiccReadable(sl) ? (res[6] || null) : null,
+					/* the slot the profile read was AIMED at, which on a modem
+					   with no slot enumeration is the inferred one — matching
+					   on euiccReadable here would drop the answer we just
+					   fetched on the floor */
+					profiles: (probedSlot && probedSlot.physical === sl.physical)
+						? (res[6] || null) : null,
 					showLogical: showLogical,
 					buttons: (!sl.active && sl.card == 'present') ? [
 						E('button', { 'class': 'btn cbi-button cbi-button-apply',

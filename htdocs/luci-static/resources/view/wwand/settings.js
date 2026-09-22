@@ -362,7 +362,12 @@ return view.extend({
 				   without an eSIM section, so the only trace was two ubus round
 				   trips per page load that could never succeed. Found by
 				   review, 2026-09-20. */
-				var euicc = fmt.euiccSlot(slots);
+				/* euiccProbeSlot, not euiccSlot: on a modem that cannot
+				   enumerate slots the daemon infers one, and "unknown" is a
+				   reason to ask rather than a reason not to. The paragraph
+				   above still governs the case it was written about — a real
+				   slot list with the eUICC in the inactive slot. */
+				var euicc = fmt.euiccProbeSlot(slots);
 				var slot = euicc ? euicc.physical : null;
 
 				return Promise.all([
