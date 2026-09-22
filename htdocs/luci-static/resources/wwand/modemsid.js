@@ -38,9 +38,26 @@ function ensureModemSid(ifaceSid) {
    Reads new-style (wwand_modem) or, until one exists, legacy inline; writes
    new-style and clears any legacy inline copy. */
 function bindModem(o) {
+	/* WAS THE MODEM RESOLVABLE THE FIRST TIME THIS OPTION WAS READ. A form is
+	   drawn before it is saved, so the first read is the render — and the
+	   render is the only moment that tells us whether the widget the user
+	   looked at was showing the modem's value or a default.
+
+	   RECORDED ONCE PER SECTION AND NEVER OVERWRITTEN. That is the whole
+	   difference from the attempt described in remove() below: form.js:2148
+	   calls cfgvalue again inside save(), by which time an earlier option has
+	   written `option modem` and the lookup succeeds — so a recording that
+	   updates on every call always ends up saying "resolved", including for
+	   the form that never resolved it at render. */
+	var seenResolved = {};
+
 	o.cfgvalue = function(sid) {
 		var opt = this.ucioption || this.option;
 		var msid = modemSid(sid);
+
+		if (!(sid in seenResolved))
+			seenResolved[sid] = (msid != null);
+
 		return uci.get('network', msid || sid, opt);
 	};
 	o.write = function(sid, val) {
@@ -81,7 +98,42 @@ function bindModem(o) {
 		   section IS the wwand_modem and `bind` is a pass-through — there
 		   remove() reaches it directly and means what it says. What this one
 		   still does is drop a legacy inline copy from the interface, which is
-		   the migration half and touches nothing shared. */
+		   the migration half and touches nothing shared.
+
+		   A CHECKBOX IS THE ONE CASE THIS CAN DECIDE, and it had to be carved
+		   out because the blanket refusal made it impossible to switch a
+		   modem-level flag OFF from the interface form at all: form.Flag sets
+		   `default = disabled` in its constructor (form.js:3998-4003), so
+		   unchecking always lands in parse()'s remove branch (form.js:4109),
+		   and this function then did nothing. The box stayed ticked after
+		   Save, with "no changes to apply" — reported for `gnss` by obsy
+		   (ddimension/luci-app-wwand#11, 2026-09-22) and true of all seven
+		   modem-bound flags.
+
+		   What makes it decidable: a checkbox has no blank state. formvalue()
+		   returns `enabled` or `disabled` and nothing else, so "the user
+		   cleared it" and "the form never resolved the modem" cannot be
+		   confused — the second is answered by seenResolved above, at render,
+		   before any save can muddy it. Off is then WRITTEN rather than
+		   removed, which the daemon reads identically (config.uc bool_opt
+		   treats '0' and absent alike), and only for an option that is
+		   currently set to something else, so a form that touched nothing
+		   writes nothing.
+
+		   `disabled` is the Flag test HERE, not in general: LuCI puts that
+		   property on TextValue too (form.js:5347). It holds because every
+		   option modemopts binds is a Flag, a plain Value or a ListValue, and
+		   only form.Flag's constructor sets enabled/disabled
+		   (form.js:3998-4003). Binding a TextValue through here would need
+		   this narrowed first. Raised by Codex review, 2026-09-22. */
+		if (this.disabled != null && seenResolved[sid] === true) {
+			var msid = modemSid(sid);
+			var cur = msid ? uci.get('network', msid, opt) : null;
+
+			if (cur != null && cur != this.disabled)
+				uci.set('network', msid, opt, this.disabled);
+		}
+
 		if (opt != 'device')
 			uci.unset('network', sid, opt);
 	};
