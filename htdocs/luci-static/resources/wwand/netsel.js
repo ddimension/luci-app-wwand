@@ -239,9 +239,16 @@ return baseclass.extend({
 				return setSelection('auto', 0, 0, _('Automatic network selection enabled.'));
 			}) }, _('Set automatic'));
 
+		/* THE TITLE BELONGS INSIDE THE SECTION. LuCI's own form.js appends the
+		   section title to the `.cbi-section` element itself
+		   (form.js:2482-2490 and :2792-2816), so a theme that draws the section
+		   as a panel draws the heading inside it. Ours sat beside the panel and
+		   therefore floated above it, unstyled — reported by obsy comparing this
+		   tab against the status page, which has always had it right
+		   (ddimension/luci-app-wwand#14, 2026-09-24). */
 		return E('div', {}, [
-			E('h3', {}, _('Network selection')),
 			E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('Network selection')),
 				E('div', {}, infoRows),
 				E('p', { 'style': 'margin:8px 0' }, E('em', {},
 					_('Automatic lets the modem choose the best operator. A manual scan lists the visible operators so you can force one (e.g. to prefer a partner network while roaming).'))),

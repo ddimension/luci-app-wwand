@@ -441,9 +441,11 @@ return view.extend({
 			]);
 		}, this);
 
+		/* title INSIDE the section — see the note in netsel.js; LuCI's form.js
+		   appends it to the `.cbi-section` element itself (:2482-2490) */
 		return [
-			E('h3', {}, _('Carrier configuration')),
 			E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('Carrier configuration')),
 				E('p', {}, [ _('The carrier profile (MBN) the modem applies: APN defaults, IMS settings, band and roaming policy for a given network. The wrong one leaves the modem technically working but subtly wrong on that network — a rejected attach, no IMS, a missing band.') ]),
 				sel.pending ? E('p', { 'style': 'color:#b8860b' },
 					[ _('A different configuration is selected and waiting for a modem reset — the radio is still running the previous one.') ]) : '',
@@ -672,7 +674,14 @@ return view.extend({
 			})),
 		]) : E('p', {}, E('em', {}, _('No saved list is attached to this modem yet — edit above and "Save as list & attach".')));
 
+		/* ONE panel for the whole preferred-PLMN group: its title, the editor,
+		   the saved lists and the two read-only SIM files. The title used to
+		   float above all of it and the two tables sat outside any section at
+		   all — LuCI puts a section's title inside the section
+		   (form.js:2482-2490), which is what every panel on the status page
+		   does and none on this tab did (ddimension/luci-app-wwand#14). */
 		return E('div', { 'class': 'cbi-section' }, [
+			E('h3', {}, _('Preferred PLMN lists')),
 			E('h4', {}, [ _('Preferred-PLMN editor — '), typeSel ]),
 			E('p', { 'style': 'color:#666;font-size:90%;margin:2px 0' },
 				_('NAS = QMI preferred-networks list; User = SIM EF 6F60 (preference, not a lock); Forbidden = SIM EF 6F7B (FPLMN) — networks the modem must NOT use. Editing here is temporary; save it as a list so the daemon re-applies it before every radio-on (survives modem reboots).')),
@@ -683,6 +692,9 @@ return view.extend({
 					E('th', { 'class': 'th' }, _('Type · entries')), E('th', { 'class': 'th' }, '') ]) ].concat(savedRows))
 				: E('p', {}, E('em', {}, _('none yet'))),
 			restoreBtn,
+			E('h4', { 'style': 'margin-top:12px' }, _('On the card')),
+			plmnTable(_('Operator-controlled (6F61)'), lists.operator),
+			plmnTable(_('Home PLMN (6F62)'), lists.home),
 		]);
 	},
 
@@ -715,14 +727,18 @@ return view.extend({
 	// lock_5g (pci:arfcn:scs:band) and lock_persist regardless of qmi/mbim/ncm.
 	renderCellLock: function(data) {
 		var self = this;
-		var out = [ E('h3', {}, _('Cell lock')) ];
-
+		/* ONE section, title inside it, on BOTH paths — see the note in
+		   netsel.js. The no-interface case used to return a bare heading and a
+		   bare paragraph with no panel around them at all. */
 		var sid = this.targetIface(data.modem);
-		if (!sid) {
-			out.push(E('p', {}, E('em', {},
-				_('No wwand interface found — the cell lock is stored on the modem.'))));
-			return out;
-		}
+		if (!sid)
+			return [ E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('Cell lock')),
+				E('p', {}, E('em', {},
+					_('No wwand interface found — the cell lock is stored on the modem.'))),
+			]) ];
+
+		var out = [];
 
 		// cell lock lives on the wwand_modem section (radio setting); read it
 		// there, falling back to the interface for a legacy inline config.
@@ -778,6 +794,7 @@ return view.extend({
 		};
 
 		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('h3', {}, _('Cell lock')),
 			row(_('LTE cell lock'), l4In,
 				_('Space/comma separated "earfcn:pci" entries (several = a cell list). See Status → Modem for the live cells and their lock values.')),
 			row(_('5G NR SA cell lock'), l5In,
@@ -1003,9 +1020,10 @@ return view.extend({
 			});
 		}
 
+		/* title INSIDE the section (see netsel.js) */
 		return [
-			E('h3', {}, _('SMS')),
 			E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('SMS')),
 				E('div', { 'class': 'cbi-value' }, [
 					E('label', { 'class': 'cbi-value-title' }, _('Storage')),
 					E('div', { 'class': 'cbi-value-field' }, [ storageSel, ' ',
@@ -1210,10 +1228,7 @@ return view.extend({
 			})(),
 			netsel.render(panelCtx, data),
 		].concat(this.renderCarrierConfig(data)).concat(this.renderCellLock(data)).concat(esim.render(panelCtx, data)).concat([
-			E('h3', {}, _('Preferred PLMN lists')),
 			this.renderPlmnManager(data.modem, data),
-			plmnTable(_('Operator-controlled (6F61)'), (data.plmn || {}).operator),
-			plmnTable(_('Home PLMN (6F62)'), (data.plmn || {}).home),
 		]).concat(this.renderSms(data)));
 	},
 });
