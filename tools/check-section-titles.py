@@ -29,14 +29,21 @@ Usage: tools/check-section-titles.py
 # panel and not moving a line. Keyed by file and title text, so it survives the
 # line moving; adding to this list is a decision, not a line-number refresh.
 KNOWN = {
-    ('htdocs/luci-static/resources/wwand/esim.js', 'SIM'):
-        'heads the whole SIM/eSIM run — several sections plus h4 sub-headings; '
-        'conforming means restructuring that panel (ddimension/luci-app-wwand#14)',
+    # keyed by a marker from the heading call ITSELF, not by an absent title:
+    # (file, None) would have exempted any dynamic-title heading in the file
+    # (Codex review)
+    ('htdocs/luci-static/resources/view/wwand/settings.js', "title + ' ('"):
+        'plmnTable() returns a sub-block that is only ever appended INSIDE '
+        "renderPlmnManager's .cbi-section; the nesting is a call, not a "
+        'literal, so a static scan cannot see it',
 }
 import re, sys, pathlib
 
 SECTION = re.compile(r"E\(\s*'div'\s*,\s*\{[^{}]*'class'\s*:\s*'cbi-section")
-H3 = re.compile(r"E\(\s*'h3'")
+# <h3> AND <h4>: the first version checked only h3, and the SIM/eSIM panel's
+# h4 sub-headings ("SIM PIN", "SIM overrides") sat outside their boxes on a
+# release that passed it (ddimension/luci-app-wwand#14, reported on 1.6.8_p1).
+H3 = re.compile(r"E\(\s*'h[34]'")
 
 # A `/` starts a regex literal only where an OPERAND is expected. Without this
 # a regex containing an apostrophe — `/'/` — opens a phantom string, blanks the
@@ -160,30 +167,35 @@ for f in files:
         if inside:
             ok += 1
             continue
-        t = re.match(r"E\(\s*'h3'\s*,[^,]*,\s*\[?\s*_\(\s*'([^']*)'", raw[off:off + 200])
+        t = re.match(r"E\(\s*'h[34]'\s*,[^,]*,\s*\[?\s*_\(\s*'([^']*)'", raw[off:off + 200])
         title = t.group(1) if t else None
+        tag = raw[off:off + 12].split("'")[1]
         key = (rel, title)
+        call = raw[off:off + 120]
+        for (kf, kmark) in KNOWN:
+            if kf == rel and kmark and kmark not in (title or '') and kmark in call:
+                key = (kf, kmark)
         # EXACTLY ONE. Keyed by file and title alone, a second accidental
         # <h3>SIM</h3> in the same file would inherit the exemption — the
         # false negative an allowlist is always one step away from. Codex
         # review, 2026-09-24.
         if key in KNOWN and key not in claimed:
             claimed.add(key)
-            structural.append((rel, line_of(raw, off), title))
+            structural.append((rel, line_of(raw, off), title, tag, key))
         else:
-            bad.append((rel, line_of(raw, off), title))
+            bad.append((rel, line_of(raw, off), title, tag))
 
-for rel, ln, title in bad:
-    print('  OUTSIDE a .cbi-section: %s:%d  <h3>%s</h3>' % (rel, ln, title or '?'))
+for rel, ln, title, tag in bad:
+    print('  OUTSIDE a .cbi-section: %s:%d  <%s>%s</%s>' % (rel, ln, tag, title or '?', tag))
     print('           LuCI puts a section title inside the section (form.js:2482-2490).')
-for rel, ln, title in structural:
-    print('  known exception  %s:%d  <h3>%s</h3>' % (rel, ln, title or '?'))
-    print('           %s' % KNOWN[(rel, title)])
+for rel, ln, title, tag, key in structural:
+    print('  known exception  %s:%d  <%s>%s</%s>' % (rel, ln, tag, title or '?', tag))
+    print('           %s' % KNOWN[key])
 
 for rel, ln, kind in unparsed:
     print('  UNPARSED  %s:%d  an E(\'h3\' the lexer lost inside a %s — fix strip_noise()' % (rel, ln, kind))
 
-print('checked %d <h3> in %d files: %d inside a .cbi-section, %d outside, %d known, %d unparsed'
+print('checked %d headings in %d files: %d inside a .cbi-section, %d outside, %d known, %d unparsed'
       % (ok + len(bad) + len(structural) + len(unparsed), len(files), ok, len(bad),
          len(structural), len(unparsed)))
 

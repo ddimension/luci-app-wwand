@@ -105,7 +105,14 @@ return baseclass.extend({
 	render: function(ctx, data) {
 		var self = this;
 		var esimOk = data.esim && data.esim.ok !== false && data.esim.profiles;
-		var out = [ E('h3', {}, _('SIM')) ];
+		/* EVERY GROUP BELOW IS ONE .cbi-section WITH ITS TITLE INSIDE, the way
+		   LuCI's form.js builds a section (form.js:2482-2490) and the status
+		   page always did. This panel was the one left as a flat run of
+		   headings, paragraphs and sections, so "SIM PIN" sat above its box
+		   and "SIM overrides" had no box at all (ddimension/luci-app-wwand#14,
+		   evidence on 1.6.8_p1). tools/check-section-titles.py now checks
+		   <h4> as well as <h3>, which is how this stays fixed. */
+		var out = [];
 
 		/* WHICH CARD THESE ACTIONS ACT ON. The eUICC is not necessarily the
 		   active slot, so every call below has to name the slot that holds it.
@@ -164,8 +171,8 @@ return baseclass.extend({
 			}, primaryBtn ? [ primaryBtn ] : []);
 		});
 
-		out.push(E('div', { 'class': 'cbi-section' },
-			slotRows.length ? slotRows : [ E('em', {}, _('No slot information available.')) ]));
+		out.push(E('div', { 'class': 'cbi-section' }, [ E('h3', {}, _('SIM')) ].concat(
+			slotRows.length ? slotRows : [ E('em', {}, _('No slot information available.')) ])));
 
 		/* --- SIM PIN lock: enable / disable the PIN query, with the current PIN --- */
 		var minfo = data.info || {};
@@ -194,8 +201,8 @@ return baseclass.extend({
 			});
 		};
 
-		out.push(E('h4', {}, _('SIM PIN')));
 		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('h4', {}, _('SIM PIN')),
 			/* array child: pinState can now carry daemon text (sim_note), and a
 			   bare string goes in through innerHTML (luci.js:1394-96) */
 			E('p', {}, [ _('PIN query: '), E('strong', {}, [ pinState ]) ]),
@@ -213,22 +220,26 @@ return baseclass.extend({
 		/* per-SIM overrides (config wwand_sim) are edited on the Network →
 		   Modems overview page (shared wwand.simlist) — single source, no
 		   duplicate list here. */
-		out.push(E('h4', {}, _('SIM overrides')));
-		out.push(E('p', {}, [
-			_('Per-card PIN/APN overrides (matched by ICCID or IMSI) are managed on '),
-			E('a', { 'href': L.url('admin/network/wwand') }, _('Network → Modems')),
-			'.'
+		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('h4', {}, _('SIM overrides')),
+			E('p', {}, [
+				_('Per-card PIN/APN overrides (matched by ICCID or IMSI) are managed on '),
+				E('a', { 'href': L.url('admin/network/wwand') }, _('Network → Modems')),
+				'.'
+			])
 		]));
 
 		if (!esimOk) {
 			if (data.esim && data.esim.error == 'esim_not_installed')
 				out.push(E('p', {}, E('em', {}, _('eSIM management: package wwand-esim is not installed.'))));
 			else if (data.esim && data.esim.detail && data.esim.detail.error == 'es10_refused') {
-				out.push(E('h4', {}, _('eSIM')));
-				out.push(E('div', { 'class': 'wwe-banner run' },
-					[ _('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
-						.format(data.esim.detail.sw || '6985') ]));
-				out.push(E('p', {}, _('This is the normal behaviour of M2M eUICCs (SGP.02) and of vendor-locked cards: profiles are managed over-the-air by the SIM provider (SM-SR), so downloading or switching profiles from this router is not possible. Use the provider’s portal to manage the card — the router only needs to keep the active profile registered and online.')));
+				out.push(E('div', { 'class': 'cbi-section' }, [
+					E('h4', {}, _('eSIM')),
+					E('div', { 'class': 'wwe-banner run' },
+						[ _('eUICC detected, but the card refuses local eSIM management (ES10 rejected, SW %s).')
+							.format(data.esim.detail.sw || '6985') ]),
+					E('p', {}, _('This is the normal behaviour of M2M eUICCs (SGP.02) and of vendor-locked cards: profiles are managed over-the-air by the SIM provider (SM-SR), so downloading or switching profiles from this router is not possible. Use the provider’s portal to manage the card — the router only needs to keep the active profile registered and online.'))
+				]));
 
 				/* The one path left when the CARD refuses local management: ask
 				   the MODEM instead. lpac talks ES10 to the card over an APDU
@@ -275,8 +286,9 @@ return baseclass.extend({
 			]);
 		});
 
-		out.push(E('h4', {}, _('eSIM profiles')));
-		out.push(E('table', { 'class': 'table' }, [
+		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('h4', {}, _('eSIM profiles')),
+			E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr table-titles' }, [
 				E('th', { 'class': 'th' }, 'ICCID'),
 				E('th', { 'class': 'th' }, _('Provider')),
@@ -284,7 +296,8 @@ return baseclass.extend({
 				E('th', { 'class': 'th' }, ''),
 			]),
 		].concat(profRows.length ? profRows : [
-			E('tr', { 'class': 'tr' }, [ E('td', { 'class': 'td', 'colspan': 4 }, E('em', {}, _('no profiles'))) ]) ])));
+			E('tr', { 'class': 'tr' }, [ E('td', { 'class': 'td', 'colspan': 4 }, E('em', {}, _('no profiles'))) ]) ]))
+		]));
 
 		// shared activity panel: live progress for downloads / notifications
 		var panel = E('div', { 'class': 'wwe-panel', 'style': 'display:none' });
@@ -391,8 +404,6 @@ return baseclass.extend({
 			? _('The modem downloads over its own network attach — no router data path or APN needed.')
 			: _('lpac downloads on the router over your uplink and relays the eUICC APDUs through wwand — no dedicated modem APN needed.');
 
-		out.push(E('h4', {}, _('Download profile')));
-		out.push(E('p', {}, E('em', {}, dlHint)));
 
 		var codeIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
 			'style': 'width:min(440px,72%);margin-right:6px',
@@ -403,6 +414,8 @@ return baseclass.extend({
 		var ackChk = E('input', { 'type': 'checkbox', 'checked': 'checked', 'style': 'margin:0 5px 0 0' });
 
 		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('h4', {}, _('Download profile')),
+			E('p', {}, E('em', {}, dlHint)),
 			E('div', { 'style': 'margin-bottom:8px' }, [ codeIn, confIn,
 				E('button', { 'class': 'btn cbi-button cbi-button-apply',
 					'click': ui.createHandlerFn(self, function() {
@@ -428,9 +441,9 @@ return baseclass.extend({
 		// pending eUICC notifications: confirm the download/enable/disable to
 		// the operator's SM-DP+ (ES9+). Can be done any time the router has
 		// internet — lpac delivers the queued notifications.
-		out.push(E('h4', {}, _('Provider confirmations (notifications)')));
-		out.push(E('p', {}, E('em', {}, _('After a download or profile change the eUICC queues notifications that confirm the operation to the operator. Send them once the router has internet.'))));
 		out.push(E('div', { 'class': 'cbi-section' }, [
+			E('h4', {}, _('Provider confirmations (notifications)')),
+			E('p', {}, E('em', {}, _('After a download or profile change the eUICC queues notifications that confirm the operation to the operator. Send them once the router has internet.'))),
 			E('button', { 'class': 'btn cbi-button',
 				'click': ui.createHandlerFn(self, function() {
 					startBusy(_('Listing pending notifications…'));
