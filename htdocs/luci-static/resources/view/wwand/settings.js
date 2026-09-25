@@ -381,6 +381,8 @@ return view.extend({
 					   normal — resolveDefault keeps the page working either way */
 					L.resolveDefault(wrpc.carrierConfig(name, 'get', ''), {}),
 					L.resolveDefault(wrpc.carrierConfig(name, 'list', ''), {}),
+					/* eIM fleet management: {} (no panel) without wwand-ipa */
+					L.resolveDefault(wrpc.ipaStatus(name), {}),
 				]).then(function(res) {
 					var esimData = res[2] || {};
 					esimData.backend = (res[3] || {}).backend;
@@ -394,7 +396,8 @@ return view.extend({
 					            no eUICC to act on, and with no profiles listed
 					            there is nothing there to act on either */
 					         slots: slots, esimSlot: slot ?? 1, esim: esimData,
-					         mbnSel: res[4] || {}, mbnList: (res[5] || {}).configs || [] };
+					         mbnSel: res[4] || {}, mbnList: (res[5] || {}).configs || [],
+					         ipa: res[6] || {} };
 				});
 			});
 		});

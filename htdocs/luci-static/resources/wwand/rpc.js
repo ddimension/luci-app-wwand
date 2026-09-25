@@ -70,6 +70,12 @@ return baseclass.extend({
 	esim:       rpc.declare({ object: 'wwand', method: 'modem_esim',
 		params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify' ], expect: {} }),
 
+	/* eSIM fleet management (wwand-ipa). The status is its own READ-ONLY
+	   method for the reason given at esimProfiles above: a poll can switch
+	   the active profile, so modem_ipa is in the write acl. */
+	ipaStatus:  rpc.declare({ object: 'wwand', method: 'modem_ipa_status', params: [ 'modem' ], expect: {} }),
+	ipa:        rpc.declare({ object: 'wwand', method: 'modem_ipa', params: [ 'modem', 'op' ], expect: {} }),
+
 	/* --- settings / network selection ------------------------------------ */
 	getSettings: rpc.declare({ object: 'wwand', method: 'modem_get_settings', params: [ 'modem' ], expect: {} }),
 	setSettings: rpc.declare({ object: 'wwand', method: 'modem_set_settings', params: [ 'modem', 'settings' ], expect: {} }),
