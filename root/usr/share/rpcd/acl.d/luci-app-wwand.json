@@ -8,6 +8,7 @@
 			"ubus": {
 				"wwand": [
 					"context_status",
+					"sim_inventory",
 					"modem_cells",
 					"modem_datapath",
 					"modem_gps",

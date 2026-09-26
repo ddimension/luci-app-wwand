@@ -17,6 +17,24 @@
 			}
 		}
 	},
+	"admin/status/wwand-sims": {
+		"title": "SIM cards",
+		"order": 16,
+		"action": {
+			"type": "view",
+			"path": "wwand/sims"
+		},
+		"depends": {
+			"acl": [
+				"luci-app-wwand"
+			],
+			"ubus": {
+				"wwand": [
+					"sim_inventory"
+				]
+			}
+		}
+	},
 	"admin/network/wwand": {
 		"title": "Modems",
 		"order": 55,
