@@ -624,6 +624,20 @@ function renderLive(name, modem, graphs, board) {
 		if (modem.sim_note)
 			mdmRows.push([ term(_('SIM event'), _('The last thing the card said about itself: a session it closed and why, an internal recovery, or an activation that did not complete.')),
 				E('span', { 'style': 'color:#c00' }, [ modem.sim_note ]) ]);
+
+		/* What optional packages report about this modem — a remote SIM in a
+		   reader on the router, say. The daemon collects the rows
+		   (plugins_status); this page knows no package by name, so any
+		   package can add one without a change here. The label comes from
+		   the package and is shown as it is. */
+		(Array.isArray(modem.plugins) ? modem.plugins : []).forEach(function(r) {
+			if (!r || r.label == null || r.text == null)
+				return;
+
+			mdmRows.push([ term(String(r.label), _('Reported by the optional package %s').format(r.plugin || '?')),
+				E('span', { 'style': r.level == 'error' ? 'color:#c00' : r.level == 'warn' ? 'color:#b8860b' : '' },
+				  [ String(r.text) ]) ]);
+		});
 		/* ICCID and IMSI now live in the SIM slots panel, beside the slot they
 		   came out of — they are the CARD's identity, and repeating them here
 		   made the same number appear twice on one screen with nothing saying
