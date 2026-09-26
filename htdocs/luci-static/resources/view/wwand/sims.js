@@ -10,7 +10,7 @@
    with when they were last seen: that is what a later ICCID binding needs to
    know, and what an operator asks after moving cards around. */
 
-var callInventory = rpc.declare({ object: 'wwand', method: 'sim_inventory', expect: { cards: [] } });
+var callInventory = rpc.declare({ object: 'wwand', method: 'sim_inventory', expect: { '': {} } });
 
 function where(c) {
 	if (c.reader)
@@ -20,9 +20,22 @@ function where(c) {
 	return '?';
 }
 
-function state(c) {
+/* how long ago, from the router's clock: last_seen is the daemon's time() */
+function ago(secs) {
+	if (secs < 120)
+		return _('%d s ago').format(secs);
+	if (secs < 7200)
+		return _('%d min ago').format(Math.floor(secs / 60));
+	if (secs < 172800)
+		return _('%d h ago').format(Math.floor(secs / 3600));
+	return _('%d days ago').format(Math.floor(secs / 86400));
+}
+
+function state(c, now) {
 	if (!c.present)
-		return E('span', { 'style': 'opacity:.6' }, _('not present'));
+		return E('span', { 'style': 'opacity:.6' }, (c.last_seen != null && now != null)
+			? _('not present, last seen %s').format(ago(Math.max(0, now - c.last_seen)))
+			: _('not present'));
 	if (c.active)
 		return E('strong', {}, _('in use'));
 	return _('present');
@@ -40,10 +53,12 @@ function esim(c) {
 
 return view.extend({
 	load: function() {
-		return L.resolveDefault(callInventory(), []);
+		return L.resolveDefault(callInventory(), {});
 	},
 
-	table: function(cards) {
+	table: function(inv) {
+		var cards = (inv && inv.cards) || [];
+
 		if (!cards.length)
 			return E('p', {}, E('em', {}, _('No SIM card seen yet.')));
 
@@ -59,20 +74,20 @@ return view.extend({
 			return E('tr', { 'class': 'tr' }, [
 				E('td', { 'class': 'td' }, E('code', {}, [ c.iccid ])),
 				E('td', { 'class': 'td' }, [ where(c) ]),
-				E('td', { 'class': 'td' }, state(c)),
+				E('td', { 'class': 'td' }, state(c, inv.now)),
 				E('td', { 'class': 'td' }, [ c.imsi || '—' ]),
 				E('td', { 'class': 'td' }, esim(c)),
 			]);
 		})));
 	},
 
-	render: function(cards) {
+	render: function(inv) {
 		var self = this;
-		var box = E('div', {}, self.table(cards || []));
+		var box = E('div', {}, self.table(inv || {}));
 
 		poll.add(function() {
-			return L.resolveDefault(callInventory(), []).then(function(c) {
-				box.replaceChildren(self.table(c || []));
+			return L.resolveDefault(callInventory(), {}).then(function(i) {
+				box.replaceChildren(self.table(i || {}));
 			});
 		}, 10);
 
