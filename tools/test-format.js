@@ -735,20 +735,5 @@ eq(fmt.PLMN_RATS.map(function(r) { return r.key; }),
 eq(fmt.PLMN_RATS.map(function(r) { return r.label; }), [ '2G', '3G', '4G', '5G' ],
    'plmn rats: ...with one set of labels');
 
-/* ipaRows: the eIM panel, on the DAEMON's clock (st.now), never the browser's */
-eq(fmt.ipaRows({ enabled: false }), [], 'ipa: no panel rows without option ipa');
-eq(fmt.ipaRows({ enabled: true, now: 1300, state: 'idle', runs: 4, profile_changes: 1,
-                 last_end: 1000, last_ok: false, last_error: 'exit 234', fails: 2, next_due: 2200,
-                 last_changes: { switched: [ { from: 'A', to: 'B', rollback: false },
-                                             { from: 'B', to: 'A', rollback: true } ],
-                                 installed: [ 'C' ], deleted: [] } }), [
-	[ 'State', 'idle · 4 runs · 1 profile change' ],
-	[ 'Last run', '5m 0s ago · failed: exit 234 (2 in a row)' ],
-	[ 'Next poll', 'in 15m 0s' ],
-	[ 'Last changes', 'switched A → B · rolled back B → A · installed C' ],
-], 'ipa: outcome, retry, and what the last run did to the card');
-eq(fmt.ipaRows({ enabled: true, now: 50, state: 'idle', runs: 0, profile_changes: 0 })[1],
-   [ 'Next poll', 'once the connection is up' ], 'ipa: offline, it waits for the connection');
-
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);

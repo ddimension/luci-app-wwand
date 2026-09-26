@@ -102,33 +102,6 @@ return baseclass.extend({
 		return box;
 	},
 
-	/* The eIM section: where the fleet management stands, and a poll on
-	   request. Rows from fmt.ipaRows, which tools/test-format.js checks. */
-	renderIpa: function(data) {
-		var rows = fmt.ipaRows(data.ipa).map(function(r) {
-			/* arrays: ICCIDs and error strings come from the card and the eIM */
-			return E('tr', { 'class': 'tr' }, [
-				E('td', { 'class': 'td left', 'width': '25%' }, [ r[0] ]),
-				E('td', { 'class': 'td left' }, [ r[1] ]),
-			]);
-		});
-
-		return E('div', { 'class': 'cbi-section' }, [
-			E('h4', {}, _('eSIM fleet management (eIM)')),
-			E('p', {}, E('em', {}, _('An eIM manages the profiles on this card: it is polled after the connection comes up and then periodically, and profile changes it sends are applied here. Manual profile changes are switched off while it does.'))),
-			E('table', { 'class': 'table' }, rows),
-			E('button', { 'class': 'btn cbi-button cbi-button-apply',
-				'click': ui.createHandlerFn(this, function() {
-					return wrpc.ipa(data.modem, 'poll').then(function(res) {
-						if (res && res.ok === false)
-							ui.addNotification(null, E('p', {}, [ _('eIM poll not started: %s').format(res.error || '?') ]), 'warning');
-						else
-							ui.addNotification(null, E('p', {}, _('eIM poll started; reload the page for the result.')), 'info');
-					});
-				}) }, _('Poll now')),
-		]);
-	},
-
 	render: function(ctx, data) {
 		var self = this;
 		var esimOk = data.esim && data.esim.ok !== false && data.esim.profiles;
@@ -279,26 +252,30 @@ return baseclass.extend({
 			return out;
 		}
 
-		/* A CARD THE eIM MANAGES (wwand-ipa, `option ipa`) is not changed from
-		   here: the assistant keeps its own record of the card (the profile to
-		   roll back to, pending results) and the daemon refuses enable,
-		   disable, delete, download and notify with `ipa_managed`. So those
-		   controls are not offered at all rather than offered and then refused;
-		   the override (`force`) is left to the CLI, for someone who knows. */
-		var managed = !!(data.ipa && data.ipa.enabled);
+		/* A CARD A PLUGIN MANAGES (status `esim_managed_by`, e.g. an SGP.32 eIM
+		   client) is not changed from here: the plugin keeps its own record of
+		   the card, and the daemon refuses enable, disable, delete, download
+		   and notify with `esim_managed`. So those controls are not offered at
+		   all rather than offered and then refused; the override (`force`) is
+		   left to the CLI, for someone who knows. */
+		var managedBy = (data.info && data.info.esim_managed_by) || null;
 
-		if (managed)
-			out.push(this.renderIpa(data));
+		if (managedBy)
+			out.push(E('div', { 'class': 'cbi-section' }, [
+				E('h4', {}, _('Managed card')),
+				/* array: the plugin name comes from the daemon */
+				E('p', {}, [ _('This card is managed by %s. Profile changes are made there, not here.').format(managedBy) ]),
+			]));
 
 		var profRows = (data.esim.profiles || []).map(function(p) {
 			var acts = [];
 
-			if (managed)
+			if (managedBy)
 				return E('tr', { 'class': 'tr' }, [
 					E('td', { 'class': 'td' }, [ p.iccid ]),
 					E('td', { 'class': 'td' }, [ p.provider || p.name || p.nickname || '' ]),
 					E('td', { 'class': 'td' }, [ p.state ]),
-					E('td', { 'class': 'td' }, E('em', {}, _('managed by the eIM'))),
+					E('td', { 'class': 'td' }, E('em', {}, [ _('managed by %s').format(managedBy) ])),
 				]);
 
 			if (p.state != 'enabled')
@@ -452,7 +429,7 @@ return baseclass.extend({
 			: _('lpac downloads on the router over your uplink and relays the eUICC APDUs through wwand — no dedicated modem APN needed.');
 
 
-		if (managed)
+		if (managedBy)
 			return out;
 
 		var codeIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
