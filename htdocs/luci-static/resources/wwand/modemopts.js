@@ -575,6 +575,16 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		/* The one automatic hardware action on a modem that has never
+		   answered (a wedged modem after a reboot looks exactly like that):
+		   a pulse of the reset GPIO assigned to THIS modem, once per outage.
+		   Without a reset GPIO on the modem it does nothing. */
+		o = s.taboption(tab, form.Value, 'unarmed_reset_after', _('Reset a never-answering modem after (s)'),
+			_('If the modem has not answered since boot or since the outage began, pulse its reset GPIO once after this many seconds. Only a modem with its own reset GPIO set is touched, never another modem on the router. 0 = never.'));
+		o.placeholder = '300';
+		o.datatype = 'uinteger';
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'proto_error_limit', _('Reboot after N protocol errors'),
 			_('Reboot after this many consecutive control-protocol errors. Gated by the failure-reboot setting above — with reboot disabled it never fires.'));
 		o.placeholder = '25';

@@ -662,7 +662,25 @@ function renderLive(name, modem, graphs, board) {
 			var line = _('%s · %d/%d steps taken').format(state, fired,
 				rec.rungs ? rec.rungs.length : 0);
 
-			if (rec.next)
+			/* An unarmed modem climbs no ladder: the one thing that can still
+			   happen by itself is a pulse of the reset line assigned to it,
+			   due by time since the outage began. Naming the ladder's next
+			   rung there promised a step that is never taken (#40). */
+			if (!rec.armed)
+				line += ' · %s'.format(rec.unarmed_reset == 'available'
+					? (rec.unarmed_reset_in == null
+						? _('reset-line pulse available')
+						: rec.unarmed_reset_in > 0
+							? _('reset-line pulse in %d s').format(rec.unarmed_reset_in)
+							: _('reset-line pulse on the next failed attempt'))
+					: rec.unarmed_reset == 'spent'
+						? _('reset-line pulse already used this outage')
+						: rec.unarmed_reset_off == 'disabled'
+							? _('nothing physical until the modem answers (automatic reset switched off)')
+							: rec.unarmed_reset_off == 'no_reset_gpio'
+								? _('nothing physical until the modem answers (no reset GPIO assigned to it)')
+								: _('nothing physical until the modem answers'));
+			else if (rec.next)
 				line += ' · %s'.format(rec.next['in'] > 0
 					? _('next: %s in %d attempts').format(rec.next.action, rec.next['in'])
 					: _('next: %s, due now').format(rec.next.action));
