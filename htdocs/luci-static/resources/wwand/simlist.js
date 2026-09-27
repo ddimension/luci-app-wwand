@@ -2,12 +2,49 @@
 'require baseclass';
 'require form';
 'require uci';
+'require rpc';
 
 /* Shared per-SIM override list (config wwand_sim in /etc/config/network): a
    PIN/APN bundle matched at runtime by ICCID, independent of the modem (a
    wwand_sim with no `modem` applies to whichever modem holds that card). Used —
    like wwand.modemopts — by both the dedicated Modems page and the interface
    proto handler, so the list is defined once. */
+
+var callInventory = rpc.declare({ object: 'wwand', method: 'sim_inventory', expect: { '': {} } });
+
+/* An ICCID as written in the config and as read from the card can differ in
+   case and in the 'F' padding of an odd-length ICCID (EF ICCID is BCD,
+   ETSI TS 102 221 13.2), so both sides are compared normalised. */
+function normIccid(v) {
+	return String(v || '').toUpperCase().replace(/F+$/, '');
+}
+
+/* one inventory entry, tersely: where the card sits right now */
+function whereShort(c, now) {
+	var parts = [];
+
+	if (!c.present) {
+		if (c.last_seen != null && now != null) {
+			var d = Math.max(0, now - c.last_seen);
+			return _('not present, %s').format(d < 7200 ? _('%d min').format(Math.floor(d / 60))
+				: d < 172800 ? _('%d h').format(Math.floor(d / 3600)) : _('%d d').format(Math.floor(d / 86400)));
+		}
+		return _('not present');
+	}
+
+	if (c.reader)
+		parts.push(_('rsim %s').format(c.reader));
+	else if (c.modem)
+		parts.push(c.slot != null ? _('%s · slot %d').format(c.modem, c.slot) : c.modem);
+
+	if (c.eid)
+		parts.push(c.profile && c.profile.state ? _('eSIM %s').format(c.profile.state) : _('eSIM'));
+
+	if (c.active)
+		parts.push(_('in use'));
+
+	return parts.join(' · ') || '?';
+}
 
 return baseclass.extend({
 	/* add the SIM-override GridSection to the form.Map `m`.
@@ -40,6 +77,11 @@ return baseclass.extend({
 
 		var o;
 
+		/* Where the card is right now, from the daemon's SIM inventory — status
+		   only. One request per page; a page whose ACL lacks sim_inventory (or
+		   an older daemon) just shows nothing here. */
+		var inventory = L.resolveDefault(callInventory(), {});
+
 		o = s.option(form.Value, 'iccid', _('ICCID'),
 			_('The card\'s ICCID (printed on the SIM / shown on the modem status page).'));
 		o.rmempty = false;
@@ -47,10 +89,36 @@ return baseclass.extend({
 		if (opts.prefillIccid)
 			o.default = opts.prefillIccid;
 
+		o = s.option(form.DummyValue, '_where', _('Now'));
+		o.modalonly = false;
+		o.textvalue = function(section_id) {
+			var want = normIccid(uci.get('network', section_id, 'iccid')),
+			    span = E('span', { 'style': 'white-space:nowrap' }, [ '…' ]);
+
+			inventory.then(function(inv) {
+				var hits = ((inv && inv.cards) || []).filter(function(c) {
+					return want && normIccid(c.iccid) == want;
+				});
+
+				/* array children: reader and profile names come from outside */
+				span.replaceChildren(hits.length
+					? hits.map(function(c) { return whereShort(c, inv.now); }).join('; ')
+					: E('span', { 'style': 'opacity:.6' }, [ _('not seen') ]));
+			});
+
+			return span;
+		};
+
 		o = s.option(form.Value, 'pincode', _('PIN'),
 			_('SIM PIN for this card. Overrides the modem\'s default PIN; wwand never retries a PIN when only one attempt is left.'));
 		o.datatype = 'and(uinteger,minlength(4),maxlength(8))';
 		o.password = true;
+		/* `password` masks the input field only: the grid cell is rendered from
+		   textvalue(), which is the stored value (form.js renderTextValue), so
+		   the list showed every card's PIN in clear. Only whether one is set. */
+		o.textvalue = function(section_id) {
+			return this.cfgvalue(section_id) ? '••••' : null;
+		};
 
 		o = s.option(form.Value, 'apn', _('APN'),
 			_('Optional APN for this card, overriding the interface/default APN.'));
