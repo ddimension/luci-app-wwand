@@ -92,15 +92,21 @@ return baseclass.extend({
 		o = s.option(form.DummyValue, '_where', _('Now'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {
+			/* the daemon matches a section by ICCID, by `imsi`, or by an IMSI
+			   written into the iccid field (modem_common.uc match_sim_override,
+			   config.uc accepting `imsi`) — so does this */
 			var want = normIccid(uci.get('network', section_id, 'iccid')),
+			    imsi = uci.get('network', section_id, 'imsi'),
 			    span = E('span', { 'style': 'white-space:nowrap' }, [ '…' ]);
 
 			inventory.then(function(inv) {
 				var hits = ((inv && inv.cards) || []).filter(function(c) {
-					return want && normIccid(c.iccid) == want;
+					return (want && (normIccid(c.iccid) == want || c.imsi == want)) ||
+					       (imsi && c.imsi == imsi);
 				});
 
-				/* array children: reader and profile names come from outside */
+				/* a string argument becomes a text node: reader and profile
+				   names come from outside and are never parsed as markup */
 				span.replaceChildren(hits.length
 					? hits.map(function(c) { return whereShort(c, inv.now); }).join('; ')
 					: E('span', { 'style': 'opacity:.6' }, [ _('not seen') ]));
