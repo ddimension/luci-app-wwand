@@ -625,6 +625,13 @@ function renderLive(name, modem, graphs, board) {
 			mdmRows.push([ term(_('SIM event'), _('The last thing the card said about itself: a session it closed and why, an internal recovery, or an activation that did not complete.')),
 				E('span', { 'style': 'color:#c00' }, [ modem.sim_note ]) ]);
 
+		/* A radio an optional package holds off, and why: the modem's card is
+		   lent to another modem, or its remote SIM is not in use yet. Its
+		   interfaces fail with RADIO_HELD meanwhile; this row is the reason. */
+		if (modem.radio_held)
+			mdmRows.push([ term(_('Radio'), _('An optional package holds this modem\'s radio off. Its interfaces stay down until the reason is gone, then the radio is switched on again by itself.')),
+				E('span', { 'style': 'color:#b8860b' }, [ _('off — %s').format(String(modem.radio_held)) ]) ]);
+
 		/* What optional packages report about this modem — a remote SIM in a
 		   reader on the router, say. The daemon collects the rows
 		   (plugins_status); this page knows no package by name, so any
