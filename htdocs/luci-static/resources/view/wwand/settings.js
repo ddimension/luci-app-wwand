@@ -104,6 +104,7 @@ var ERROR_TEXT = {
 	cancelled:              _('Cancelled.'),
 	modem_not_ready:        _('The modem is not ready yet.'),
 	sim_transport:          _('No usable channel to the SIM on this modem.'),
+	unsupported_tuple:      _('The modem\'s current radio-technology setting does not allow a band list to be written.'),
 	missing_argument:       _('Incomplete request — a required value was missing.'),
 };
 
@@ -116,6 +117,13 @@ function describeError(res) {
 		if (d.key != null)    bits.push(String(d.key));
 		if (bits.length) txt += ' (' + bits.join(', ') + ')';
 	}
+	/* the band codec answers with a sentence in `detail` and names the
+	   offending option or band beside it ("band 66 is not one this module
+	   supports") — shown bare, invalid_setting says nothing */
+	else if (typeof d == 'string' && d)
+		txt += ': ' + d;
+	else if (r.key != null)
+		txt += ' (' + String(r.key) + (r.band != null ? ' ' + String(r.band) : '') + ')';
 	return txt;
 }
 
@@ -1043,10 +1051,29 @@ return view.extend({
 
 		var self = this;
 		var s = data.settings || {};
+
+		/* A band-only backend (a Fibocom FM350 through +GTACT) names what it
+		   can set in `settable`; the QMI/MBIM path leaves it out and every
+		   control applies. The daemon refuses an edit carrying a key the
+		   backend cannot set, so sending all six made every save on such a
+		   modem fail (luci-app-wwand#9). */
+		var settable = Array.isArray(s.settable) ? s.settable : null;
+		var can = function(k) { return !settable || settable.indexOf(k) >= 0; };
+		var sharedNr = !!s.nr_bands_shared;
+		var sup = s.supported || {};
+		/* offer only the bands the module lists: +GTACT aborts the whole
+		   write on one it does not know */
+		var only = function(known, list) {
+			return Array.isArray(list)
+				? known.filter(function(b) { return list.indexOf(b.num) >= 0; })
+				: known;
+		};
+
 		var modeBoxes = MODE_BITS.map(function(m) {
 			return E('label', { 'style': 'margin-right:1em' }, [
 				E('input', { type: 'checkbox', 'data-bit': m[0],
-					checked: (s.mode_preference & m[0]) ? '' : null }),
+					checked: (s.mode_preference & m[0]) ? '' : null,
+					disabled: can('mode_preference') ? null : '' }),
 				' ' + m[1],
 			]);
 		});
@@ -1061,9 +1088,9 @@ return view.extend({
 			E('option', { value: 255, selected: s.roaming_preference == 255 ? '' : null }, _('any')),
 		]);
 
-		var ltePicker = bandPicker(lteKnownBands(), s.lte_bands || []);
-		var saPicker  = bandPicker(nrKnownBands(), s.nr5g_sa_bands || []);
-		var nsaPicker = bandPicker(nrKnownBands(), s.nr5g_nsa_bands || []);
+		var ltePicker = bandPicker(only(lteKnownBands(), sup.lte_bands), s.lte_bands || []);
+		var saPicker  = bandPicker(only(nrKnownBands(), sup.nr_bands), s.nr5g_sa_bands || []);
+		var nsaPicker = bandPicker(only(nrKnownBands(), sup.nr_bands), s.nr5g_nsa_bands || []);
 
 		var collect = function() {
 			// start from the bits we do not render, so they survive the save
@@ -1073,14 +1100,17 @@ return view.extend({
 				if (cb.checked)
 					mode |= +cb.getAttribute('data-bit');
 			});
-			return {
-				mode_preference: mode,
-				usage_preference: +usageSel.value,
-				roaming_preference: +roamSel.value,
-				lte_bands: ltePicker._collect(),
-				nr5g_sa_bands: saPicker._collect(),
-				nr5g_nsa_bands: nsaPicker._collect(),
-			};
+			var out = {};
+			if (can('mode_preference')) out.mode_preference = mode;
+			if (can('usage_preference')) out.usage_preference = +usageSel.value;
+			if (can('roaming_preference')) out.roaming_preference = +roamSel.value;
+			if (can('lte_bands')) out.lte_bands = ltePicker._collect();
+			/* one list for SA and NSA alike: the same value in both keys is
+			   what the daemon accepts for it */
+			if (can('nr5g_sa_bands')) out.nr5g_sa_bands = saPicker._collect();
+			if (can('nr5g_nsa_bands'))
+				out.nr5g_nsa_bands = sharedNr ? saPicker._collect() : nsaPicker._collect();
+			return out;
 		};
 
 		/* same signature as the cell-lock row() above — these six controls
@@ -1139,28 +1169,41 @@ return view.extend({
 			modemSel,
 			warns || '',
 			E('div', { 'class': 'cbi-section' }, [
+				(settable && settable.length == 0)
+					? E('p', {}, E('em', {}, [ s.settable_note || _('This modem\'s bands cannot be changed from here right now.') ]))
+					: '',
 				row(_('Radio technologies'), E('div', {}, modeBoxes),
-					_('Which generations the modem may use. Unchecking one stops it being used at all — a modem restricted to 5G will not fall back to LTE where 5G is absent, so leave everything the network offers checked unless you are deliberately pinning a technology.')),
-				row(_('UE usage'), usageSel,
-					_('The 3GPP usage setting the modem reports to the network: whether this device is here for data or for voice. It is a preference, not a command — what the network then does about voice continuity is its decision. Data centric is what a router wants.')),
-				row(_('Roaming'), roamSel,
-					_('Which networks the modem may register on. "Home only" refuses roaming partners outright — useful against accidental cross-border charges, and the reason a SIM that works elsewhere may show "no service" here.')),
-				row(_('LTE bands'), ltePicker,
-					_('Restrict LTE to these bands. Leave everything unchecked to let the modem use all bands it supports — a narrowed list is a way to pin a known-good band, not a way to improve a working link.')),
-				row(_('NR5G SA bands'), saPicker,
-					_('5G bands for standalone operation, where the modem talks 5G only with no LTE anchor.')),
-				row(_('NR5G NSA bands'), nsaPicker,
-					_('5G bands for non-standalone operation, where a 5G carrier rides on an LTE anchor. Which of the two lists applies depends on the network: the Status page names the mode the modem is actually in.')),
+					can('mode_preference')
+						? _('Which generations the modem may use. Unchecking one stops it being used at all — a modem restricted to 5G will not fall back to LTE where 5G is absent, so leave everything the network offers checked unless you are deliberately pinning a technology.')
+						: _('Shown, not set: this modem picks its technologies with its own RAT setting, and a band edit keeps it as it is.')),
+				can('usage_preference') ? row(_('UE usage'), usageSel,
+					_('The 3GPP usage setting the modem reports to the network: whether this device is here for data or for voice. It is a preference, not a command — what the network then does about voice continuity is its decision. Data centric is what a router wants.')) : '',
+				can('roaming_preference') ? row(_('Roaming'), roamSel,
+					_('Which networks the modem may register on. "Home only" refuses roaming partners outright — useful against accidental cross-border charges, and the reason a SIM that works elsewhere may show "no service" here.')) : '',
+				can('lte_bands') ? row(_('LTE bands'), ltePicker,
+					_('Restrict LTE to these bands. Leave everything unchecked to let the modem use all bands it supports — a narrowed list is a way to pin a known-good band, not a way to improve a working link.')) : '',
+				(sharedNr && can('nr5g_sa_bands')) ? row(_('NR5G bands'), saPicker,
+					_('5G bands. This modem has one 5G band list for standalone and non-standalone operation alike.')) : '',
+				(!sharedNr && can('nr5g_sa_bands')) ? row(_('NR5G SA bands'), saPicker,
+					_('5G bands for standalone operation, where the modem talks 5G only with no LTE anchor.')) : '',
+				(!sharedNr && can('nr5g_nsa_bands')) ? row(_('NR5G NSA bands'), nsaPicker,
+					_('5G bands for non-standalone operation, where a 5G carrier rides on an LTE anchor. Which of the two lists applies depends on the network: the Status page names the mode the modem is actually in.')) : '',
 				E('p', { 'style': 'margin:6px 0 0;color:var(--fg-color-2,#666)' }, E('em', {},
 					_('Leave every band unchecked (and the fallback empty) to let the modem use all supported bands.'))),
+				/* +GTACT is not NV: the daemon keeps the lists in the modem's
+				   uci section and re-applies them at every start */
+				(s.persistent === false) ? E('p', { 'style': 'margin:6px 0 0;color:var(--fg-color-2,#666)' }, E('em', {},
+					_('This modem forgets its bands when it is power-cycled, so they are kept in the router configuration (band_lte / band_nr of the modem) and applied again at every start.'))) : '',
 			]),
 			E('div', { 'class': 'cbi-page-actions' }, [
 				E('button', { 'class': 'btn cbi-button cbi-button-apply',
+					disabled: (settable && settable.length == 0) ? '' : null,
 					click: ui.createHandlerFn(self, function() {
 						return self.apply(data.modem, collect());
 					}) }, _('Apply')),
 				' ',
 				E('button', { 'class': 'btn cbi-button cbi-button-reset',
+					disabled: (settable && settable.length == 0) ? '' : null,
 					click: ui.createHandlerFn(self, function() {
 						if (!confirm(_('Reset radio/band/usage/roaming settings to defaults?')))
 							return;
@@ -1172,6 +1215,13 @@ return view.extend({
 						var defs = Object.assign({}, DEFAULTS);
 						defs.mode_preference = ((+s.mode_preference || 0) & ~MODE_BITS_MASK) |
 							DEFAULTS.mode_preference;
+						/* a band-only backend: every band list empty, which it
+						   reads as "all bands the module supports" — not the
+						   1..63 table, which names bands it would refuse */
+						if (settable) {
+							defs = {};
+							settable.forEach(function(k) { defs[k] = []; });
+						}
 
 						return self.apply(data.modem, defs).then(function() {
 							window.location.reload();

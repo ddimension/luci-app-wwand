@@ -35,9 +35,9 @@ function ago(secs) {
 
 function state(c, now) {
 	if (!c.present)
-		return E('span', { 'style': 'opacity:.6' }, (c.last_seen != null && now != null)
+		return E('span', { 'style': 'opacity:.6' }, [ (c.last_seen != null && now != null)
 			? _('not present, last seen %s').format(ago(Math.max(0, now - c.last_seen)))
-			: _('not present'));
+			: _('not present') ]);
 	if (c.active)
 		return E('strong', {}, _('in use'));
 	return _('present');
