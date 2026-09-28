@@ -2,6 +2,8 @@
 'require view';
 'require rpc';
 'require poll';
+'require uci';
+'require wwand.simlist as simlist';
 
 /* Status -> SIM cards: every SIM card wwand has seen (ubus sim_inventory,
    the daemon's siminventory.uc), by ICCID, and where it is — which modem and
@@ -51,9 +53,29 @@ function esim(c) {
 	]);
 }
 
+/* this card's override (PIN, APN, …) on the Modems page, in the editor
+   there: Edit when it has one, Create when not (Modems page, ?sim=) */
+function settingsButton(c) {
+	if (!c.iccid)
+		return '';
+
+	var have = !!simlist.findSim(c.iccid, c.imsi);
+
+	return E('button', {
+		'class': 'btn cbi-button ' + (have ? 'cbi-button-edit' : 'cbi-button-add'),
+		'title': have ? _('Edit the settings of this SIM card') : _('Create settings for this SIM card'),
+		'click': function() {
+			window.location.href = L.url('admin/network/wwand') + '?sim=' + encodeURIComponent(c.iccid);
+		},
+	}, [ have ? _('Edit') : _('Create') ]);
+}
+
 return view.extend({
 	load: function() {
-		return L.resolveDefault(callInventory(), {});
+		return Promise.all([
+			L.resolveDefault(callInventory(), {}),
+			L.resolveDefault(uci.load('network'), null),
+		]).then(function(r) { return r[0]; });
 	},
 
 	table: function(inv) {
@@ -69,6 +91,7 @@ return view.extend({
 				E('th', { 'class': 'th' }, _('State')),
 				E('th', { 'class': 'th' }, _('IMSI')),
 				E('th', { 'class': 'th' }, _('eSIM')),
+				E('th', { 'class': 'th' }, _('Settings')),
 			]),
 		].concat(cards.map(function(c) {
 			return E('tr', { 'class': 'tr' }, [
@@ -77,6 +100,7 @@ return view.extend({
 				E('td', { 'class': 'td' }, state(c, inv.now)),
 				E('td', { 'class': 'td' }, [ c.imsi || '—' ]),
 				E('td', { 'class': 'td' }, esim(c)),
+				E('td', { 'class': 'td' }, settingsButton(c)),
 			]);
 		})));
 	},

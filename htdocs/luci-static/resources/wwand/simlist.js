@@ -46,7 +46,44 @@ function whereShort(c, now) {
 	return parts.join(' · ') || '?';
 }
 
+/* the wwand_sim section for a card, matched as the daemon matches it:
+   by ICCID, or by an IMSI written into the iccid field or into `imsi`
+   (modem_common.uc match_sim_override); null when there is none */
+function findSim(iccid, imsi) {
+	var want = normIccid(iccid), hit = null;
+
+	uci.sections('network', 'wwand_sim', function(sec) {
+		if (hit)
+			return;
+		if ((want && normIccid(sec.iccid) == want) ||
+		    (imsi && (sec.imsi == imsi || sec.iccid == imsi)))
+			hit = sec['.name'];
+	});
+
+	return hit;
+}
+
 return baseclass.extend({
+	findSim: findSim,
+
+	/* Open the override editor of the list `s` (addSimList's section) for
+	   one card: its section when it has one, otherwise a new one with the
+	   ICCID filled in — added the way the list's own Add does
+	   (GridSection.handleAdd, form.js), so Cancel removes it again and only
+	   Save & Apply keeps it. */
+	openSim: function(s, iccid, imsi) {
+		var sid = findSim(iccid, imsi);
+
+		if (sid)
+			return s.renderMoreOptionsModal(sid);
+
+		sid = s.map.data.add('network', 'wwand_sim');
+		s.map.data.set('network', sid, 'iccid', iccid);
+		s.map.addedSection = sid;
+
+		return s.renderMoreOptionsModal(sid);
+	},
+
 	/* add the SIM-override GridSection to the form.Map `m`.
 	   opts.prefillIccid — prefill the ICCID on a freshly added row (the active
 	   card, so the common "PIN for the inserted SIM" case is one click). */

@@ -563,7 +563,7 @@ return view.extend({
 		};
 
 		/* per-ICCID/IMSI SIM overrides (PIN/APN), shared wwand.simlist */
-		simlist.addSimList(m, {});
+		var simSec = simlist.addSimList(m, {});
 
 		/* detected control devices without a wwand_modem section — offer a
 		   one-click Configure that stages a prefilled section (saved with the
@@ -709,7 +709,22 @@ return view.extend({
 			]);
 		}
 
+		/* ?sim=<ICCID>: the SIM cards page's Edit/Create button — open that
+		   card's override. Taken off the URL first, so a reload does not add
+		   a second one. */
+		var simParam = new URLSearchParams(window.location.search).get('sim');
+
+		if (simParam) {
+			var u = new URL(window.location.href);
+
+			u.searchParams.delete('sim');
+			window.history.replaceState(null, '', u.toString());
+		}
+
 		return m.render().then(function(mapNode) {
+			if (simParam && /^[0-9A-Fa-f]{6,22}$/.test(simParam))
+				window.setTimeout(function() { simlist.openSim(simSec, simParam); }, 0);
+
 			return E('div', {}, [ mapNode, migration, detected ]);
 		});
 	},
