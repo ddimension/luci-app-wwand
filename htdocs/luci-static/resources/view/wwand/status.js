@@ -625,6 +625,21 @@ function renderLive(name, modem, graphs, board) {
 			mdmRows.push([ term(_('SIM event'), _('The last thing the card said about itself: a session it closed and why, an internal recovery, or an activation that did not complete.')),
 				E('span', { 'style': 'color:#c00' }, [ modem.sim_note ]) ]);
 
+		/* Whether this modem can run on a card that is not in its slot (a
+		   remote SIM, wwand-rsim): from the services the modem lists itself —
+		   QMI UIM Remote natively, or over the QMI passthrough on MBIM. */
+		if (modem.remote_sim && typeof modem.remote_sim == 'object') {
+			var rs = modem.remote_sim;
+			var rsText = (rs.supported === true)
+				? (rs.via == 'mbim-passthrough' ? _('yes (MBIM, over the QMI passthrough)') : _('yes (QMI)'))
+				: (rs.supported === false)
+					? _('no — %s').format(String(rs.reason || ''))
+					: _('not known yet — %s').format(String(rs.reason || ''));
+
+			mdmRows.push([ term(_('Remote SIM supported'), _('Whether the modem offers QMI UIM Remote, the service a modem needs to run on a SIM card that is not in its own slot (a card in a reader, a phone, or another modem — the wwand-rsim package). Read from the services the modem lists itself; a Quectel lists it even while its switch for it is off (wwandctl rsim MODEM switch).')),
+				E('span', { 'style': rs.supported === true ? '' : 'opacity:.75' }, [ rsText ]) ]);
+		}
+
 		/* A radio an optional package holds off, and why: the modem's card is
 		   lent to another modem, or its remote SIM is not in use yet. Its
 		   interfaces fail with RADIO_HELD meanwhile; this row is the reason. */
