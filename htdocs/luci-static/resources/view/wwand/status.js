@@ -713,6 +713,12 @@ function renderLive(name, modem, graphs, board) {
 						? _('reset-line pulse already used this outage')
 						: rec.unarmed_reset_off == 'disabled'
 							? _('nothing physical until the modem answers (automatic reset switched off)')
+							/* the board's own line, when the modem names none: the
+							   pulse deliberately does not take it (a second modem's
+							   line, possibly), and "no reset GPIO" alone read as "this
+							   board has none" (ddimension/wwand#40) */
+							: (rec.unarmed_reset_off == 'no_reset_gpio' && rec.board_reset_gpio)
+								? _('nothing physical until the modem answers (the board\'s reset line %s is used only by an explicit reset — set this modem\'s reset GPIO for the automatic pulse)').format(rec.board_reset_gpio)
 							: rec.unarmed_reset_off == 'no_reset_gpio'
 								? _('nothing physical until the modem answers (no reset GPIO assigned to it)')
 								: _('nothing physical until the modem answers'));
