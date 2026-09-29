@@ -254,6 +254,22 @@ function plmnRatBox(e, key, label) {
 }
 function plmnEditRow(e, noRat) {
 	e = e || {};
+	/* An entry the modem reports by NAME only: on the FM350-GL the user list
+	   comes from the modem's own operator table, which ignores AT+CPOL=,2 and
+	   has no MCC/MNC to show (ddimension/luci-app-wwand#9). Empty inputs
+	   rendered it as a blank row, and a write would have dropped it — so it
+	   is shown read-only, by name, and marks the list as not writable. */
+	if (e.name && (!e.mcc || !e.mnc)) {
+		var ro = [ E('td', { 'class': 'td' }, [ e.mcc || '—' ]), E('td', { 'class': 'td' }, [ e.mnc || '—' ]),
+			E('td', { 'class': 'td' }, [ e.name ]) ];
+		if (!noRat)
+			ro.push(E('td', { 'class': 'td' }, fmt.PLMN_RATS.map(function(r) {
+				return E('label', { 'style': 'margin-right:8px;white-space:nowrap;opacity:.6' }, [
+					E('input', { 'type': 'checkbox', 'disabled': '', 'checked': e[r.key] ? '' : null }), ' ' + r.label ]);
+			})));
+		ro.push(E('td', { 'class': 'td' }, ''));
+		return E('tr', { 'class': 'tr', 'data-named': '1' }, ro);
+	}
 	var mccIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
 		'style': 'width:5em', 'data-f': 'mcc', 'maxlength': '3', 'placeholder': 'MCC', 'value': e.mcc || '' });
 	var mncIn = E('input', { 'type': 'text', 'class': 'cbi-input-text',
@@ -539,6 +555,16 @@ return view.extend({
 					return plmnEditRow(e, noRat);
 				}))));
 		};
+		/* entries the modem gives by name only (see plmnEditRow): a write
+		   carries MCC/MNC and would silently drop every one of them */
+		var namedCount = function() { return tcontainer.querySelectorAll('tr[data-named]').length; };
+		var refuseNamed = function() {
+			var n = namedCount();
+			if (!n)
+				return false;
+			ui.addNotification(null, E('p', {}, [ _('Not written: %d entries of this list are reported by the modem by name without a complete MCC/MNC, and writing the list would drop them.').format(n) ]), 'warning');
+			return true;
+		};
 		var collect = function() {
 			var out = [], trs = tcontainer.getElementsByTagName('tr');
 			for (var i = 0; i < trs.length; i++) {
@@ -580,6 +606,8 @@ return view.extend({
 
 		/* write the edited list straight to the modem (not persisted) */
 		var writeNow = ui.createHandlerFn(self, function() {
+			if (refuseNamed())
+				return;
 			var entries = collect(), t = typeSel.value;
 			if (!confirm(_('Write %d record(s) to the modem\'s %s list now? (not saved to config)')
 					.format(entries.length, t == 'nas' ? 'NAS' : t == 'fplmn' ? 'FPLMN' : 'user')))
@@ -600,6 +628,8 @@ return view.extend({
 
 		/* save the edited list as a named wwand_plmnlist + attach it to this modem */
 		var saveAs = ui.createHandlerFn(self, function() {
+			if (refuseNamed())
+				return;
 			var entries = collect(), t = typeSel.value;
 			var name = (window.prompt(_('Save as list — name:'), curListName || (t + '-list')) || '').replace(/[^a-zA-Z0-9_]/g, '');
 			if (!name) return;
