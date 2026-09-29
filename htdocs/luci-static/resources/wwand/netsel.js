@@ -39,8 +39,13 @@ return baseclass.extend({
 
 		var results = E('div', { 'style': 'margin-top:10px' });
 
-		var setSelection = function(smode, mcc, mnc, label) {
-			return callSetSelection(data.modem, smode, (mcc != null ? +mcc : 0), (mnc != null ? +mnc : 0))
+		/* `digits` is the MNC's width from the scan (310/030 and 310/30 are
+		   different operators, and mnc crosses ubus as an integer). Left
+		   undefined when unknown, which rpc.js drops from the call — a null
+		   would reach ucode as an argument of the wrong type and be refused. */
+		var setSelection = function(smode, mcc, mnc, digits, label) {
+			return callSetSelection(data.modem, smode, (mcc != null ? +mcc : 0), (mnc != null ? +mnc : 0),
+				(digits == 2 || digits == 3) ? +digits : undefined)
 				.then(function(res) {
 					if (res && res.ok === false)
 						ui.addNotification(null, E('p', [ _('Failed: ') + (res.error || '?') ]), 'error');
@@ -102,7 +107,7 @@ return baseclass.extend({
 							if (!confirm(_('Register manually to %s (%s)? The connection may briefly drop.')
 									.format(op.name || '?', fmt.fmtPlmn(op.mcc, op.mnc, op.mnc_digits))))
 								return;
-							return setSelection('manual', op.mcc, op.mnc,
+							return setSelection('manual', op.mcc, op.mnc, op.mnc_digits,
 								_('Manual network selection applied.'));
 						}) }, current ? _('Reselect') : _('Select'));
 				return E('tr', { 'class': 'tr',
@@ -236,7 +241,7 @@ return baseclass.extend({
 
 		var autoBtn = E('button', { 'class': 'btn cbi-button', 'style': 'margin-left:6px',
 			'click': ui.createHandlerFn(self, function() {
-				return setSelection('auto', 0, 0, _('Automatic network selection enabled.'));
+				return setSelection('auto', 0, 0, undefined, _('Automatic network selection enabled.'));
 			}) }, _('Set automatic'));
 
 		/* THE TITLE BELONGS INSIDE THE SECTION. LuCI's own form.js appends the
