@@ -612,7 +612,9 @@ function renderLive(name, modem, graphs, board) {
 		   because the other end happens to cooperate. */
 		if (modem.proven === false && !modem.recovery)
 			mdmRows.push([ term(_('Recovery'), _('The modem has not yet answered in the control protocol wwand is using, so no hardware recovery step will run — repowering a modem that was never broken only adds outages. Check the control protocol setting and the bound driver.')),
-				E('span', { 'style': 'color:#b8860b' }, [ _('disarmed — the modem has not answered yet') ]) ]);
+				/* the same words as the ladder row below: one state, and
+				   two phrasings of it read as two (ddimension/wwand#40) */
+				E('span', { 'style': 'color:#b8860b' }, [ _('not armed — no exchange has succeeded in the selected protocol yet') ]) ]);
 
 		/* The card's own last word about itself, from the UIM indications. A
 		   removed or busy card used to leave these rows simply absent, which
