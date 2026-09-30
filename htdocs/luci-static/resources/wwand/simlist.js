@@ -126,6 +126,16 @@ return baseclass.extend({
 		if (opts.prefillIccid)
 			o.default = opts.prefillIccid;
 
+		/* A label for the card. With several cards in a box the ICCID alone
+		   does not say which one is which (ddimension/wwand#44); the name is
+		   shown on the SIM cards page and the modem status. Display only —
+		   wwand matches on nothing but the ICCID/IMSI, and renaming the card
+		   in use re-dials nothing. */
+		o = s.option(form.Value, 'name', _('Name'),
+			_('A name for this card, e.g. "Work" or "Travel". Shown on the SIM cards page and the modem status.'));
+		o.rmempty = true;
+		o.datatype = 'maxlength(32)';
+
 		o = s.option(form.DummyValue, '_where', _('Now'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {

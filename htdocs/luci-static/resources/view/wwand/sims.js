@@ -86,6 +86,7 @@ return view.extend({
 
 		return E('table', { 'class': 'table' }, [
 			E('tr', { 'class': 'tr table-titles' }, [
+				E('th', { 'class': 'th' }, _('Name')),
 				E('th', { 'class': 'th' }, _('ICCID')),
 				E('th', { 'class': 'th' }, _('Where')),
 				E('th', { 'class': 'th' }, _('State')),
@@ -95,6 +96,8 @@ return view.extend({
 			]),
 		].concat(cards.map(function(c) {
 			return E('tr', { 'class': 'tr' }, [
+				/* the label from the card's wwand_sim, set on Network → Modems */
+				E('td', { 'class': 'td' }, [ c.name ? String(c.name) : '—' ]),
 				E('td', { 'class': 'td' }, E('code', {}, [ c.iccid ])),
 				E('td', { 'class': 'td' }, [ where(c) ]),
 				E('td', { 'class': 'td' }, state(c, inv.now)),

@@ -381,6 +381,13 @@ return baseclass.extend({
 			' \u00b7 ' + kind,
 		];
 
+		/* the card's label from its wwand_sim (`option name`, daemon
+		   modem_sim_slots): with two cards the ICCID alone does not say which
+		   one is in which slot (ddimension/wwand#44). Text node — it is
+		   operator-entered, but still never markup. */
+		if (sl.card == 'present' && sl.name)
+			head.push(' \u00b7 ', E('span', { 'style': 'font-weight:600' }, [ String(sl.name) ]));
+
 		if (sl.active)
 			head.push(E('span', { 'style': 'margin-left:.5em;padding:0 .4em;border-radius:3px;'
 				+ 'background:#2c8a2c;color:#fff;font-size:85%' }, [ _('active') ]));
