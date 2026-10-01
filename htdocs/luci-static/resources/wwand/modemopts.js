@@ -152,8 +152,13 @@ return baseclass.extend({
 			]).then(function(res) {
 				(res[0] || []).forEach(function(n) { uniqVal(self, n, n); });
 				var brg = (res[1] || {}).board && res[1].board.reset_gpio;
+				/* NOT "only to override": the board's line serves explicit
+				   resets, but the automatic pulse for a modem that never
+				   answered takes only a line set HERE (wwand recovery.uc
+				   unarmed_reset_line), so leaving this empty switches that
+				   pulse off (ddimension/wwand#40) */
 				if (brg)
-					self.description = _('Named GPIO on the modem RESET line (invert, wait 30 s, restore instead of a USB power-cycle). This board already provides a default reset GPIO "%s" — set this only to override it.').format(brg);
+					self.description = _('Named GPIO on the modem RESET line (invert, wait 30 s, restore instead of a USB power-cycle). This board provides the reset GPIO "%s", which explicit resets use anyway; set it here as well to let wwand pulse it automatically when the modem never answers after boot.').format(brg);
 				return self.super('load', [section_id]);
 			});
 		};

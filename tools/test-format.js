@@ -735,5 +735,22 @@ eq(fmt.PLMN_RATS.map(function(r) { return r.key; }),
 eq(fmt.PLMN_RATS.map(function(r) { return r.label; }), [ '2G', '3G', '4G', '5G' ],
    'plmn rats: ...with one set of labels');
 
+/* --- the card's ISD-R about itself (daemon status `euicc`) --- */
+eq(fmt.euiccText({ sgp32: true, ipae_supported: true, svn: '2.5.0', ipa: 'ipae' }),
+   'SGP.32 IoT eUICC (on SGP.22 2.5.0)', 'euicc: SGP.32 names the SGP.22 base');
+eq(fmt.euiccText({ sgp32: false, svn: '2.2.2' }), 'SGP.22 2.2.2', 'euicc: an SGP.22 card');
+eq(fmt.euiccText(null), null, 'euicc: nothing read, nothing said');
+eq(fmt.ipaText({ sgp32: true, ipae_supported: true, ipa: 'ipae' }),
+   'in the card (IPAe) — the card and its eIM manage the profiles; the router has no ES10 access',
+   'ipa: the card runs itself');
+eq(fmt.ipaText({ sgp32: true, ipae_supported: true, ipa: 'ipad' }),
+   'on the device (IPAd); the card could also run its own', 'ipa: device IPA on a card that has its own');
+eq(fmt.ipaText({ sgp32: true, ipae_supported: false, ipa: null }), 'unknown', 'ipa: not determined');
+eq(fmt.ipaText({ sgp32: false, svn: '2.5.0' }), null, 'ipa: no row for an SGP.22 card');
+eq(fmt.cardHoldText({ card_hold: 61 }),
+   'modem reset, power cycle and reboot held for 2 min — the card is settling its own profile change',
+   'card hold: rounded up to whole minutes');
+eq(fmt.cardHoldText({ card_hold: null }), null, 'card hold: none, no text');
+
 console.log(`test-format: ${checks} checks, ${failures} failures`);
 process.exit(failures ? 1 : 0);

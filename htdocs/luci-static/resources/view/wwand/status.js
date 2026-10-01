@@ -478,6 +478,12 @@ function renderLive(name, modem, graphs, board) {
 		   passes eslot.physical for the same reason. */
 		var euicc = fmt.euiccProbeSlot((res[3] || {}).slots);
 
+		/* a card run by its own IPA refuses device-side ES10 with 6985, so
+		   the read is known to fail: do not open an APDU channel for it every
+		   minute (each one also logs a closed UIM session) */
+		if (modem.euicc && modem.euicc.ipa == 'ipae')
+			euicc = null;
+
 		return (euicc
 			? cachedCall(name, 'profiles', 60, function() {
 				return wrpc.esimProfiles(name, euicc.physical);
@@ -728,6 +734,11 @@ function renderLive(name, modem, graphs, board) {
 				line += ' · %s'.format(rec.next['in'] > 0
 					? _('next: %s in %d attempts').format(rec.next.action, rec.next['in'])
 					: _('next: %s, due now').format(rec.next.action));
+
+			var holdTxt = fmt.cardHoldText(rec);
+
+			if (holdTxt)
+				line += ' · ' + holdTxt;
 
 			mdmRows.push([ term(_('Recovery'), _('wwand escalates a failing modem in steps: cycle the operating mode, reset the modem, then the board\'s power or reset line, and a reboot beyond that. Each step fires once per outage. The ladder stays disarmed until one exchange has succeeded in the selected control protocol, so a misdetected modem is never repowered.')),
 				_('%s (%d attempts)').format(line, rec.attempts || 0) ]);
@@ -986,6 +997,7 @@ function renderLive(name, modem, graphs, board) {
 					operator: sl.active ? iName : null,
 					imsi:     sl.active ? modem.imsi : null,
 					pin:      sl.active ? pinTxt : null,
+					euicc:    sl.active ? (modem.euicc || null) : null,
 					/* the slot the profile read was AIMED at, which on a modem
 					   with no slot enumeration is the inferred one — matching
 					   on euiccReadable here would drop the answer we just

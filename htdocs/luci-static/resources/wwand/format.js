@@ -235,6 +235,53 @@ return baseclass.extend({
 	   apart from "not read" (status.js does that at res[6]). Evidence beats
 	   inference, and nothing here guesses: with no reading and no claim, the
 	   answer is no. */
+	/* What the card's ISD-R says about itself (daemon status `euicc`, read
+	   once per modem from the SELECT answer without ES10): an SGP.32 IoT
+	   eUICC carries an extra template there, and the SGP.22 version it builds
+	   on. null when there is nothing to say. */
+	euiccText: function(e) {
+		if (!e || (!e.sgp32 && !e.svn))
+			return null;
+
+		var base = e.svn ? 'SGP.22 %s'.format(e.svn) : null;
+
+		return e.sgp32
+			? (base ? _('SGP.32 IoT eUICC (on %s)').format(base) : _('SGP.32 IoT eUICC'))
+			: base;
+	},
+
+	/* Which IoT Profile Assistant runs an SGP.32 card. The card's own (IPAe)
+	   keeps ES10 to itself, so the router cannot list or switch its profiles;
+	   it changes them on its eIM's order and rolls back by itself. null when
+	   the card is not SGP.32. */
+	ipaText: function(e) {
+		if (!e || !e.sgp32)
+			return null;
+
+		if (e.ipa == 'ipae')
+			return _('in the card (IPAe) — the card and its eIM manage the profiles; the router has no ES10 access');
+
+		if (e.ipa == 'ipad')
+			return e.ipae_supported
+				? _('on the device (IPAd); the card could also run its own')
+				: _('on the device (IPAd)');
+
+		return e.ipae_supported ? _('unknown (the card supports an IPAe)') : _('unknown');
+	},
+
+	/* The recovery hold after the card's own IPA changed the subscription
+	   (daemon recovery.card_hold, seconds left): without it, "next: modem
+	   reset, due now" reads as overdue. null when there is none. */
+	cardHoldText: function(rec) {
+		var s = rec ? +(rec.card_hold || 0) : 0;
+
+		if (!(s > 0))
+			return null;
+
+		return _('modem reset, power cycle and reboot held for %d min — the card is settling its own profile change')
+			.format(Math.ceil(s / 60));
+	},
+
 	euiccConfirmed: function(sl, profiles) {
 		if (!sl)
 			return false;
@@ -374,7 +421,9 @@ return baseclass.extend({
 		o = o || {};
 
 		var rows = [];
-		var isEuicc = this.euiccConfirmed(sl, o.profiles);
+		/* o.euicc: the daemon's reading of the ACTIVE card's ISD-R */
+		var eu = (sl.active && o.euicc) ? o.euicc : null;
+		var isEuicc = this.euiccConfirmed(sl, o.profiles) || !!(eu && eu.sgp32);
 		var kind = isEuicc ? _('eUICC (eSIM)') : _('SIM card');
 		var head = [
 			E('strong', {}, [ _('Slot %d').format(sl.physical) ]),
@@ -413,6 +462,14 @@ return baseclass.extend({
 			if (o.pin)
 				rows.push([ _('PIN'), o.pin ]);
 
+			var euTxt = this.euiccText(eu), ipaTxt = this.ipaText(eu);
+
+			if (euTxt)
+				rows.push([ _('eUICC'), euTxt ]);
+
+			if (ipaTxt)
+				rows.push([ _('IPA'), ipaTxt ]);
+
 			/* the per-slot surface some AT modems expose (ESLOTSINFO-class):
 			   the INACTIVE slot's PIN and service state is exactly what decides
 			   whether switching to it is worth trying */
@@ -438,8 +495,13 @@ return baseclass.extend({
 		if (body.length)
 			out.push(E('table', { 'class': 'table', 'style': 'margin:0 0 .4em .8em' }, body));
 
+		/* a card whose own IPA runs it does not hand its profile list to the
+		   router at all, so "not read" would suggest a read that could work */
 		if (isEuicc && sl.card == 'present')
-			out.push(this.esimProfileList(o.profiles, sl.active));
+			out.push((eu && eu.ipa == 'ipae')
+				? E('div', { 'style': 'margin-left:.8em;font-size:90%;color:#888' },
+					[ _('Profiles: kept by the card — its own IPA manages them with the eIM') ])
+				: this.esimProfileList(o.profiles, sl.active));
 
 		return E('div', { 'style': 'margin-bottom:.8em' }, out);
 	},
