@@ -627,6 +627,14 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		/* Default ON in the daemon (config.uc), so the flag must default to '1'
+		   too: a '0' default would render an unset option as off while wwand
+		   treats it as on. */
+		o = s.taboption(tab, form.Flag, 'nitz_time', _('Set the clock from the network'),
+			_('Step the system clock to the network\'s time (NITZ) when it is more than two minutes off. Smaller differences are left to NTP. A router without a real-time clock otherwise keeps its boot-time date until an NTP server is reachable. The time zone is not changed.'));
+		o.default = '1';
+		bind(o);
+
 		/* TWO DIFFERENT PATHS, and this option was labelled as the other one.
 		   `location` is the QMI LOC service, which is documented as broken on
 		   Quectel (docs/backend-interface.md) and is QMI-only; `gnss` runs the
