@@ -139,9 +139,9 @@ return view.extend({
 		o.value('qrtr', _('qrtr — QMI over the QRTR bus (PCIe/MHI)'));
 
 		/* only meaningful for device 'qrtr': which node, when more than one
-		   serves QMI DMS (the daemon's default is the first that does) */
+		   serves QMI DMS and WDS (the daemon's default is the first that does) */
 		o = s.taboption('modem', form.Value, 'qrtr_node', _('QRTR node'),
-			_('The QRTR node of this modem, for a box with more than one QRTR modem. Leave empty to use the first node that serves QMI DMS.'));
+			_('The QRTR node of this modem, for a box with more than one QRTR modem. Leave empty to use the first node that serves QMI DMS and WDS.'));
 		o.datatype = 'uinteger';
 		o.depends('device', 'qrtr');
 
