@@ -826,6 +826,10 @@ return baseclass.extend({
 		var out = {
 			legacy: legacy,
 			port: g.port || null,
+			/* where the NMEA comes from: the modem's port, or QMI LOC on a
+			   modem without one (wwand-gps); the old shape had only the port */
+			source: legacy ? 'nmea_port' : (g.source || null),
+			loc: legacy ? null : (g.loc || null),
 			receiver_started: !!g.receiver_started,
 			configured: legacy ? !!g.receiver : !!g.configured,
 			reading: legacy ? !!g.reader : !!g.reading,

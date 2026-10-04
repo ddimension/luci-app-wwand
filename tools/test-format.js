@@ -633,6 +633,15 @@ eq(g_new.counters.unparsed, 1, 'gnss: the counters say how much of the stream wa
 
 /* a fix type the receiver never stated is null, not "none" — a GGA-only
    stream makes exactly that, and "none" would claim it said so */
+/* the source travels: a modem without an NMEA port is read over QMI LOC, and
+ * the panel says so instead of "no NMEA port" */
+var g_loc = fmt.gnss({ port: 'qmi-loc', source: 'qmi_loc', reading: true, configured: true,
+                       loc: { state: 'running', error: null, indications: 3 } });
+eq(g_loc.source, 'qmi_loc', 'gnss: the source is carried');
+eq(g_loc.loc && g_loc.loc.state, 'running', 'gnss: ...with the LOC session state');
+eq(fmt.gnss({ port: '/dev/ttyUSB1', reader: true, receiver: true }).source, 'nmea_port',
+   'gnss: the old shape only ever had a port');
+
 eq(fmt.gnss({ port: '/dev/x', reading: true, valid: true, fix: null }).fix_type, null,
    'gnss: an unstated fix type stays unstated');
 eq(fmt.gnss({ port: '/dev/x', reading: true, valid: false, fix: 'none' }).fix_type, null,

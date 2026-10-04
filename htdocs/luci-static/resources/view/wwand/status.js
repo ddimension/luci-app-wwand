@@ -194,12 +194,28 @@ function renderGps(raw) {
 	var term = fmt.term;
 	var rows = [];
 
-	rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration; with wwand-gps installed it also reads it.')),
-		g.port || E('span', { 'style': 'color:#888' }, [ _('none reported') ]) ]);
+	if (g.source == 'qmi_loc') {
+		/* no NMEA port: the same sentences over the QMI location service,
+		   whose session wwand-gps starts and stops itself */
+		var ls = g.loc || {};
 
-	rows.push([ term(_('Receiver'), _('Whether the modem\'s own GNSS engine has been switched on. wwand starts it with the vendor AT command when `option gnss` is set; without that the port exists and nothing is sent on it.')),
-		g.receiver_started ? _('running')
-			: (g.configured ? _('requested, not started') : _('off')) ]);
+		rows.push([ term(_('Source'), _('This modem has no NMEA port of its own, so wwand-gps asks its QMI location service (LOC) for the same NMEA sentences — natively on a QMI modem, over the QMI passthrough on an MBIM one.')),
+			_('QMI location service') ]);
+
+		rows.push([ term(_('Receiver'), _('The QMI LOC position session. Started when the modem registers and stopped before its client is released; a firmware may accept it and still send nothing, which shows as no sentences below.')),
+			ls.state == 'running' ? _('running')
+				: (ls.state == 'failed'
+					? E('span', { 'style': 'color:#da3' }, [ _('not available (%s)').format(ls.error && ls.error.stage || '?') ])
+					: _('starting')) ]);
+	}
+	else {
+		rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration; with wwand-gps installed it also reads it.')),
+			g.port || E('span', { 'style': 'color:#888' }, [ _('none reported') ]) ]);
+
+		rows.push([ term(_('Receiver'), _('Whether the modem\'s own GNSS engine has been switched on. wwand starts it with the vendor AT command when `option gnss` is set; without that the port exists and nothing is sent on it.')),
+			g.receiver_started ? _('running')
+				: (g.configured ? _('requested, not started') : _('off')) ]);
+	}
 
 	if (!g.reading)
 		rows.push([ term(_('Reader'), _('What parses the NMEA and publishes a position. Not reading is a different thing from having no fix — the receiver may be perfectly happy and nobody listening.')),
