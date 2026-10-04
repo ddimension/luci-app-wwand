@@ -146,6 +146,26 @@ return view.extend({
 		o.depends('device', 'qrtr');
 
 		modemopts.addModemSim(s, 'modem', direct);
+
+		/* The data endpoint override lives HERE and not in the shared
+		   modemopts: through the interface form's bindModem() a cleared field
+		   is never removed from the modem section (modemsid.js remove()), so
+		   "automatic" could not be chosen back there. Empty means the daemon
+		   derives both from the data netdev's bus (USB: the QMI function's
+		   interface; PCIe: type 3, interface 4). */
+		o = s.taboption('modem', form.ListValue, 'ep_type', _('Data endpoint type'),
+			_('Override the QMI data endpoint type sent with the data format and mux binding. Leave on automatic unless a modem refuses the derived endpoint.'));
+		o.value('', _('automatic'));
+		o.value('2', _('2 — USB'));
+		o.value('3', _('3 — PCIe'));
+		o.value('4', _('4 — embedded'));
+		o.optional = true;
+
+		o = s.taboption('modem', form.Value, 'ep_id', _('Data endpoint interface'),
+			_('Override the endpoint interface number (USB: the QMI function\'s interface, PCIe: 4). Leave empty for automatic.'));
+		o.datatype = 'uinteger';
+		o.optional = true;
+
 		modemopts.addRadio(s, 'radio', direct);
 		modemopts.addCellLock(s, 'radio', direct);
 		modemopts.addResilience(s, 'resilience', direct);
