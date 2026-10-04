@@ -408,6 +408,25 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		/* Overrides only: the daemon derives both from the data netdev's bus
+		   (USB: the QMI function's interface; PCIe: type 3, interface 4). An
+		   empty field must stay empty — a placeholder value written back would
+		   pin the endpoint for every modem the section is reused on. */
+		o = s.taboption(tab, form.ListValue, 'ep_type', _('Data endpoint type'),
+			_('Override the QMI data endpoint type sent with the data format and mux binding. Leave on automatic unless a modem refuses the derived endpoint.'));
+		o.value('', _('automatic'));
+		o.value('2', _('2 — USB'));
+		o.value('3', _('3 — PCIe'));
+		o.value('4', _('4 — embedded'));
+		o.optional = true;
+		bind(o);
+
+		o = s.taboption(tab, form.Value, 'ep_id', _('Data endpoint interface'),
+			_('Override the endpoint interface number (USB: the QMI function\'s interface, PCIe: 4). Leave empty for automatic.'));
+		o.datatype = 'uinteger';
+		o.optional = true;
+		bind(o);
+
 		o = s.taboption(tab, form.DynamicList, 'at_init', _('Extra AT init commands'),
 			_('Vendor AT commands sent once after the modem is detected, before registration.'));
 		o.placeholder = 'ATE0';

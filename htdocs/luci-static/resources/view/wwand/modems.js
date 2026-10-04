@@ -134,8 +134,16 @@ return view.extend({
 		/* on this page the edited section IS the wwand_modem — direct storage */
 		var direct = function(o) { return o; };
 
-		s.taboption('modem', form.Value, 'device', _('Modem device'),
-			_('Network device name (e.g. wwan0), a mux parent, or a control node (/dev/cdc-wdm0). Leave empty and set only the USB path to bind purely by topology.'));
+		var o = s.taboption('modem', form.Value, 'device', _('Modem device'),
+			_('Network device name (e.g. wwan0), a mux parent, or a control node (/dev/cdc-wdm0). Leave empty and set only the USB path to bind purely by topology. <em>qrtr</em> drives a Qualcomm modem on PCIe/MHI whose QMI is only on the QRTR bus (no cdc-wdm); its data device is the interface\'s L3 device.'));
+		o.value('qrtr', _('qrtr — QMI over the QRTR bus (PCIe/MHI)'));
+
+		/* only meaningful for device 'qrtr': which node, when more than one
+		   serves QMI DMS (the daemon's default is the first that does) */
+		o = s.taboption('modem', form.Value, 'qrtr_node', _('QRTR node'),
+			_('The QRTR node of this modem, for a box with more than one QRTR modem. Leave empty to use the first node that serves QMI DMS.'));
+		o.datatype = 'uinteger';
+		o.depends('device', 'qrtr');
 
 		modemopts.addModemSim(s, 'modem', direct);
 		modemopts.addRadio(s, 'radio', direct);
