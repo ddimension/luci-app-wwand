@@ -4,6 +4,7 @@
 'require ui';
 'require wwand.rpc as wrpc';
 'require wwand.format as fmt';
+'require wwand.simlist as simlist';
 
 /* SIM & eSIM management panel, extracted from view/wwand/settings.js: SIM
    slots (primary/switch), SIM PIN lock, and — on an eUICC — the eSIM profile
@@ -54,6 +55,16 @@ function parseActivity(log) {
 /* the shared .wwe-* CSS now lives in wwand.format (injected once by the hosting
    view); this panel and wwand.netsel just use the classes. */
 
+/* an ICCID cell, with the card's name from its wwand_sim when it has one
+   (ddimension/wwand#39) — text nodes only: the name is operator-entered */
+function iccidCell(iccid) {
+	var name = simlist.simName(iccid);
+
+	return name
+		? [ iccid || '', ' ', E('span', { 'style': 'font-weight:600' }, [ String(name) ]) ]
+		: [ iccid || '' ];
+}
+
 return baseclass.extend({
 	/* The modem's own eUICC profile read (QMI UIM), for a card whose ES10 lpac
 	   cannot use. Rendered lazily into its own container: it is a second round
@@ -90,7 +101,7 @@ return baseclass.extend({
 					return E('tr', { 'class': 'tr' }, [
 						E('td', { 'class': 'td' }, [ p.name || p.nickname || p.spn || _('(unnamed)') ]),
 						E('td', { 'class': 'td' }, [ p.active ? _('active') : (p.state || '') ]),
-						E('td', { 'class': 'td' }, [ p.iccid || '' ]),
+						E('td', { 'class': 'td' }, iccidCell(p.iccid)),
 						E('td', { 'class': 'td' }, [
 							(p.class || '') + (p.policy && p.policy.delete_not_allowed
 								? ' · ' + _('delete not allowed') : '') ]),
@@ -272,7 +283,7 @@ return baseclass.extend({
 
 			if (managedBy)
 				return E('tr', { 'class': 'tr' }, [
-					E('td', { 'class': 'td' }, [ p.iccid ]),
+					E('td', { 'class': 'td' }, iccidCell(p.iccid)),
 					E('td', { 'class': 'td' }, [ p.provider || p.name || p.nickname || '' ]),
 					E('td', { 'class': 'td' }, [ p.state ]),
 					E('td', { 'class': 'td' }, E('em', {}, [ _('managed by %s').format(managedBy) ])),
@@ -303,7 +314,7 @@ return baseclass.extend({
 				   profile is free text the CARRIER put on the eUICC when it was
 				   downloaded, and dom.append() routes a bare string through
 				   innerHTML (luci.js:1394-96) */
-				E('td', { 'class': 'td' }, [ p.iccid ]),
+				E('td', { 'class': 'td' }, iccidCell(p.iccid)),
 				E('td', { 'class': 'td' }, [ p.provider || p.name || p.nickname || '' ]),
 				E('td', { 'class': 'td' }, [ p.state ]),
 				E('td', { 'class': 'td' }, acts),

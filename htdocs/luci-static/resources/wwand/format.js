@@ -595,7 +595,13 @@ return baseclass.extend({
 		var line = [
 			E('strong', {}, [ _('Slot %d').format(sl.physical) +
 				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '') ]),
-			' \u2014 ' + this.cardText(sl.card) + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
+			/* the card's name (daemon modem_sim_slots `name`, from its
+			   wwand_sim) beside the ICCID it labels (ddimension/wwand#39);
+			   this whole line is one array member, so a text node — the name
+			   is operator-entered and never markup */
+			' \u2014 ' + this.cardText(sl.card) +
+				((sl.card == 'present' && sl.name) ? (' \u00b7 ' + String(sl.name)) : '') +
+				(sl.iccid ? (', ICCID ' + sl.iccid) : '') +
 				(sl.eid ? (', EID ' + sl.eid) : '') +
 				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) —
 				   the inactive slot's PIN and service state matter when deciding

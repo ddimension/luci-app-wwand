@@ -66,6 +66,16 @@ function findSim(iccid, imsi) {
 return baseclass.extend({
 	findSim: findSim,
 
+	/* the card's label (`option name` of its wwand_sim), or null — for the
+	   places that list cards by ICCID: with several cards in a box the ICCID
+	   alone does not say which one is which (ddimension/wwand#44, #39).
+	   Operator-entered text: callers put it in a text node, never markup. */
+	simName: function(iccid, imsi) {
+		var sid = findSim(iccid, imsi);
+
+		return sid ? (uci.get('network', sid, 'name') || null) : null;
+	},
+
 	/* Open the override editor of the list `s` (addSimList's section) for
 	   one card: its section when it has one, otherwise a new one with the
 	   ICCID filled in — added the way the list's own Add does

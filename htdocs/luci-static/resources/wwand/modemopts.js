@@ -449,9 +449,19 @@ return baseclass.extend({
 						if (sl.physical == null || seen[sl.physical]) return;
 						seen[sl.physical] = true;
 						self.slotsOf[section_id][String(sl.physical)] = true;
+						/* the card's name first when it has one (daemon
+						   modem_sim_slots `name`, from its wwand_sim): the
+						   ICCID alone does not say which card is which
+						   (ddimension/wwand#39). A PLAIN STRING: this
+						   dropdown escapes a string label itself, so `%h`
+						   showed `&#60;b&#62;`, and it stringifies an array,
+						   commas and all — both seen on 245 with a name of
+						   "M2M <b>test</b>" (luci-base as built for the
+						   chateau tree, 2026-10-05). */
 						var lbl = _('Slot %d').format(sl.physical);
+
 						if (sl.iccid)
-							lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
+							lbl += ' — ' + (sl.name ? String(sl.name) + ' · ' : '') + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
 						else
 							lbl += ' — ' + _('empty');
 						uniqVal(self, String(sl.physical), lbl);
