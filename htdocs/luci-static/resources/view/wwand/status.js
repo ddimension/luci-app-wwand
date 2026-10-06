@@ -275,18 +275,15 @@ function renderGps(raw) {
 	}
 
 	/* IN USE and IN VIEW are different numbers and the difference is the
-	   diagnosis: none in view is an antenna problem, plenty in view and none
-	   in use is a sky or almanac problem. ugps only ever had the first. */
-	/* IN USE and IN VIEW are different numbers and the difference is the
 	   diagnosis. Neither is filled in for the other when it is missing: an
 	   absent in-use count rendered as "0 in use of 13 in view" would be a
 	   claim, not a gap. Raised by Codex review, 2026-09-21. */
 	if (g.sats_used != null || g.sats_view != null)
 		rows.push([ term(_('Satellites'), _('In use / in view. Nothing in view is usually the antenna, though a cold receiver or a blocked sky looks the same; many in view with none in use means it can hear them but not yet solve a position, which outdoors typically takes a minute or two.')),
 			(g.sats_used != null && g.sats_view != null)
-				? '%d %s %d %s'.format(g.sats_used, _('in use of'), g.sats_view, _('in view'))
-				: ((g.sats_used != null) ? '%d %s'.format(g.sats_used, _('in use'))
-				                         : '%d %s'.format(g.sats_view, _('in view'))) ]);
+				? _('%d in use of %d in view').format(g.sats_used, g.sats_view)
+				: ((g.sats_used != null) ? _('%d in use').format(g.sats_used)
+				                         : _('%d in view').format(g.sats_view)) ]);
 
 	var dop = [];
 	if (g.hdop != null) dop.push('H %.1f'.format(g.hdop));
@@ -309,8 +306,8 @@ function renderGps(raw) {
 
 	if (g.counters && g.counters.sentences != null)
 		rows.push([ term(_('NMEA stream'), _('Sentences understood since the reader opened the port, and how many it could not parse. A climbing "unparsed" means the port is carrying something that is not NMEA.')),
-			'%d %s, %d %s'.format(g.counters.sentences, _('parsed'),
-				g.counters.unparsed ?? 0, _('not')) ]);
+			_('%d parsed, %d not').format(g.counters.sentences,
+				g.counters.unparsed ?? 0) ]);
 
 	return E('div', { 'class': 'cbi-section' }, [
 		E('h3', {}, _('GNSS')), tbl(rows)
@@ -964,7 +961,7 @@ function renderLive(name, modem, graphs, board) {
 		   re-attaching shows the difference here */
 		if (ps.tai && ps.tai.mcc != null) {
 			srvRows.push([ term(_('Attach TAI'), _('Tracking Area Identity recorded at attach: PLMN and Tracking Area Code. Differs from the serving cell TAC when the modem moved without re-attaching')),
-				'%s/%s · TAC %d'.format(ps.tai.mcc, fmt.fmtMnc(ps.tai.mnc), ps.tai.tac) ]);
+				'%s/%s · TAC %d'.format(ps.tai.mcc, fmt.fmtMnc(ps.tai.mnc, ps.tai.mnc_digits), ps.tai.tac) ]);
 		}
 
 		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [

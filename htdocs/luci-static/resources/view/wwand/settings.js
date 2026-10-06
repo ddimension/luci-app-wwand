@@ -1245,12 +1245,14 @@ return view.extend({
 						var defs = Object.assign({}, DEFAULTS);
 						defs.mode_preference = ((+s.mode_preference || 0) & ~MODE_BITS_MASK) |
 							DEFAULTS.mode_preference;
-						/* a band-only backend: every band list empty, which it
+						/* a band-only backend: blank the band lists only, which it
 						   reads as "all bands the module supports" — not the
-						   1..63 table, which names bands it would refuse */
+						   1..63 table, which names bands it would refuse. Leave
+						   any integer prefs (mode/usage/roaming) that settable
+						   may also list untouched; can() rejects an array there. */
 						if (settable) {
 							defs = {};
-							settable.forEach(function(k) { defs[k] = []; });
+							settable.forEach(function(k) { if (/_bands$/.test(k)) defs[k] = []; });
 						}
 
 						return self.apply(data.modem, defs).then(function() {

@@ -563,7 +563,7 @@ return baseclass.extend({
 		 * modem rejected the command.) Found by a full review, 2026-09-19. */
 		var lock5g = s.taboption(tab, form.Value, 'lock_5g', _('5G NR SA cell lock'),
 			_('Lock to a 5G SA cell: "pci:arfcn:scs:band" — the subcarrier spacing is in kHz (15, 30, 60 …). The "Lock this 5G cell" button fills in 30 as a default; the modem does not report the actual spacing, so check it against your band before saving.'));
-		lock5g.placeholder = '242:431070:15:1';
+		lock5g.placeholder = '242:431070:30:78';
 		bind(lock5g);
 
 		var persist = s.taboption(tab, form.Flag, 'lock_persist', _('Persist lock in modem'),
