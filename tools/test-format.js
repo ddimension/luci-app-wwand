@@ -524,6 +524,32 @@ eq(fmt.fmtFrequencyRange(5), 'FR1 (sub-6 GHz) + 0x4',
 eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
 eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
 
+/* --- sccIdle: ONE rule for the CA table and the carrier graph -------------
+ *
+ * ddimension/openwrt-repo#2: the EG060K listed PCC + SCC in the table while the
+ * graph said one carrier. The modem had reported the SCC as not activated; the
+ * graph was right, the table just did not say so.
+ */
+(function () {
+	eq(fmt.sccIdle({ role: 'SCC', state: 1 }), 'inactive', 'sccIdle: a deactivated SCC is marked');
+	eq(fmt.sccIdle({ role: 'SCC', state: 0 }), 'deconfigured', 'sccIdle: ...and a deconfigured one');
+	eq(fmt.sccIdle({ role: 'SCC', state: 2 }), null, 'sccIdle: an activated SCC is a carrier');
+	eq(fmt.sccIdle({ role: 'SCC' }), null, 'sccIdle: no state reported counts as in use');
+	eq(fmt.sccIdle({ role: 'PCC', state: 1 }), null, 'sccIdle: never the primary');
+
+	/* the graph applies the same rule: PCC + idle SCC is one carrier */
+	var one = fmt.carrierSample({
+		ca: [ { role: 'PCC', bandwidth_mhz: 20 },
+		      { role: 'SCC', state: 1, bandwidth_mhz: 20 } ],
+	});
+	eq(one.ca, [ 1, null ], 'sccIdle: the graph does not count what the table marks');
+
+	/* carrierSample is handed around as a formatter: it must not need `this` */
+	var sample = fmt.carrierSample;
+	eq(sample({ ca: [ { role: 'PCC' }, { role: 'SCC', state: 1 } ] }).ca, [ 1, null ],
+		'sccIdle: a detached carrierSample applies the same rule');
+})();
+
 /* --- carrierSample: the aggregation picture is STACKED ---------------------
  *
  * The second series is the TOTAL, not the 5G count on its own. Drawn

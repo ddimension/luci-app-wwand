@@ -1094,10 +1094,15 @@ function renderLive(name, modem, graphs, board) {
 				var isNR = (c.rat == 'nr' ||
 					(c.rat == null && ('' + c.role).toUpperCase().indexOf('NR') >= 0));
 				var cf = isNR ? bands.nrArfcn(c.earfcn) : bands.lteEarfcn(c.earfcn);
+				/* the Fibocom rows already say 'PCC NR'; do not say it twice */
+				var type = (isNR && ('' + c.role).toUpperCase().indexOf('NR') < 0)
+					? (c.role + ' 5G') : c.role;
+				/* marked the way the carrier graph counts it (fmt.sccIdle) */
+				var idle = fmt.sccIdle(c);
+				if (idle)
+					type += ' (' + idle + ')';
 				return cellRow({
-					/* the Fibocom rows already say 'PCC NR'; do not say it twice */
-					type: (isNR && ('' + c.role).toUpperCase().indexOf('NR') < 0)
-						? (c.role + ' 5G') : c.role,
+					type: type,
 					/* the modem's own band token wins — it knows n78 from 78 */
 					band: (c.band != null) ? c.band : (cf ? cf.band : null),
 					earfcn: c.earfcn,

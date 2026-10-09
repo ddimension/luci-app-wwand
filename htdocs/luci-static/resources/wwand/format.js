@@ -32,6 +32,20 @@ var WWE_CSS = '' +
 'border-top-color:#0b6fc2;border-radius:50%;animation:wwe-rot .9s linear infinite;flex:none}' +
 '@keyframes wwe-rot{to{transform:rotate(360deg)}}';
 
+/* Whether a CA row is a secondary cell the modem lists but has not ACTIVATED:
+   it carries no data, so the carrier graph does not count it and the CA table
+   marks it — ONE rule for both, because a table showing two carriers next to a
+   graph saying one made both look broken (ddimension/openwrt-repo#2). `state`
+   is the QMI enum every producer maps onto (0 deconfigured, 1 deactivated,
+   2 activated); null = not reported, which counts as in use. Returns the note
+   to show, or null. Module-level so carrierSample needs no receiver. */
+function sccIdle(c) {
+	if (!c || c.role != 'SCC' || c.state == null || c.state == 2)
+		return null;
+
+	return (c.state == 0) ? _('deconfigured') : _('inactive');
+}
+
 return baseclass.extend({
 	/* the shared .wwe-* stylesheet as a <style> node; the page that hosts the
 	   wwand panels renders this once (see view/wwand/settings.js). */
@@ -926,6 +940,11 @@ return baseclass.extend({
 			}).slice(0, n || 6);
 	},
 
+	/* Whether a CA row is an idle secondary cell (module-level sccIdle). */
+	sccIdle: function(c) {
+		return sccIdle(c);
+	},
+
 	carrierSample: function(cells) {
 		cells = cells || {};
 
@@ -947,7 +966,7 @@ return baseclass.extend({
 				(c.rat == null && ('' + c.role).toUpperCase().indexOf('NR') >= 0))
 				? 'nr' : 'lte';
 
-			if (c.role == 'SCC' && c.state != null && c.state != 2)
+			if (sccIdle(c))
 				continue;
 
 			n[rat]++;
