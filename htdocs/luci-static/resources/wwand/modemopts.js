@@ -163,8 +163,27 @@ return baseclass.extend({
 			});
 		};
 
+		o = s.taboption(tab, form.Value, 'reset_fallback', _('Reset GPIO fallback'),
+			_('Seconds a reset waits for the modem\'s own soft reset to take it off USB before the reset GPIO is pulsed (default 30).'));
+		o.datatype = 'uinteger';
+		o.placeholder = '30';
+		o.optional = true;
+		bind(o);
+
+		/* Quectel only. The level is the BOARD's wiring, never a preference:
+		   with the wrong one the modem takes an inserted card for removed —
+		   which is why the default leaves the modem's own value alone. */
+		o = s.taboption(tab, form.ListValue, 'sim_detect', _('SIM hot-plug detection'),
+			_('Quectel modems: let the modem notice a SIM card that is inserted or removed while it runs. "Inserted" is the level of the SIM tray\'s detect pin with a card in — it depends on the board; a wrong level makes the modem see no card.'));
+		o.value('', _('Leave modem setting unchanged'));
+		o.value('high', _('On, card detected at high level'));
+		o.value('low', _('On, card detected at low level'));
+		o.value('off', _('Off'));
+		o.optional = true;
+		bind(o);
+
 		o = s.taboption(tab, form.Button, '_reset', _('Reset modem now'),
-			_('Reset this modem: a dedicated reset GPIO is pulsed when available, otherwise the control protocol performs a soft reset (QMI/MBIM offline+reset, AT+CFUN=1,1). Recovers a modem that hung or dropped off USB.'));
+			_('Reset this modem: the control protocol\'s soft reset first (QMI/MBIM offline+reset, AT+CFUN=1,1), so it can shut down cleanly; a dedicated reset GPIO is pulsed only if the modem does not reboot. Recovers a modem that hung or dropped off USB.'));
 		o.inputtitle = _('Reset modem');
 		o.inputstyle = 'remove';
 		o.modelabel = false;

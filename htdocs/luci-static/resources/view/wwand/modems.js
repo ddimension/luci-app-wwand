@@ -287,11 +287,12 @@ return view.extend({
 				return e ? (HW_REASON[e] || e) : fallback;
 			};
 
-			/* Reboot: GPIO-first then backend soft reset (ubus modem_reset).
+			/* Reboot: the modem's own soft reset first, the reset GPIO only as
+			   the fallback (ubus modem_reset; ddimension/openwrt-repo#4).
 			   Confirm first — it drops this modem's connection(s) briefly. */
 			var reboot = E('button', {
 				'class': 'btn cbi-button cbi-button-negative',
-				'title': _('Reset/reboot this modem (GPIO reset if available, otherwise a backend soft reset). Its connections drop briefly and recover on their own.'),
+				'title': _('Reset/reboot this modem: its own soft reset first, so it can shut down cleanly; a configured reset GPIO is pulsed only if the modem does not reboot. Its connections drop briefly and recover on their own.'),
 				'click': ui.createHandlerFn(this, function(ev) {
 					ev.preventDefault();
 					if (!confirm(_('Reset modem "%s" now? Its connection(s) will drop briefly and recover automatically.').format(section_id)))
@@ -305,6 +306,26 @@ return view.extend({
 					});
 				}),
 			}, _('Reboot'));
+
+			/* Reinit SIM: power the card in the active slot off and on and
+			   re-read it (ubus modem_sim_reinit) — for a card swapped while
+			   the modem runs, without the modem reboot that used to be the
+			   only way (ddimension/openwrt-repo#3). */
+			var reinitSim = E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'title': _('Re-initialise the SIM card in the active slot: power it off and on and read it again, e.g. after swapping the card. The connection drops and recovers on its own; not a modem reset.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!confirm(_('Re-initialise the SIM of modem "%s" now? Its connection drops and recovers automatically.').format(section_id)))
+						return;
+					return wrpc.modemSimReinit(section_id).then(function(res) {
+						if (res && res.slot != null)
+							ui.addNotification(null, E('p', {}, [ _('SIM in slot %d re-initialised.').format(res.slot) ]), 'info');
+						else
+							ui.addNotification(null, E('p', {}, [ _('SIM re-initialisation failed: %s.').format((res && res.error) || '?') ]), 'warning');
+					});
+				}),
+			}, _('Reinit SIM'));
 
 			/* Repower: the HARDWARE rung — reset-GPIO pulse or board power-cycle
 			   (ubus modem_repower). Recovers a hung or vanished modem where the
@@ -468,6 +489,7 @@ return view.extend({
 					L.url('admin/network/wwand-tools')));
 			add('unlock', _('Unlock SIM'), unlockSim);
 			add('savesim', _('Save SIM'), saveSim);
+			add('reinitsim', _('Reinit SIM'), reinitSim);
 			add('reattach', _('Reattach'), reattach);
 			add('reboot', _('Reboot'), reboot);
 			add('repower', _('Repower'), repower);
