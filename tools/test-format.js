@@ -56,7 +56,10 @@ String.prototype.format = function () {
 const length_of = (a) => (a && a.length) || 0;
 const baseclass = { extend: (o) => o };
 const _ = (s) => s;                       /* i18n passthrough */
-const E = () => ({});                     /* no DOM here */
+/* no DOM here: an element is its description, so a test can assert what
+   would be built (tag, attributes, children) without a browser */
+const E = (tag, attr, children) =>
+	({ tag: tag, attr: attr || {}, children: children || [] });
 const ui = {};
 
 const fmt = new Function('baseclass', '_', 'E', 'ui', body)(baseclass, _, E, ui);
@@ -523,6 +526,19 @@ eq(fmt.fmtFrequencyRange(5), 'FR1 (sub-6 GHz) + 0x4',
    'range: ...and survives next to a known one');
 eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
 eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
+
+/* --- brief: short value, explanation on hover (luci-app-wwand#15) --------- */
+eq(fmt.brief('no', null), 'no', 'brief: no detail = the bare text, no hover cue');
+eq(fmt.brief('no', ''), 'no', 'brief: an empty detail counts as none');
+eq(fmt.brief('no', 'the modem offers no UIM Remote'), {
+	tag: 'span',
+	attr: {
+		title: 'the modem offers no UIM Remote',
+		style: 'cursor:help;text-decoration:underline dotted;text-underline-offset:2px',
+	},
+	/* a TEXT child, never markup: the detail may carry daemon text */
+	children: [ 'no' ],
+}, 'brief: a detail becomes a titled span with a text child');
 
 /* --- sccIdle: ONE rule for the CA table and the carrier graph -------------
  *

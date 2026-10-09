@@ -61,6 +61,21 @@ return baseclass.extend({
 			label);
 	},
 
+	/* A status VALUE kept short, its explanation on hover — the same dotted
+	   underline as a term. The status screen is read at a glance, and a
+	   sentence in a value cell wrapped into a paragraph there; the LuCI
+	   maintainers asked for "no" / "step 1/4" with the rest in a tooltip
+	   (ddimension/luci-app-wwand#15). No detail = the bare text, no cue that
+	   promises more. */
+	brief: function(short, detail) {
+		if (detail == null || detail === '')
+			return short;
+
+		return E('span', { 'title': detail,
+			'style': 'cursor:help;text-decoration:underline dotted;text-underline-offset:2px' },
+			[ short ]);
+	},
+
 	/* MNC as a zero-padded code: the leading zero is significant (260/06 is not
 	   260/6, and 310/030 is not 310/30 — different operators).
 
