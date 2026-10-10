@@ -41,6 +41,8 @@
 					"modem_esim",
 					"modem_plmn_restore",
 					"modem_plmn_set",
+					"modem_attach",
+					"modem_detach",
 					"modem_reattach",
 					"modem_repower",
 					"modem_reset",

@@ -670,6 +670,12 @@ function renderLive(name, modem, graphs, board) {
 			mdmRows.push([ term(_('Radio'), _('An optional package holds this modem\'s radio off. Its interfaces stay down until the reason is gone, then the radio is switched on again by itself.')),
 				E('span', { 'style': 'color:#b8860b' }, [ _('off — %s').format(String(modem.radio_held)) ]) ]);
 
+		/* Detached by the operator (Detach in the modem list, wwandctl
+		   detach): the interfaces wait with DETACHED until the attach. */
+		if (modem.detached)
+			mdmRows.push([ term(_('Network'), _('The modem was detached from the network by hand. Its interfaces stay down until it is attached again (modem list → Attach, or wwandctl attach); a modem reset attaches it too.')),
+				E('span', { 'style': 'color:#b8860b' }, [ _('detached by the operator') ]) ]);
+
 		/* What optional packages report about this modem — a remote SIM in a
 		   reader on the router, say. The daemon collects the rows
 		   (plugins_status); this page knows no package by name, so any

@@ -458,6 +458,31 @@ return view.extend({
 				}),
 			}, _('Unlock SIM')) : null;
 
+			/* Detach / Attach: one entry that flips with the modem's state
+			   (status `detached`). Detach ends the data sessions first, then
+			   detaches from the packet network with the radio on, and the modem
+			   STAYS detached — its interfaces wait (DETACHED) — until Attach or
+			   a modem reset. */
+			var isDetached = !!mi.detached;
+			var detachAttach = E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'title': isDetached
+					? _('Attach the modem to the network again; its interfaces reconnect on their own.')
+					: _('Stop the data sessions and detach the modem from the network (radio stays on). It stays detached until you attach it again or the modem is reset.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!isDetached && !confirm(_('Detach modem "%s" from the network? Its connections stop and stay down until you attach it again.').format(section_id)))
+						return;
+					var call = isDetached ? wrpc.modemAttach : wrpc.modemDetach;
+					return call(section_id).then(function(res) {
+						if (res && res.ok)
+							ui.addNotification(null, E('p', {}, [ (isDetached ? _('Modem attached (%s).') : _('Modem detached (%s).')).format(res.via || '?') ]), 'info');
+						else
+							ui.addNotification(null, E('p', {}, [ (isDetached ? _('Attach failed: %s.') : _('Detach failed: %s.')).format((res && res.error) || '?') ]), 'warning');
+					});
+				}),
+			}, isDetached ? _('Attach') : _('Detach'));
+
 			/* Everything from Tools on goes into ONE dropdown, so the row shows
 			   Config, Status, the menu and Delete instead of up to nine buttons
 			   competing for a column that does not wrap. Config and Status stay
@@ -491,6 +516,7 @@ return view.extend({
 			add('savesim', _('Save SIM'), saveSim);
 			add('reinitsim', _('Reinit SIM'), reinitSim);
 			add('reattach', _('Reattach'), reattach);
+			add('detach', isDetached ? _('Attach') : _('Detach'), detachAttach);
 			add('reboot', _('Reboot'), reboot);
 			add('repower', _('Repower'), repower);
 

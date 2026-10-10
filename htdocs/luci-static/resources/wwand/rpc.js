@@ -60,6 +60,8 @@ return baseclass.extend({
 	modemSimReinit: checked({ object: 'wwand', method: 'modem_sim_reinit', params: [ 'modem' ], expect: {} }),
 	modemRepower: checked({ object: 'wwand', method: 'modem_repower', params: [ 'modem' ], expect: {} }),
 	modemReattach: checked({ object: 'wwand', method: 'modem_reattach', params: [ 'modem' ], expect: {} }),
+	modemDetach: checked({ object: 'wwand', method: 'modem_detach', params: [ 'modem' ], expect: {} }),
+	modemAttach: checked({ object: 'wwand', method: 'modem_attach', params: [ 'modem' ], expect: {} }),
 	setProtocol: checked({ object: 'wwand', method: 'modem_set_protocol', params: [ 'modem', 'protocol' ], expect: {} }),
 
 	/* --- carrier configuration (MBN, over QMI PDC) ------------------------
