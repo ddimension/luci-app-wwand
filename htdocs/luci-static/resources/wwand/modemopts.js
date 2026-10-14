@@ -609,6 +609,19 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		/* The three hardware rungs' attempt counts (recovery_steps). The
+		   daemon refuses a list that does not rise and keeps 8/16/24, with a
+		   config warning; the check here only catches the shape early. */
+		o = s.taboption(tab, form.Value, 'recovery_steps', _('Recovery steps'),
+			_('Failed attempts at which the recovery ladder cycles the radio, resets the modem and pulses the reset line / repowers it, e.g. "2 6 12". One or two numbers replace only the first steps. Empty = 8 16 24. An earlier radio cycle helps after a registration reject, which the modem may only retry after a switch-off.'));
+		o.placeholder = '8 16 24';
+		o.validate = function(section_id, value) {
+			if (!value || /^\s*\d+([\s,]+\d+){0,2}\s*$/.test(value))
+				return true;
+			return _('One to three whole numbers, rising, e.g. "2 6 12"');
+		};
+		bind(o);
+
 		/* The one automatic hardware action on a modem that has never
 		   answered (a wedged modem after a reboot looks exactly like that):
 		   a pulse of the reset GPIO assigned to THIS modem, once per outage.
