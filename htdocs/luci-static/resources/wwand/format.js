@@ -32,6 +32,20 @@ var WWE_CSS = '' +
 'border-top-color:#0b6fc2;border-radius:50%;animation:wwe-rot .9s linear infinite;flex:none}' +
 '@keyframes wwe-rot{to{transform:rotate(360deg)}}';
 
+/* Whether a CA row is a secondary cell the modem lists but has not ACTIVATED:
+   it carries no data, so the carrier graph does not count it and the CA table
+   marks it — ONE rule for both, because a table showing two carriers next to a
+   graph saying one made both look broken (ddimension/openwrt-repo#2). `state`
+   is the QMI enum every producer maps onto (0 deconfigured, 1 deactivated,
+   2 activated); null = not reported, which counts as in use. Returns the note
+   to show, or null. Module-level so carrierSample needs no receiver. */
+function sccIdle(c) {
+	if (!c || c.role != 'SCC' || c.state == null || c.state == 2)
+		return null;
+
+	return (c.state == 0) ? _('deconfigured') : _('inactive');
+}
+
 return baseclass.extend({
 	/* the shared .wwe-* stylesheet as a <style> node; the page that hosts the
 	   wwand panels renders this once (see view/wwand/settings.js). */
@@ -45,6 +59,21 @@ return baseclass.extend({
 		return E('span', { 'title': desc,
 			'style': 'cursor:help;text-decoration:underline dotted;text-underline-offset:2px' },
 			label);
+	},
+
+	/* A status VALUE kept short, its explanation on hover — the same dotted
+	   underline as a term. The status screen is read at a glance, and a
+	   sentence in a value cell wrapped into a paragraph there; the LuCI
+	   maintainers asked for "no" / "step 1/4" with the rest in a tooltip
+	   (ddimension/luci-app-wwand#15). No detail = the bare text, no cue that
+	   promises more. */
+	brief: function(short, detail) {
+		if (detail == null || detail === '')
+			return short;
+
+		return E('span', { 'title': detail,
+			'style': 'cursor:help;text-decoration:underline dotted;text-underline-offset:2px' },
+			[ short ]);
 	},
 
 	/* MNC as a zero-padded code: the leading zero is significant (260/06 is not
@@ -595,7 +624,13 @@ return baseclass.extend({
 		var line = [
 			E('strong', {}, [ _('Slot %d').format(sl.physical) +
 				(sl.is_euicc ? ' (eSIM)' : '') + (sl.active ? ' \u2713' : '') ]),
-			' \u2014 ' + this.cardText(sl.card) + (sl.iccid ? (', ICCID ' + sl.iccid) : '') +
+			/* the card's name (daemon modem_sim_slots `name`, from its
+			   wwand_sim) beside the ICCID it labels (ddimension/wwand#39);
+			   this whole line is one array member, so a text node — the name
+			   is operator-entered and never markup */
+			' \u2014 ' + this.cardText(sl.card) +
+				((sl.card == 'present' && sl.name) ? (' \u00b7 ' + String(sl.name)) : '') +
+				(sl.iccid ? (', ICCID ' + sl.iccid) : '') +
 				(sl.eid ? (', EID ' + sl.eid) : '') +
 				/* per-slot CPIN/service/ATR (ESLOTSINFO-class slots surface) —
 				   the inactive slot's PIN and service state matter when deciding
@@ -826,6 +861,10 @@ return baseclass.extend({
 		var out = {
 			legacy: legacy,
 			port: g.port || null,
+			/* where the NMEA comes from: the modem's port, or QMI LOC on a
+			   modem without one (wwand-gps); the old shape had only the port */
+			source: legacy ? 'nmea_port' : (g.source || null),
+			loc: legacy ? null : (g.loc || null),
 			receiver_started: !!g.receiver_started,
 			configured: legacy ? !!g.receiver : !!g.configured,
 			reading: legacy ? !!g.reader : !!g.reading,
@@ -916,6 +955,11 @@ return baseclass.extend({
 			}).slice(0, n || 6);
 	},
 
+	/* Whether a CA row is an idle secondary cell (module-level sccIdle). */
+	sccIdle: function(c) {
+		return sccIdle(c);
+	},
+
 	carrierSample: function(cells) {
 		cells = cells || {};
 
@@ -937,7 +981,7 @@ return baseclass.extend({
 				(c.rat == null && ('' + c.role).toUpperCase().indexOf('NR') >= 0))
 				? 'nr' : 'lte';
 
-			if (c.role == 'SCC' && c.state != null && c.state != 2)
+			if (sccIdle(c))
 				continue;
 
 			n[rat]++;

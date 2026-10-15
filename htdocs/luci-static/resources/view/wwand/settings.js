@@ -751,6 +751,14 @@ return view.extend({
 		return callSet(modem, settings).then(function(res) {
 			if (res && res.ok && res.unchanged)
 				ui.addNotification(null, E('p', _('No change — the modem already runs these settings.')), 'info');
+			/* the firmware refused the bands and the daemon applied the rest
+			   on its own (RAT, usage, roaming) — say which half did not;
+			   before `deferred`, which the same answer may also carry */
+			else if (res && res.ok && res.partial) {
+				ui.addNotification(null, E('p', {}, [ _('Applied, except the band settings — the modem refused them (%s).').format((res.refused || []).join(', ')) ]), 'warning');
+				if (res.deferred)
+					notifyDeferred(modem);
+			}
 			else if (res && res.ok && res.deferred)
 				notifyDeferred(modem);
 			else if (res && res.ok)
@@ -1245,12 +1253,35 @@ return view.extend({
 						var defs = Object.assign({}, DEFAULTS);
 						defs.mode_preference = ((+s.mode_preference || 0) & ~MODE_BITS_MASK) |
 							DEFAULTS.mode_preference;
-						/* a band-only backend: every band list empty, which it
+						/* "all bands" = the bands the modem says it supports
+						   (band_caps, DMS Get Band Capabilities). The blanket
+						   1..63 / 1..79 names bands a firmware may refuse
+						   outright, and the refusal took the RAT reset with
+						   it (ddimension/wwand#55). A modem without NR5G gets
+						   no NR keys at all. */
+						var caps = s.band_caps;
+						if (caps) {
+							if (Array.isArray(caps.lte) && caps.lte.length)
+								defs.lte_bands = caps.lte.slice();
+							else
+								delete defs.lte_bands;
+							if (Array.isArray(caps.nr5g) && caps.nr5g.length) {
+								defs.nr5g_sa_bands = caps.nr5g.slice();
+								defs.nr5g_nsa_bands = caps.nr5g.slice();
+							}
+							else {
+								delete defs.nr5g_sa_bands;
+								delete defs.nr5g_nsa_bands;
+							}
+						}
+						/* a band-only backend: blank the band lists only, which it
 						   reads as "all bands the module supports" — not the
-						   1..63 table, which names bands it would refuse */
+						   1..63 table, which names bands it would refuse. Leave
+						   any integer prefs (mode/usage/roaming) that settable
+						   may also list untouched; can() rejects an array there. */
 						if (settable) {
 							defs = {};
-							settable.forEach(function(k) { defs[k] = []; });
+							settable.forEach(function(k) { if (/_bands$/.test(k)) defs[k] = []; });
 						}
 
 						return self.apply(data.modem, defs).then(function() {

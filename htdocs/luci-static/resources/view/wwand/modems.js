@@ -134,10 +134,38 @@ return view.extend({
 		/* on this page the edited section IS the wwand_modem — direct storage */
 		var direct = function(o) { return o; };
 
-		s.taboption('modem', form.Value, 'device', _('Modem device'),
-			_('Network device name (e.g. wwan0), a mux parent, or a control node (/dev/cdc-wdm0). Leave empty and set only the USB path to bind purely by topology.'));
+		var o = s.taboption('modem', form.Value, 'device', _('Modem device'),
+			_('Network device name (e.g. wwan0), a mux parent, or a control node (/dev/cdc-wdm0). Leave empty and set only the USB path to bind purely by topology. <em>qrtr</em> drives a Qualcomm modem on PCIe/MHI whose QMI is only on the QRTR bus (no cdc-wdm); its data device is the interface\'s L3 device.'));
+		o.value('qrtr', _('qrtr — QMI over the QRTR bus (PCIe/MHI)'));
+
+		/* only meaningful for device 'qrtr': which node, when more than one
+		   serves QMI DMS and WDS (the daemon's default is the first that does) */
+		o = s.taboption('modem', form.Value, 'qrtr_node', _('QRTR node'),
+			_('The QRTR node of this modem, for a box with more than one QRTR modem. Leave empty to use the first node that serves QMI DMS and WDS.'));
+		o.datatype = 'uinteger';
+		o.depends('device', 'qrtr');
 
 		modemopts.addModemSim(s, 'modem', direct);
+
+		/* The data endpoint override lives HERE and not in the shared
+		   modemopts: through the interface form's bindModem() a cleared field
+		   is never removed from the modem section (modemsid.js remove()), so
+		   "automatic" could not be chosen back there. Empty means the daemon
+		   derives both from the data netdev's bus (USB: the QMI function's
+		   interface; PCIe: type 3, interface 4). */
+		o = s.taboption('modem', form.ListValue, 'ep_type', _('Data endpoint type'),
+			_('Override the QMI data endpoint type sent with the data format and mux binding. Leave on automatic unless a modem refuses the derived endpoint.'));
+		o.value('', _('automatic'));
+		o.value('2', _('2 — USB'));
+		o.value('3', _('3 — PCIe'));
+		o.value('4', _('4 — embedded'));
+		o.optional = true;
+
+		o = s.taboption('modem', form.Value, 'ep_id', _('Data endpoint interface'),
+			_('Override the endpoint interface number (USB: the QMI function\'s interface, PCIe: 4). Leave empty for automatic.'));
+		o.datatype = 'uinteger';
+		o.optional = true;
+
 		modemopts.addRadio(s, 'radio', direct);
 		modemopts.addCellLock(s, 'radio', direct);
 		modemopts.addResilience(s, 'resilience', direct);
@@ -259,11 +287,12 @@ return view.extend({
 				return e ? (HW_REASON[e] || e) : fallback;
 			};
 
-			/* Reboot: GPIO-first then backend soft reset (ubus modem_reset).
+			/* Reboot: the modem's own soft reset first, the reset GPIO only as
+			   the fallback (ubus modem_reset; ddimension/openwrt-repo#4).
 			   Confirm first — it drops this modem's connection(s) briefly. */
 			var reboot = E('button', {
 				'class': 'btn cbi-button cbi-button-negative',
-				'title': _('Reset/reboot this modem (GPIO reset if available, otherwise a backend soft reset). Its connections drop briefly and recover on their own.'),
+				'title': _('Reset/reboot this modem: its own soft reset first, so it can shut down cleanly; a configured reset GPIO is pulsed only if the modem does not reboot. Its connections drop briefly and recover on their own.'),
 				'click': ui.createHandlerFn(this, function(ev) {
 					ev.preventDefault();
 					if (!confirm(_('Reset modem "%s" now? Its connection(s) will drop briefly and recover automatically.').format(section_id)))
@@ -277,6 +306,26 @@ return view.extend({
 					});
 				}),
 			}, _('Reboot'));
+
+			/* Reinit SIM: power the card in the active slot off and on and
+			   re-read it (ubus modem_sim_reinit) — for a card swapped while
+			   the modem runs, without the modem reboot that used to be the
+			   only way (ddimension/openwrt-repo#3). */
+			var reinitSim = E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'title': _('Re-initialise the SIM card in the active slot: power it off and on and read it again, e.g. after swapping the card. The connection drops and recovers on its own; not a modem reset.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!confirm(_('Re-initialise the SIM of modem "%s" now? Its connection drops and recovers automatically.').format(section_id)))
+						return;
+					return wrpc.modemSimReinit(section_id).then(function(res) {
+						if (res && res.slot != null)
+							ui.addNotification(null, E('p', {}, [ _('SIM in slot %d re-initialised.').format(res.slot) ]), 'info');
+						else
+							ui.addNotification(null, E('p', {}, [ _('SIM re-initialisation failed: %s.').format((res && res.error) || '?') ]), 'warning');
+					});
+				}),
+			}, _('Reinit SIM'));
 
 			/* Repower: the HARDWARE rung — reset-GPIO pulse or board power-cycle
 			   (ubus modem_repower). Recovers a hung or vanished modem where the
@@ -409,6 +458,31 @@ return view.extend({
 				}),
 			}, _('Unlock SIM')) : null;
 
+			/* Detach / Attach: one entry that flips with the modem's state
+			   (status `detached`). Detach ends the data sessions first, then
+			   detaches from the packet network with the radio on, and the modem
+			   STAYS detached — its interfaces wait (DETACHED) — until Attach or
+			   a modem reset. */
+			var isDetached = !!mi.detached;
+			var detachAttach = E('button', {
+				'class': 'btn cbi-button cbi-button-neutral',
+				'title': isDetached
+					? _('Attach the modem to the network again; its interfaces reconnect on their own.')
+					: _('Stop the data sessions and detach the modem from the network (radio stays on). It stays detached until you attach it again or the modem is reset.'),
+				'click': ui.createHandlerFn(this, function(ev) {
+					ev.preventDefault();
+					if (!isDetached && !confirm(_('Detach modem "%s" from the network? Its connections stop and stay down until you attach it again.').format(section_id)))
+						return;
+					var call = isDetached ? wrpc.modemAttach : wrpc.modemDetach;
+					return call(section_id).then(function(res) {
+						if (res && res.ok)
+							ui.addNotification(null, E('p', {}, [ (isDetached ? _('Modem attached (%s).') : _('Modem detached (%s).')).format(res.via || '?') ]), 'info');
+						else
+							ui.addNotification(null, E('p', {}, [ (isDetached ? _('Attach failed: %s.') : _('Detach failed: %s.')).format((res && res.error) || '?') ]), 'warning');
+					});
+				}),
+			}, isDetached ? _('Attach') : _('Detach'));
+
 			/* Everything from Tools on goes into ONE dropdown, so the row shows
 			   Config, Status, the menu and Delete instead of up to nine buttons
 			   competing for a column that does not wrap. Config and Status stay
@@ -440,7 +514,9 @@ return view.extend({
 					L.url('admin/network/wwand-tools')));
 			add('unlock', _('Unlock SIM'), unlockSim);
 			add('savesim', _('Save SIM'), saveSim);
+			add('reinitsim', _('Reinit SIM'), reinitSim);
 			add('reattach', _('Reattach'), reattach);
+			add('detach', isDetached ? _('Attach') : _('Detach'), detachAttach);
 			add('reboot', _('Reboot'), reboot);
 			add('repower', _('Repower'), repower);
 

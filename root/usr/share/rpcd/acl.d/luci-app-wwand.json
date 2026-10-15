@@ -41,6 +41,8 @@
 					"modem_esim",
 					"modem_plmn_restore",
 					"modem_plmn_set",
+					"modem_attach",
+					"modem_detach",
 					"modem_reattach",
 					"modem_repower",
 					"modem_reset",
@@ -53,6 +55,7 @@
 					"modem_sim_pin_lock",
 					"modem_sim_pin_verify",
 					"modem_sim_puk",
+					"modem_sim_reinit",
 					"modem_sim_switch_slot",
 					"modem_sms_delete"
 				]

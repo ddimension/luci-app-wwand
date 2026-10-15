@@ -56,7 +56,10 @@ String.prototype.format = function () {
 const length_of = (a) => (a && a.length) || 0;
 const baseclass = { extend: (o) => o };
 const _ = (s) => s;                       /* i18n passthrough */
-const E = () => ({});                     /* no DOM here */
+/* no DOM here: an element is its description, so a test can assert what
+   would be built (tag, attributes, children) without a browser */
+const E = (tag, attr, children) =>
+	({ tag: tag, attr: attr || {}, children: children || [] });
 const ui = {};
 
 const fmt = new Function('baseclass', '_', 'E', 'ui', body)(baseclass, _, E, ui);
@@ -524,6 +527,45 @@ eq(fmt.fmtFrequencyRange(5), 'FR1 (sub-6 GHz) + 0x4',
 eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
 eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
 
+/* --- brief: short value, explanation on hover (luci-app-wwand#15) --------- */
+eq(fmt.brief('no', null), 'no', 'brief: no detail = the bare text, no hover cue');
+eq(fmt.brief('no', ''), 'no', 'brief: an empty detail counts as none');
+eq(fmt.brief('no', 'the modem offers no UIM Remote'), {
+	tag: 'span',
+	attr: {
+		title: 'the modem offers no UIM Remote',
+		style: 'cursor:help;text-decoration:underline dotted;text-underline-offset:2px',
+	},
+	/* a TEXT child, never markup: the detail may carry daemon text */
+	children: [ 'no' ],
+}, 'brief: a detail becomes a titled span with a text child');
+
+/* --- sccIdle: ONE rule for the CA table and the carrier graph -------------
+ *
+ * ddimension/openwrt-repo#2: the EG060K listed PCC + SCC in the table while the
+ * graph said one carrier. The modem had reported the SCC as not activated; the
+ * graph was right, the table just did not say so.
+ */
+(function () {
+	eq(fmt.sccIdle({ role: 'SCC', state: 1 }), 'inactive', 'sccIdle: a deactivated SCC is marked');
+	eq(fmt.sccIdle({ role: 'SCC', state: 0 }), 'deconfigured', 'sccIdle: ...and a deconfigured one');
+	eq(fmt.sccIdle({ role: 'SCC', state: 2 }), null, 'sccIdle: an activated SCC is a carrier');
+	eq(fmt.sccIdle({ role: 'SCC' }), null, 'sccIdle: no state reported counts as in use');
+	eq(fmt.sccIdle({ role: 'PCC', state: 1 }), null, 'sccIdle: never the primary');
+
+	/* the graph applies the same rule: PCC + idle SCC is one carrier */
+	var one = fmt.carrierSample({
+		ca: [ { role: 'PCC', bandwidth_mhz: 20 },
+		      { role: 'SCC', state: 1, bandwidth_mhz: 20 } ],
+	});
+	eq(one.ca, [ 1, null ], 'sccIdle: the graph does not count what the table marks');
+
+	/* carrierSample is handed around as a formatter: it must not need `this` */
+	var sample = fmt.carrierSample;
+	eq(sample({ ca: [ { role: 'PCC' }, { role: 'SCC', state: 1 } ] }).ca, [ 1, null ],
+		'sccIdle: a detached carrierSample applies the same rule');
+})();
+
 /* --- carrierSample: the aggregation picture is STACKED ---------------------
  *
  * The second series is the TOTAL, not the 5G count on its own. Drawn
@@ -633,6 +675,15 @@ eq(g_new.counters.unparsed, 1, 'gnss: the counters say how much of the stream wa
 
 /* a fix type the receiver never stated is null, not "none" — a GGA-only
    stream makes exactly that, and "none" would claim it said so */
+/* the source travels: a modem without an NMEA port is read over QMI LOC, and
+ * the panel says so instead of "no NMEA port" */
+var g_loc = fmt.gnss({ port: 'qmi-loc', source: 'qmi_loc', reading: true, configured: true,
+                       loc: { state: 'running', error: null, indications: 3 } });
+eq(g_loc.source, 'qmi_loc', 'gnss: the source is carried');
+eq(g_loc.loc && g_loc.loc.state, 'running', 'gnss: ...with the LOC session state');
+eq(fmt.gnss({ port: '/dev/ttyUSB1', reader: true, receiver: true }).source, 'nmea_port',
+   'gnss: the old shape only ever had a port');
+
 eq(fmt.gnss({ port: '/dev/x', reading: true, valid: true, fix: null }).fix_type, null,
    'gnss: an unstated fix type stays unstated');
 eq(fmt.gnss({ port: '/dev/x', reading: true, valid: false, fix: 'none' }).fix_type, null,

@@ -99,7 +99,8 @@ function renderConnections(details) {
 			if (v6.unmanaged) {
 				/* RNDIS v6 model: the host address is RA/SLAAC on the netdev,
 				   managed by the dhcpv6 subinterface — nothing null/0 here */
-				rows.push([ _('IPv6'), E('em', {}, _('unmanaged — RA/SLAAC on the netdev (dhcpv6 subinterface)')) ]);
+				rows.push([ _('IPv6'), E('em', {}, [ fmt.brief(_('unmanaged'),
+					_('RA/SLAAC on the netdev, run by the dhcpv6 subinterface')) ]) ]);
 				if (v6.dns && v6.dns.length)
 					rows.push([ _('IPv6 DNS'), fmtList(v6.dns) ]);
 			}
@@ -194,18 +195,34 @@ function renderGps(raw) {
 	var term = fmt.term;
 	var rows = [];
 
-	rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration; with wwand-gps installed it also reads it.')),
-		g.port || E('span', { 'style': 'color:#888' }, [ _('none reported') ]) ]);
+	if (g.source == 'qmi_loc') {
+		/* no NMEA port: the same sentences over the QMI location service,
+		   whose session wwand-gps starts and stops itself */
+		var ls = g.loc || {};
 
-	rows.push([ term(_('Receiver'), _('Whether the modem\'s own GNSS engine has been switched on. wwand starts it with the vendor AT command when `option gnss` is set; without that the port exists and nothing is sent on it.')),
-		g.receiver_started ? _('running')
-			: (g.configured ? _('requested, not started') : _('off')) ]);
+		rows.push([ term(_('Source'), _('This modem has no NMEA port of its own, so wwand-gps asks its QMI location service (LOC) for the same NMEA sentences — natively on a QMI modem, over the QMI passthrough on an MBIM one.')),
+			_('QMI location service') ]);
+
+		rows.push([ term(_('Receiver'), _('The QMI LOC position session. Started when the modem registers and stopped before its client is released; a firmware may accept it and still send nothing, which shows as no sentences below.')),
+			ls.state == 'running' ? _('running')
+				: (ls.state == 'failed'
+					? E('span', { 'style': 'color:#da3' }, [ _('not available (%s)').format(ls.error && ls.error.stage || '?') ])
+					: _('starting')) ]);
+	}
+	else {
+		rows.push([ term(_('NMEA port'), _('The modem serial port that carries NMEA sentences. wwand finds it during enumeration; with wwand-gps installed it also reads it.')),
+			g.port || E('span', { 'style': 'color:#888' }, [ _('none reported') ]) ]);
+
+		rows.push([ term(_('Receiver'), _('Whether the modem\'s own GNSS engine has been switched on. wwand starts it with the vendor AT command when `option gnss` is set; without that the port exists and nothing is sent on it.')),
+			g.receiver_started ? _('running')
+				: (g.configured ? _('requested, not started') : _('off')) ]);
+	}
 
 	if (!g.reading)
 		rows.push([ term(_('Reader'), _('What parses the NMEA and publishes a position. Not reading is a different thing from having no fix — the receiver may be perfectly happy and nobody listening.')),
 			E('span', { 'style': 'color:#da3' }, [
 				g.legacy ? _('ugps is not answering')
-					: (GNSS_REASON[g.reason] || _('not reading')) ]) ]);
+					: fmt.brief(_('not reading'), GNSS_REASON[g.reason]) ]) ]);
 
 	/* the fix TYPE is the new shape's own: 2D means a position without a
 	   usable height, which is worth knowing before trusting the elevation */
@@ -259,18 +276,15 @@ function renderGps(raw) {
 	}
 
 	/* IN USE and IN VIEW are different numbers and the difference is the
-	   diagnosis: none in view is an antenna problem, plenty in view and none
-	   in use is a sky or almanac problem. ugps only ever had the first. */
-	/* IN USE and IN VIEW are different numbers and the difference is the
 	   diagnosis. Neither is filled in for the other when it is missing: an
 	   absent in-use count rendered as "0 in use of 13 in view" would be a
 	   claim, not a gap. Raised by Codex review, 2026-09-21. */
 	if (g.sats_used != null || g.sats_view != null)
 		rows.push([ term(_('Satellites'), _('In use / in view. Nothing in view is usually the antenna, though a cold receiver or a blocked sky looks the same; many in view with none in use means it can hear them but not yet solve a position, which outdoors typically takes a minute or two.')),
 			(g.sats_used != null && g.sats_view != null)
-				? '%d %s %d %s'.format(g.sats_used, _('in use of'), g.sats_view, _('in view'))
-				: ((g.sats_used != null) ? '%d %s'.format(g.sats_used, _('in use'))
-				                         : '%d %s'.format(g.sats_view, _('in view'))) ]);
+				? _('%d in use of %d in view').format(g.sats_used, g.sats_view)
+				: ((g.sats_used != null) ? _('%d in use').format(g.sats_used)
+				                         : _('%d in view').format(g.sats_view)) ]);
 
 	var dop = [];
 	if (g.hdop != null) dop.push('H %.1f'.format(g.hdop));
@@ -293,8 +307,8 @@ function renderGps(raw) {
 
 	if (g.counters && g.counters.sentences != null)
 		rows.push([ term(_('NMEA stream'), _('Sentences understood since the reader opened the port, and how many it could not parse. A climbing "unparsed" means the port is carrying something that is not NMEA.')),
-			'%d %s, %d %s'.format(g.counters.sentences, _('parsed'),
-				g.counters.unparsed ?? 0, _('not')) ]);
+			_('%d parsed, %d not').format(g.counters.sentences,
+				g.counters.unparsed ?? 0) ]);
 
 	return E('div', { 'class': 'cbi-section' }, [
 		E('h3', {}, _('GNSS')), tbl(rows)
@@ -620,7 +634,8 @@ function renderLive(name, modem, graphs, board) {
 			mdmRows.push([ term(_('Recovery'), _('The modem has not yet answered in the control protocol wwand is using, so no hardware recovery step will run — repowering a modem that was never broken only adds outages. Check the control protocol setting and the bound driver.')),
 				/* the same words as the ladder row below: one state, and
 				   two phrasings of it read as two (ddimension/wwand#40) */
-				E('span', { 'style': 'color:#b8860b' }, [ _('not armed — no exchange has succeeded in the selected protocol yet') ]) ]);
+				E('span', { 'style': 'color:#b8860b' }, [ fmt.brief(_('not armed'),
+					_('No exchange has succeeded in the selected protocol yet.')) ]) ]);
 
 		/* The card's own last word about itself, from the UIM indications. A
 		   removed or busy card used to leave these rows simply absent, which
@@ -639,10 +654,10 @@ function renderLive(name, modem, graphs, board) {
 		if (modem.remote_sim && typeof modem.remote_sim == 'object') {
 			var rs = modem.remote_sim;
 			var rsText = (rs.supported === true)
-				? (rs.via == 'mbim-passthrough' ? _('yes (MBIM, over the QMI passthrough)') : _('yes (QMI)'))
-				: (rs.supported === false)
-					? _('no — %s').format(String(rs.reason || ''))
-					: _('not known yet — %s').format(String(rs.reason || ''));
+				? fmt.brief(_('yes'), rs.via == 'mbim-passthrough'
+					? _('MBIM, over the QMI passthrough') : _('QMI'))
+				: fmt.brief((rs.supported === false) ? _('no') : _('unknown'),
+					rs.reason ? String(rs.reason) : null);
 
 			mdmRows.push([ term(_('Remote SIM supported'), _('Whether the modem offers QMI UIM Remote, the service a modem needs to run on a SIM card that is not in its own slot (a card in a reader, a phone, or another modem — the wwand-rsim package). Read from the services the modem lists itself; a Quectel lists it even while its switch for it is off (wwandctl rsim MODEM switch).')),
 				E('span', { 'style': rs.supported === true ? '' : 'opacity:.75' }, [ rsText ]) ]);
@@ -654,6 +669,12 @@ function renderLive(name, modem, graphs, board) {
 		if (modem.radio_held)
 			mdmRows.push([ term(_('Radio'), _('An optional package holds this modem\'s radio off. Its interfaces stay down until the reason is gone, then the radio is switched on again by itself.')),
 				E('span', { 'style': 'color:#b8860b' }, [ _('off — %s').format(String(modem.radio_held)) ]) ]);
+
+		/* Detached by the operator (Detach in the modem list, wwandctl
+		   detach): the interfaces wait with DETACHED until the attach. */
+		if (modem.detached)
+			mdmRows.push([ term(_('Network'), _('The modem was detached from the network by hand. Its interfaces stay down until it is attached again (modem list → Attach, or wwandctl attach); a modem reset attaches it too.')),
+				E('span', { 'style': 'color:#b8860b' }, [ _('detached by the operator') ]) ]);
 
 		/* What optional packages report about this modem — a remote SIM in a
 		   reader on the router, say. The daemon collects the rows
@@ -696,15 +717,16 @@ function renderLive(name, modem, graphs, board) {
 
 		if (rec) {
 			var fired = rec.rungs ? rec.rungs.filter(function(x) { return x.fired; }).length : 0;
-			var state = rec.armed
-				? _('armed')
+			/* SHORT IN THE CELL, THE REST ON HOVER (luci-app-wwand#15): the
+			   cell says where the ladder stands, "armed · 1/4"; what comes
+			   next, why nothing physical happens and the attempt count are
+			   the tooltip. ONE msgid per sentence still: a fragment glued
+			   into an untranslatable shell reaches a translator as words
+			   they cannot reorder. */
+			var short = (rec.armed ? _('armed · %d/%d') : _('not armed · %d/%d'))
+				.format(fired, rec.rungs ? rec.rungs.length : 0);
+			var line = rec.armed ? _('armed')
 				: _('not armed — no exchange has succeeded in the selected protocol yet');
-			/* ONE msgid per sentence. `_('steps taken')` dropped into an
-			   untranslatable '%s' shell reaches a translator as two
-			   context-free words they cannot reorder — the same defect the
-			   graph.js legend line was collapsed to fix. */
-			var line = _('%s · %d/%d steps taken').format(state, fired,
-				rec.rungs ? rec.rungs.length : 0);
 
 			/* An unarmed modem climbs no ladder: the one thing that can still
 			   happen by itself is a pulse of the reset line assigned to it,
@@ -741,10 +763,10 @@ function renderLive(name, modem, graphs, board) {
 				line += ' · ' + holdTxt;
 
 			mdmRows.push([ term(_('Recovery'), _('wwand escalates a failing modem in steps: cycle the operating mode, reset the modem, then the board\'s power or reset line, and a reboot beyond that. Each step fires once per outage. The ladder stays disarmed until one exchange has succeeded in the selected control protocol, so a misdetected modem is never repowered.')),
-				_('%s (%d attempts)').format(line, rec.attempts || 0) ]);
+				fmt.brief(short, _('%s (%d attempts)').format(line, rec.attempts || 0)) ]);
 
 			var hw = rec.hardware || {};
-			var hwText;
+			var hwText, hwShort;
 
 			/* ABSENT IS NOT "NONE". A daemon that does not report this field at
 			   all (it is newer than the field) must not have silence read as an
@@ -752,12 +774,17 @@ function renderLive(name, modem, graphs, board) {
 			   a board that has one is worse than saying nothing. Seen for real:
 			   a WH3000 Pro on r68 reports no `recovery` block whatsoever, and
 			   the profile for that board does carry a modem power line. */
-			if (rec.hardware == null)
+			if (rec.hardware == null) {
+				hwShort = _('not reported');
 				hwText = _('not reported by this wwand version');
-			else if (hw.action == 'reset_gpio')
-				hwText = _('reset line %s (%s)').format(hw.gpio,
-					hw.source == 'modem' ? _('from this modem\'s configuration') : _('board default'));
-			else if (hw.action == 'power_cycle')
+			}
+			else if (hw.action == 'reset_gpio') {
+				hwShort = _('reset line %s').format(hw.gpio);
+				hwText = hw.source == 'modem' ? _('from this modem\'s configuration') : _('board default');
+			}
+			else if (hw.action == 'power_cycle') {
+				hwShort = (hw.has_power !== false) ? _('power cycle')
+					: (board && board.profile === false) ? _('unknown board') : _('no power line');
 				hwText = (hw.has_power !== false)
 					? _('power cycle the modem')
 					/* has_power false has two causes and they want different
@@ -772,15 +799,23 @@ function renderLive(name, modem, graphs, board) {
 						? _('nothing — "%s" is not in wwand\'s board profile table, so its modem power and reset lines are unknown. They may well exist.')
 							.format(board.id || '?')
 						: _('power cycle — but this board has no modem power line');
+			}
 			/* An action this page does not know — a rung added to the daemon
 			   after this release. Falling through to the branch below would
 			   describe it as "no GPIO — software only", which the daemon never
 			   said, under a tooltip promising the answer came from the code
 			   that performs it. Quote it instead and say plainly that the page
 			   is the older half (openwrt/luci#8917). */
-			else if (hw.action != null && hw.action !== '')
+			/* 'none' is the daemon's own word for "no hardware step"
+			   (hwops.uc repower_plan, with `error` saying why), not a step
+			   newer than this page: it belongs to the branch below, which
+			   explains the why. Taken as unknown, the X3000 showed "none —
+			   this page is older than that step" (found with #15). */
+			else if (hw.action != null && hw.action !== '' && hw.action != 'none') {
+				hwShort = String(hw.action);
 				hwText = _('%s — reported by the daemon; this page is older than that step and cannot describe it.')
 					.format(hw.action);
+			}
 			else {
 				/* NO HARDWARE STEP. "nothing" was true and not useful: what a
 				   reader needs is what is left, and that is not "reboot only"
@@ -803,6 +838,7 @@ function renderLive(name, modem, graphs, board) {
 						? _('no board profile for this device, so no power or reset line is known')
 						: _('this board exposes no modem power or reset line');
 
+				hwShort = soft.length ? _('software only') : _('nothing');
 				hwText = soft.length
 					? (canReboot
 						? _('no GPIO — software only (%s), then a router reboot. %s.')
@@ -813,7 +849,7 @@ function renderLive(name, modem, graphs, board) {
 			}
 
 			mdmRows.push([ term(_('Hardware step'), _('What the hardware step of the recovery ladder would actually do on this box for this modem — asked of the same code that performs it, not inferred.')),
-				hwText ]);
+				fmt.brief(hwShort, hwText) ]);
 		}
 		if (modem.fcc_lock != null && modem.fcc_lock != 0)
 			mdmRows.push([ term(_('FCC lock'), _('This module boots radio-locked (laptop-SKU) and the modem will not register while the lock is armed — set fcc_auth on the modem configuration to unlock at boot')),
@@ -948,7 +984,7 @@ function renderLive(name, modem, graphs, board) {
 		   re-attaching shows the difference here */
 		if (ps.tai && ps.tai.mcc != null) {
 			srvRows.push([ term(_('Attach TAI'), _('Tracking Area Identity recorded at attach: PLMN and Tracking Area Code. Differs from the serving cell TAC when the modem moved without re-attaching')),
-				'%s/%s · TAC %d'.format(ps.tai.mcc, fmt.fmtMnc(ps.tai.mnc), ps.tai.tac) ]);
+				'%s/%s · TAC %d'.format(ps.tai.mcc, fmt.fmtMnc(ps.tai.mnc, ps.tai.mnc_digits), ps.tai.tac) ]);
 		}
 
 		cols.push(E('div', { 'class': 'cbi-section', 'style': 'flex:1;min-width:280px' }, [
@@ -988,7 +1024,7 @@ function renderLive(name, modem, graphs, board) {
 						? _('required (%d attempts left)').format(modem.pin1.retries != null ? modem.pin1.retries : 3)
 						: (modem.pin1.enabled === false
 							? _('not required')
-							: _('unlocked — this backend does not report whether a PIN is set')))
+							: fmt.brief(_('unlocked'), _('This backend does not report whether a PIN is set.'))))
 					: null);
 
 			var probedSlot = fmt.euiccProbeSlot(slots);
@@ -1081,10 +1117,15 @@ function renderLive(name, modem, graphs, board) {
 				var isNR = (c.rat == 'nr' ||
 					(c.rat == null && ('' + c.role).toUpperCase().indexOf('NR') >= 0));
 				var cf = isNR ? bands.nrArfcn(c.earfcn) : bands.lteEarfcn(c.earfcn);
+				/* the Fibocom rows already say 'PCC NR'; do not say it twice */
+				var type = (isNR && ('' + c.role).toUpperCase().indexOf('NR') < 0)
+					? (c.role + ' 5G') : c.role;
+				/* marked the way the carrier graph counts it (fmt.sccIdle) */
+				var idle = fmt.sccIdle(c);
+				if (idle)
+					type += ' (' + idle + ')';
 				return cellRow({
-					/* the Fibocom rows already say 'PCC NR'; do not say it twice */
-					type: (isNR && ('' + c.role).toUpperCase().indexOf('NR') < 0)
-						? (c.role + ' 5G') : c.role,
+					type: type,
 					/* the modem's own band token wins — it knows n78 from 78 */
 					band: (c.band != null) ? c.band : (cf ? cf.band : null),
 					earfcn: c.earfcn,

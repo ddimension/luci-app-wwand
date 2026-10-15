@@ -163,8 +163,27 @@ return baseclass.extend({
 			});
 		};
 
+		o = s.taboption(tab, form.Value, 'reset_fallback', _('Reset GPIO fallback'),
+			_('Seconds a reset waits for the modem\'s own soft reset to take it off USB before the reset GPIO is pulsed (default 30).'));
+		o.datatype = 'uinteger';
+		o.placeholder = '30';
+		o.optional = true;
+		bind(o);
+
+		/* Quectel only. The level is the BOARD's wiring, never a preference:
+		   with the wrong one the modem takes an inserted card for removed —
+		   which is why the default leaves the modem's own value alone. */
+		o = s.taboption(tab, form.ListValue, 'sim_detect', _('SIM hot-plug detection'),
+			_('Quectel modems: let the modem notice a SIM card that is inserted or removed while it runs. "Inserted" is the level of the SIM tray\'s detect pin with a card in — it depends on the board; a wrong level makes the modem see no card.'));
+		o.value('', _('Leave modem setting unchanged'));
+		o.value('high', _('On, card detected at high level'));
+		o.value('low', _('On, card detected at low level'));
+		o.value('off', _('Off'));
+		o.optional = true;
+		bind(o);
+
 		o = s.taboption(tab, form.Button, '_reset', _('Reset modem now'),
-			_('Reset this modem: a dedicated reset GPIO is pulsed when available, otherwise the control protocol performs a soft reset (QMI/MBIM offline+reset, AT+CFUN=1,1). Recovers a modem that hung or dropped off USB.'));
+			_('Reset this modem: the control protocol\'s soft reset first (QMI/MBIM offline+reset, AT+CFUN=1,1), so it can shut down cleanly; a dedicated reset GPIO is pulsed only if the modem does not reboot. Recovers a modem that hung or dropped off USB.'));
 		o.inputtitle = _('Reset modem');
 		o.inputstyle = 'remove';
 		o.modelabel = false;
@@ -449,9 +468,19 @@ return baseclass.extend({
 						if (sl.physical == null || seen[sl.physical]) return;
 						seen[sl.physical] = true;
 						self.slotsOf[section_id][String(sl.physical)] = true;
+						/* the card's name first when it has one (daemon
+						   modem_sim_slots `name`, from its wwand_sim): the
+						   ICCID alone does not say which card is which
+						   (ddimension/wwand#39). A PLAIN STRING: this
+						   dropdown escapes a string label itself, so `%h`
+						   showed `&#60;b&#62;`, and it stringifies an array,
+						   commas and all — both seen on 245 with a name of
+						   "M2M <b>test</b>" (luci-base as built for the
+						   chateau tree, 2026-10-05). */
 						var lbl = _('Slot %d').format(sl.physical);
+
 						if (sl.iccid)
-							lbl += ' — ' + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
+							lbl += ' — ' + (sl.name ? String(sl.name) + ' · ' : '') + sl.iccid + (sl.is_euicc ? ' (eUICC)' : '');
 						else
 							lbl += ' — ' + _('empty');
 						uniqVal(self, String(sl.physical), lbl);
@@ -553,7 +582,7 @@ return baseclass.extend({
 		 * modem rejected the command.) Found by a full review, 2026-09-19. */
 		var lock5g = s.taboption(tab, form.Value, 'lock_5g', _('5G NR SA cell lock'),
 			_('Lock to a 5G SA cell: "pci:arfcn:scs:band" — the subcarrier spacing is in kHz (15, 30, 60 …). The "Lock this 5G cell" button fills in 30 as a default; the modem does not report the actual spacing, so check it against your band before saving.'));
-		lock5g.placeholder = '242:431070:15:1';
+		lock5g.placeholder = '242:431070:30:78';
 		bind(lock5g);
 
 		var persist = s.taboption(tab, form.Flag, 'lock_persist', _('Persist lock in modem'),
@@ -578,6 +607,19 @@ return baseclass.extend({
 			_('Reboot the router after this many failed connection attempts. 0 = never reboot — the hardware recovery rungs (op-mode cycle, modem reset, GPIO/repower) still run and the ladder then keeps retrying.'));
 		o.placeholder = '100';
 		o.datatype = 'uinteger';
+		bind(o);
+
+		/* The three hardware rungs' attempt counts (recovery_steps). The
+		   daemon refuses a list that does not rise and keeps 8/16/24, with a
+		   config warning; the check here only catches the shape early. */
+		o = s.taboption(tab, form.Value, 'recovery_steps', _('Recovery steps'),
+			_('Failed attempts at which the recovery ladder cycles the radio, resets the modem and pulses the reset line / repowers it, e.g. "2 6 12". One or two numbers replace only the first steps. Empty = 8 16 24. An earlier radio cycle helps after a registration reject, which the modem may only retry after a switch-off.'));
+		o.placeholder = '8 16 24';
+		o.validate = function(section_id, value) {
+			if (!value || /^\s*\d+([\s,]+\d+){0,2}\s*$/.test(value))
+				return true;
+			return _('One to three whole numbers, rising, e.g. "2 6 12"');
+		};
 		bind(o);
 
 		/* The one automatic hardware action on a modem that has never
@@ -627,6 +669,14 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		/* Default ON in the daemon (config.uc), so the flag must default to '1'
+		   too: a '0' default would render an unset option as off while wwand
+		   treats it as on. */
+		o = s.taboption(tab, form.Flag, 'nitz_time', _('Set the clock from the network'),
+			_('Step the system clock to the network\'s time (NITZ) when it is more than two minutes off. Smaller differences are left to NTP. A router without a real-time clock otherwise keeps its boot-time date until an NTP server is reachable. The time zone is not changed.'));
+		o.default = '1';
+		bind(o);
+
 		/* TWO DIFFERENT PATHS, and this option was labelled as the other one.
 		   `location` is the QMI LOC service, which is documented as broken on
 		   Quectel (docs/backend-interface.md) and is QMI-only; `gnss` runs the
@@ -636,19 +686,14 @@ return baseclass.extend({
 		   work, with no way to find the one that does — `gnss` had no UI at
 		   all. */
 		o = s.taboption(tab, form.Flag, 'gnss', _('GNSS receiver'),
-			_('Switch the modem\'s GNSS receiver on with the vendor AT command. This is the path that works on Quectel and ASR modems; the NMEA port it feeds is reported as <em>gps_port</em>. Install <em>wwand-gps</em> to have ugps pointed at that port automatically and the position published over ubus.'));
+			_('Switch the modem\'s GNSS on. With <em>wwand-gps</em> installed wwand reads the position itself: from the modem\'s NMEA port (reported as <em>gps_port</em>; the receiver is started with the vendor AT command, the path that works on Quectel and ASR modems), or — on a modem without an NMEA port — the same NMEA over the QMI location service, natively or over the MBIM passthrough.'));
 		o.default = '0';
 		bind(o);
 
 		o = s.taboption(tab, form.Flag, 'gnss_set_time', _('Set the clock from GNSS'),
-			_('Let ugps step the system clock from the NMEA time. Off by default — the router already has an NTP client, and two things setting the clock is one more than any box needs. For installs with no RTC where the modem is the only time source.'));
+			_('Let wwand step the system clock from the GNSS time — only while the clock is plainly unset, so it never fights the NTP client. Off by default. For installs with no RTC where the modem is the only time source.'));
 		o.default = '0';
 		o.depends('gnss', '1');
-		bind(o);
-
-		o = s.taboption(tab, form.Flag, 'location', _('QMI location service'),
-			_('Start the QMI LOC service and expose its position over ubus. QMI only, and known to be broken on Quectel modems — on those use the GNSS receiver above instead. Leave off unless a modem is known to serve LOC.'));
-		o.default = '0';
 		bind(o);
 
 		o = s.taboption(tab, form.Flag, 'auto_correct_config', _('Auto-correct modem config'),
