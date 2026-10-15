@@ -755,7 +755,7 @@ return view.extend({
 			   on its own (RAT, usage, roaming) — say which half did not;
 			   before `deferred`, which the same answer may also carry */
 			else if (res && res.ok && res.partial) {
-				ui.addNotification(null, E('p', _('Applied, except the band settings — the modem refused them (%s).').format((res.refused || []).join(', '))), 'warning');
+				ui.addNotification(null, E('p', {}, [ _('Applied, except the band settings — the modem refused them (%s).').format((res.refused || []).join(', ')) ]), 'warning');
 				if (res.deferred)
 					notifyDeferred(modem);
 			}
