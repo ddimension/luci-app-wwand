@@ -61,6 +61,15 @@ function cellHead() {
 /* array, not a bare string: dom.append() would otherwise route it through
    innerHTML (luci.js:1394-96). These cells carry cell-scan output — operator
    names come off the air. */
+/* The daemon reports the serving band as a bare number (3, 48). An older
+   daemon sent the EARFCN-derived name ('B3', 'n48') instead, so a
+   token that already carries its letter is shown as it is rather than as
+   'BB3' (evidence: luci-app-wwand#16). */
+function bandLabel(prefix, b) {
+	b = String(b);
+	return /^[0-9]+$/.test(b) ? prefix + b : b;
+}
+
 function cd(v) { return E('td', { 'class': 'td' }, [ (v == null || v === '') ? '—' : ('' + v) ]); }
 function cellRow(o) {
 	return E('tr', { 'class': 'tr' }, [ cd(o.type), cd(o.band), cd(o.earfcn),
@@ -954,7 +963,7 @@ function renderLive(name, modem, graphs, board) {
 			if (dsd && dsd.mode && dsd.mode != 'LTE') tech += ' · ' + dsd.mode;
 			if (!modem.rat) srvRows.push([ techTerm, tech + techNote ]);
 			srvRows.push([ term(_('Band'), _('3GPP frequency band of the serving cell (B… = LTE, n… = 5G NR) — lower bands travel further, higher bands carry more bandwidth')),
-				(svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);
+				(svl && svl.band != null) ? bandLabel('B', svl.band) : (ef ? ef.band : '—') ]);
 			srvRows.push([ term(_('Frequency'), _('Downlink centre frequency of the serving cell · channel bandwidth')),
 				(ef ? ef.mhz.toFixed(1)+' MHz' : '—') +
 				((svl && svl.bandwidth_mhz) ? ' · ' + svl.bandwidth_mhz + ' MHz' : '') ]);
@@ -967,7 +976,7 @@ function renderLive(name, modem, graphs, board) {
 		var narfcn = (sn && sn.arfcn) || cells.nr5g_arfcn;
 		var nf = narfcn ? bands.nrArfcn(narfcn) : null;
 		if (nc || sn) {
-			var nband = (sn && sn.band != null) ? ('n'+sn.band) : (nf && nf.band ? nf.band : '?');
+			var nband = (sn && sn.band != null) ? bandLabel('n', sn.band) : (nf && nf.band ? nf.band : '?');
 			var npci = (sn && sn.pci != null) ? sn.pci : (nc ? nc.pci : '?');
 			var nbw = (sn && sn.bandwidth_mhz) ? ' · ' + sn.bandwidth_mhz + ' MHz' : '';
 			srvRows.push([ term(_('5G cell'), _('The 5G NR serving cell: band · centre frequency · bandwidth · Physical Cell ID')),
