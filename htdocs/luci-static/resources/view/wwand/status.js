@@ -860,6 +860,16 @@ function renderLive(name, modem, graphs, board) {
 			mdmRows.push([ term(_('Hardware step'), _('What the hardware step of the recovery ladder would actually do on this box for this modem — asked of the same code that performs it, not inferred.')),
 				fmt.brief(hwShort, hwText) ]);
 		}
+		/* the kernel's transmit watchdog on the data netdev, as the daemon
+		   tick reads it; shown once there is something to say, since a
+		   healthy modem's row would only ever read "0" */
+		var txs = modem.tx_stall;
+
+		if (txs && (txs.timeouts > 0 || txs.stalled_s != null))
+			mdmRows.push([ term(_('TX stalls'), _('How often the kernel found the modem\'s transmit queue stuck (its "NETDEV WATCHDOG" message), counted since wwand started watching this modem. A stall that lasts the TX stall timeout while a connection is up resets the modem.')),
+				(txs.stalled_s != null)
+					? _('stuck for %d s (%d timeouts on %s)').format(txs.stalled_s, txs.timeouts, txs.netdev)
+					: _('%d timeouts on %s, moving now').format(txs.timeouts, txs.netdev) ]);
 		if (modem.fcc_lock != null && modem.fcc_lock != 0)
 			mdmRows.push([ term(_('FCC lock'), _('This module boots radio-locked (laptop-SKU) and the modem will not register while the lock is armed — set fcc_auth on the modem configuration to unlock at boot')),
 				_('active (mode %d)').format(modem.fcc_lock) ]);

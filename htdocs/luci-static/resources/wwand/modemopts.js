@@ -657,6 +657,12 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		o = s.taboption(tab, form.Value, 'tx_stall_timeout', _('TX stall timeout'),
+			_('Reset the modem when, with a connection up, the kernel reports its transmit queue stuck for this many seconds, i.e. the modem has stopped taking packets (the "NETDEV WATCHDOG" message in the system log). 0 only records the stalls in the status. Default 120 s.'));
+		o.placeholder = '120';
+		o.datatype = 'uinteger';
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'bearer_poll_count', _('Dead-bearer poll count'),
 			_('NCM modems only. How many consecutive status polls may list no data context — with no received traffic in between — before wwand declares the bearer dead and redials. One poll per telemetry interval, so 3 is about three minutes. Lower recovers faster from a drop the modem does not announce; the minimum is 2, because a single unparsed answer on an idle link must not be enough to drop a working connection.'));
 		o.placeholder = '3';
