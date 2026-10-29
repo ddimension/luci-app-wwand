@@ -981,6 +981,10 @@ function renderLive(name, modem, graphs, board) {
 				'%d / %d'.format(lc.earfcn, lc.serving_cell_id) ]);
 			srvRows.push([ term(_('TAC / Cell ID'), _('TAC = Tracking Area Code (paging area); Cell ID = the network-wide unique identifier of this cell')),
 				'%d / %d'.format(lc.tac, lc.global_cell_id) ]);
+			var enb = fmt.fmtEnodeb(lc.global_cell_id);
+			if (enb)
+				srvRows.push([ term(_('eNodeB / Sector'), _('The Cell ID split into the base station (eNodeB ID = Cell ID / 256) and its cell, often one sector of the site (Cell ID % 256). Cells with the same eNodeB ID are on the same site')),
+					enb ]);
 		}
 		var nc = cells.nr5g_cell, sn = (cells.serving||{}).nr;
 		var narfcn = (sn && sn.arfcn) || cells.nr5g_arfcn;
