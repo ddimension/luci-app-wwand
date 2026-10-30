@@ -556,7 +556,10 @@ return baseclass.extend({
 		o.validate = function(section_id, value) {
 			if (!value) return true;
 			var known = [ 'gsm', 'umts', 'lte', 'nr5g', 'td-scdma', 'cdma1x', 'evdo' ], seen = {};
-			var names = value.toLowerCase().split(/[, ]+/).filter(function(n) { return n; });
+			/* 5gnr: libqmi's spelling, which the daemon takes for nr5g (nas.uc
+			   RAT_ORDER_ALIASES) — mapped first so "nr5g,5gnr" is a repeat */
+			var names = value.toLowerCase().split(/[, ]+/).filter(function(n) { return n; })
+				.map(function(n) { return n == '5gnr' ? 'nr5g' : n; });
 			for (var i = 0; i < names.length; i++) {
 				if (known.indexOf(names[i]) < 0)
 					return _('Unknown technology "%s" — use %s').format(names[i], known.join(', '));
