@@ -61,6 +61,15 @@ function cellHead() {
 /* array, not a bare string: dom.append() would otherwise route it through
    innerHTML (luci.js:1394-96). These cells carry cell-scan output — operator
    names come off the air. */
+/* The daemon reports the serving band as a bare number (3, 48). An older
+   daemon sent the EARFCN-derived name ('B3', 'n48') instead, so a
+   token that already carries its letter is shown as it is rather than as
+   'BB3' (evidence: luci-app-wwand#16). */
+function bandLabel(prefix, b) {
+	b = String(b);
+	return /^[0-9]+$/.test(b) ? prefix + b : b;
+}
+
 function cd(v) { return E('td', { 'class': 'td' }, [ (v == null || v === '') ? '—' : ('' + v) ]); }
 function cellRow(o) {
 	return E('tr', { 'class': 'tr' }, [ cd(o.type), cd(o.band), cd(o.earfcn),
@@ -851,6 +860,16 @@ function renderLive(name, modem, graphs, board) {
 			mdmRows.push([ term(_('Hardware step'), _('What the hardware step of the recovery ladder would actually do on this box for this modem — asked of the same code that performs it, not inferred.')),
 				fmt.brief(hwShort, hwText) ]);
 		}
+		/* the kernel's transmit watchdog on the data netdev, as the daemon
+		   tick reads it; shown once there is something to say, since a
+		   healthy modem's row would only ever read "0" */
+		var txs = modem.tx_stall;
+
+		if (txs && (txs.timeouts > 0 || txs.stalled_s != null))
+			mdmRows.push([ term(_('TX stalls'), _('How often the kernel found the modem\'s transmit queue stuck (its "NETDEV WATCHDOG" message), counted since wwand started watching this modem. A stall that lasts the TX stall timeout while a connection is up resets the modem.')),
+				(txs.stalled_s != null)
+					? _('stuck for %d s (%d timeouts on %s)').format(txs.stalled_s, txs.timeouts, txs.netdev)
+					: _('%d timeouts on %s, moving now').format(txs.timeouts, txs.netdev) ]);
 		if (modem.fcc_lock != null && modem.fcc_lock != 0)
 			mdmRows.push([ term(_('FCC lock'), _('This module boots radio-locked (laptop-SKU) and the modem will not register while the lock is armed — set fcc_auth on the modem configuration to unlock at boot')),
 				_('active (mode %d)').format(modem.fcc_lock) ]);
@@ -954,7 +973,7 @@ function renderLive(name, modem, graphs, board) {
 			if (dsd && dsd.mode && dsd.mode != 'LTE') tech += ' · ' + dsd.mode;
 			if (!modem.rat) srvRows.push([ techTerm, tech + techNote ]);
 			srvRows.push([ term(_('Band'), _('3GPP frequency band of the serving cell (B… = LTE, n… = 5G NR) — lower bands travel further, higher bands carry more bandwidth')),
-				(svl && svl.band != null) ? ('B'+svl.band) : (ef ? ef.band : '—') ]);
+				(svl && svl.band != null) ? bandLabel('B', svl.band) : (ef ? ef.band : '—') ]);
 			srvRows.push([ term(_('Frequency'), _('Downlink centre frequency of the serving cell · channel bandwidth')),
 				(ef ? ef.mhz.toFixed(1)+' MHz' : '—') +
 				((svl && svl.bandwidth_mhz) ? ' · ' + svl.bandwidth_mhz + ' MHz' : '') ]);
@@ -962,12 +981,16 @@ function renderLive(name, modem, graphs, board) {
 				'%d / %d'.format(lc.earfcn, lc.serving_cell_id) ]);
 			srvRows.push([ term(_('TAC / Cell ID'), _('TAC = Tracking Area Code (paging area); Cell ID = the network-wide unique identifier of this cell')),
 				'%d / %d'.format(lc.tac, lc.global_cell_id) ]);
+			var enb = fmt.fmtEnodeb(lc.global_cell_id);
+			if (enb)
+				srvRows.push([ term(_('eNB / Sector'), _('The Cell ID split into the base station (eNB = eNodeB, ID = Cell ID / 256) and its cell, often one sector of the site (Cell ID % 256). Cells with the same eNB ID belong to the same base station, which may drive radios at more than one site')),
+					enb ]);
 		}
 		var nc = cells.nr5g_cell, sn = (cells.serving||{}).nr;
 		var narfcn = (sn && sn.arfcn) || cells.nr5g_arfcn;
 		var nf = narfcn ? bands.nrArfcn(narfcn) : null;
 		if (nc || sn) {
-			var nband = (sn && sn.band != null) ? ('n'+sn.band) : (nf && nf.band ? nf.band : '?');
+			var nband = (sn && sn.band != null) ? bandLabel('n', sn.band) : (nf && nf.band ? nf.band : '?');
 			var npci = (sn && sn.pci != null) ? sn.pci : (nc ? nc.pci : '?');
 			var nbw = (sn && sn.bandwidth_mhz) ? ' · ' + sn.bandwidth_mhz + ' MHz' : '';
 			srvRows.push([ term(_('5G cell'), _('The 5G NR serving cell: band · centre frequency · bandwidth · Physical Cell ID')),

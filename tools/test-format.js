@@ -527,6 +527,18 @@ eq(fmt.fmtFrequencyRange(5), 'FR1 (sub-6 GHz) + 0x4',
 eq(fmt.fmtFrequencyRange(0), null, 'range: zero is absent, not "unknown"');
 eq(fmt.fmtFrequencyRange(null), null, 'range: and so is null');
 
+/* --- LTE Cell ID -> eNodeB / sector (luci-app-wwand#16) ------------------ */
+eq(fmt.fmtEnodeb(26385411), '103068 / 3', 'enb: 0x1929C03 is eNodeB 0x1929C, cell 3');
+eq(fmt.fmtEnodeb(29582339), '115556 / 3', 'enb: the Chateau RG650E on 2026-10-29, AT+QENG cell 1C36403');
+eq(fmt.fmtEnodeb(255), '0 / 255', 'enb: the cell byte alone');
+eq(fmt.fmtEnodeb(0x0FFFFFFF), '1048575 / 255', 'enb: the largest 28-bit ECI');
+eq(fmt.fmtEnodeb(0x10000000), null, 'enb: past 28 bits is not an ECI');
+eq(fmt.fmtEnodeb(0xFFFFFFFF), null, 'enb: an all-ones unknown gives no row');
+eq(fmt.fmtEnodeb(0), '0 / 0', 'enb: zero is a valid ECI; unknown is all-ones, absent is null');
+eq(fmt.fmtEnodeb(-1), null, 'enb: a negative number is not an ECI');
+eq(fmt.fmtEnodeb(null), null, 'enb: absent stays absent');
+eq(fmt.fmtEnodeb('26385411'), null, 'enb: only a number is split');
+
 /* --- brief: short value, explanation on hover (luci-app-wwand#15) --------- */
 eq(fmt.brief('no', null), 'no', 'brief: no detail = the bare text, no hover cue');
 eq(fmt.brief('no', ''), 'no', 'brief: an empty detail counts as none');

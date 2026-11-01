@@ -543,6 +543,34 @@ return baseclass.extend({
 		o.value('cdma', 'CDMA');
 		bind(o);
 
+		/* the names are config_check / nas.uc RAT_ORDER_IDS; the daemon drops
+		   an unknown or repeated one with a warning, so it is refused here
+		   before it gets that far */
+		o = s.taboption(tab, form.Value, 'rat_order', _('RAT priority'),
+			_('QMI and MBIM modems: the order in which the modem searches the radio technologies, most preferred first, e.g. <code>nr5g,lte</code>. wwand writes it at every start when the modem holds a different one. A technology missing from the list may never be searched for, even when "Radio technology" allows it. Empty = leave the modem\'s order unchanged. Saving a change restarts this modem\'s bring-up, so its connection drops briefly. The current order is shown, and can be changed live, under Modem Tools.'));
+		o.value('nr5g,lte', 'NR5G, LTE');
+		o.value('nr5g,lte,umts', 'NR5G, LTE, UMTS');
+		o.value('lte,nr5g', 'LTE, NR5G');
+		o.value('lte,umts,gsm', 'LTE, UMTS, GSM');
+		o.optional = true;
+		o.validate = function(section_id, value) {
+			if (!value) return true;
+			var known = [ 'gsm', 'umts', 'lte', 'nr5g', 'td-scdma', 'cdma1x', 'evdo' ], seen = {};
+			/* 5gnr: libqmi's spelling, which the daemon takes for nr5g (nas.uc
+			   RAT_ORDER_ALIASES) — mapped first so "nr5g,5gnr" is a repeat */
+			var names = value.toLowerCase().split(/[, ]+/).filter(function(n) { return n; })
+				.map(function(n) { return n == '5gnr' ? 'nr5g' : n; });
+			for (var i = 0; i < names.length; i++) {
+				if (known.indexOf(names[i]) < 0)
+					return _('Unknown technology "%s" — use %s').format(names[i], known.join(', '));
+				if (seen[names[i]])
+					return _('"%s" is listed twice').format(names[i]);
+				seen[names[i]] = true;
+			}
+			return true;
+		};
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'mcc', _('MCC'),
 			_('Mobile Country Code for manual network selection.'));
 		o.datatype = 'uinteger';
@@ -657,6 +685,12 @@ return baseclass.extend({
 		o.datatype = 'uinteger';
 		bind(o);
 
+		o = s.taboption(tab, form.Value, 'tx_stall_timeout', _('TX stall timeout'),
+			_('Reset the modem when, with a connection up, the kernel reports its transmit queue stuck for this many seconds, i.e. the modem has stopped taking packets (the "NETDEV WATCHDOG" message in the system log). 0 only records the stalls in the status. Default 120 s.'));
+		o.placeholder = '120';
+		o.datatype = 'uinteger';
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'bearer_poll_count', _('Dead-bearer poll count'),
 			_('NCM modems only. How many consecutive status polls may list no data context — with no received traffic in between — before wwand declares the bearer dead and redials. One poll per telemetry interval, so 3 is about three minutes. Lower recovers faster from a drop the modem does not announce; the minimum is 2, because a single unparsed answer on an idle link must not be enough to drop a working connection.'));
 		o.placeholder = '3';
@@ -693,6 +727,21 @@ return baseclass.extend({
 		o = s.taboption(tab, form.Flag, 'gnss_set_time', _('Set the clock from GNSS'),
 			_('Let wwand step the system clock from the GNSS time — only while the clock is plainly unset, so it never fights the NTP client. Off by default. For installs with no RTC where the modem is the only time source.'));
 		o.default = '0';
+		o.depends('gnss', '1');
+		bind(o);
+
+		/* '' is not "back to full": the modem stores the masks, so unsetting
+		   the option changes nothing on it (wwand reference.md, gnss_nmea) —
+		   the labels have to say so, or "unchanged" reads as "default". It is
+		   written only in start_gnss (modem_common.uc, once per bring-up); a
+		   saved change gets there because gnss_nmea is in the daemon's modem
+		   reload signature, which restarts the modem. */
+		o = s.taboption(tab, form.ListValue, 'gnss_nmea', _('GNSS NMEA output'),
+			_('Quectel and ASR modems: which NMEA sentences the receiver streams. Written when wwand starts the receiver; saving a change restarts this modem\'s bring-up, so its connection drops briefly. <em>Fix only</em> is GPS position, time and DOP (GGA, RMC, GSA) with the other constellations\' sentences off — far less for wwand-gps to parse, the same fix, but no satellites-in-view list and only GPS satellites counted as used. The modem keeps what was written last: leaving this unset does not undo <em>Fix only</em>, choose <em>All sentences</em> for that.'));
+		o.value('', _('Leave modem setting unchanged'));
+		o.value('fix', _('Fix only (less CPU)'));
+		o.value('full', _('All sentences'));
+		o.optional = true;
 		o.depends('gnss', '1');
 		bind(o);
 

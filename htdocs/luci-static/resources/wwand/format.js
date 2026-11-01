@@ -1199,6 +1199,22 @@ return baseclass.extend({
 		return out.length ? out.join(' + ') : null;
 	},
 
+	/* An LTE Cell ID (ECI) split into the eNodeB that serves it and the
+	   cell of that eNodeB: the ECI is 28 bits, the leftmost 20 the eNB ID
+	   of a macro eNodeB and the last 8 its cell (3GPP TS 36.413 §9.2.1.38,
+	   E-UTRAN CGI, Rel-17, checked 2026-10-29). Several cells of one site
+	   then share the eNodeB number, which is what makes it worth showing
+	   (luci-app-wwand#16). A home eNodeB uses all 28 bits as its ID; nothing
+	   in the ECI says which kind it is, so there the split is meaningless,
+	   and that is rare enough to accept. Anything that is not a 28-bit
+	   number, such as an all-ones "unknown", gives null and no row. */
+	fmtEnodeb: function(eci) {
+		if (typeof eci != 'number' || !Number.isInteger(eci) || eci < 0 || eci >= 0x10000000)
+			return null;
+
+		return '%d / %d'.format(Math.floor(eci / 256), eci % 256);
+	},
+
 	/* The SIM column of the modem list. `slots` is the modem_sim_slots reply
 	   when the caller has one — the readiness word alone answered "can this
 	   modem use its card", which is worth knowing and is not the question
