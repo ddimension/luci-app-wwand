@@ -433,7 +433,8 @@ return baseclass.extend({
 		bind(o);
 
 		o = s.taboption(tab, form.Value, 'sim_slot', _('SIM slot'),
-			_('Physical SIM slot to activate on multi-slot / eSIM modems (0 = leave as-is). The list shows the slots the modem reports.'));
+			_('Physical SIM slot to activate on multi-slot / eSIM modems (0 = leave as-is). The list shows the slots the modem reports.') + ' ' +
+			_('An interface bound to a SIM card (its “SIM card” setting) overrides this: its start switches to the slot or eSIM profile that holds the card, and the modem comes up on that slot already when the interface starts automatically. The slot set here applies only while no such interface needs another card.'));
 		o.placeholder = '0';
 		o.datatype = 'uinteger';
 		bind(o);
