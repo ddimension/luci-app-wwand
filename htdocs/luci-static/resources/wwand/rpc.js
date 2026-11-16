@@ -32,6 +32,25 @@ function checked(decl) {
 	};
 }
 
+var callSwitchSlot = checked({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot', 'force' ], expect: {} });
+var callEsim = checked({ object: 'wwand', method: 'modem_esim',
+	params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify', 'force' ], expect: {} });
+
+/* Shared by every button that changes the card in use: the daemon answers
+   `sim_in_use` with the interface bound to that card (`option iccid`), and
+   only a yes repeats the call with force. */
+function askBound(call) {
+	return call(false).then(function(r) {
+		if (!(r && r.error == 'sim_in_use'))
+			return r;
+
+		if (!confirm(_('Interface %s is bound to the SIM card in use. Switching takes it down; it stays down until its next start, which switches back to its card. Switch anyway?').format(r.interface || '?')))
+			return r;
+
+		return call(true);
+	});
+}
+
 return baseclass.extend({
 	/* --- status flavours -------------------------------------------------
 	   `status` unwraps the modems map (what the views iterate);
@@ -78,7 +97,13 @@ return baseclass.extend({
 
 	/* --- SIM / eSIM ------------------------------------------------------ */
 	slots:      rpc.declare({ object: 'wwand', method: 'modem_sim_slots', params: [ 'modem' ], expect: {} }),
-	switchSlot: checked({ object: 'wwand', method: 'modem_sim_switch_slot', params: [ 'modem', 'slot' ], expect: {} }),
+	switchSlot: callSwitchSlot,
+	/* A slot switch from a button: the daemon refuses one that would pull
+	   the card from under an interface bound to it (`option iccid`), naming
+	   the interface — asked here, and forced only on a yes. */
+	switchSlotAsk: function(modem, slot) {
+		return askBound(function(force) { return callSwitchSlot(modem, slot, force); });
+	},
 	pinVerify:  checked({ object: 'wwand', method: 'modem_sim_pin_verify', params: [ 'modem', 'pin' ], expect: {} }),
 	simPuk:     checked({ object: 'wwand', method: 'modem_sim_puk', params: [ 'modem', 'puk', 'new_pin' ], expect: {} }),
 	pinLock:    checked({ object: 'wwand', method: 'modem_sim_pin_lock', params: [ 'modem', 'pin', 'enable' ], expect: {} }),
@@ -89,8 +114,17 @@ return baseclass.extend({
 	esimProfiles: rpc.declare({ object: 'wwand', method: 'modem_esim_profiles',
 		params: [ 'modem', 'slot' ], expect: {} }),
 
-	esim:       checked({ object: 'wwand', method: 'modem_esim',
-		params: [ 'modem', 'op', 'slot', 'iccid', 'activation_code', 'confirmation_code', 'auto_notify' ], expect: {} }),
+	esim:       callEsim,
+	/* Enabling or disabling a profile changes the card in use just as a slot
+	   switch does, and is refused the same way. Only the bound-interface
+	   refusal is asked about: `esim_managed` is checked first by the daemon
+	   and comes back as it is, so a yes here never overrides a managing
+	   plugin. */
+	esimSwitchAsk: function(modem, op, slot, iccid) {
+		return askBound(function(force) {
+			return callEsim(modem, op, slot, iccid, '', '', undefined, force);
+		});
+	},
 
 	/* --- settings / network selection ------------------------------------ */
 	getSettings: rpc.declare({ object: 'wwand', method: 'modem_get_settings', params: [ 'modem' ], expect: {} }),

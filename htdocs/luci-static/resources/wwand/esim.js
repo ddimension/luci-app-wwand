@@ -17,7 +17,7 @@
    view — `esimSlot` is the physical slot its eSIM reads were made against, so
    this panel acts on the card it listed. */
 
-var callSwitchSlot = wrpc.switchSlot;
+var callSwitchSlot = wrpc.switchSlotAsk;
 var callPinLock = wrpc.pinLock;
 var callEsim = wrpc.esim;
 
@@ -294,14 +294,14 @@ return baseclass.extend({
 					'click': ui.createHandlerFn(self, function() {
 						if (!confirm(_('Enable profile %s? The connection will re-establish.').format(p.iccid)))
 							return;
-						return callEsim(data.modem, 'enable', esimSlot, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
+						return wrpc.esimSwitchAsk(data.modem, 'enable', esimSlot, p.iccid).then(function(res) { ctx.notifyEsimApply(data.modem, res) });
 					}) }, _('Enable')));
 			else
 				acts.push(E('button', { 'class': 'btn cbi-button',
 					'click': ui.createHandlerFn(self, function() {
 						if (!confirm(_('Disable the active profile %s?').format(p.iccid)))
 							return;
-						return callEsim(data.modem, 'disable', esimSlot, p.iccid, '', '').then(function(res) { ctx.notifyEsimApply(data.modem, res) });
+						return wrpc.esimSwitchAsk(data.modem, 'disable', esimSlot, p.iccid).then(function(res) { ctx.notifyEsimApply(data.modem, res) });
 					}) }, _('Disable')));
 			acts.push(E('button', { 'class': 'btn cbi-button cbi-button-remove', 'style': 'margin-left:4px',
 				'click': ui.createHandlerFn(self, function() {

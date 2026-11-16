@@ -433,7 +433,8 @@ return baseclass.extend({
 		bind(o);
 
 		o = s.taboption(tab, form.Value, 'sim_slot', _('SIM slot'),
-			_('Physical SIM slot to activate on multi-slot / eSIM modems (0 = leave as-is). The list shows the slots the modem reports.'));
+			_('Physical SIM slot to activate on multi-slot / eSIM modems (0 = leave as-is). The list shows the slots the modem reports.') + ' ' +
+			_('An interface bound to a SIM card (its “SIM card” setting) overrides this: its start switches to the slot or eSIM profile that holds the card, and the modem comes up on that slot already when the interface starts automatically. The slot set here applies only while no such interface needs another card.'));
 		o.placeholder = '0';
 		o.datatype = 'uinteger';
 		bind(o);
@@ -520,6 +521,16 @@ return baseclass.extend({
 			}
 		};
 
+		/* opt-in, never automatic: declaring a device IPA switches the card's
+		   own IPA (IPAe) off, and a fleet may rely on that IPA polling its eIM
+		   (wwand docs/reference.md, "SGP.32 IoT cards") */
+		o = s.taboption(tab, form.ListValue, 'ipa_mode', _('SGP.32 IPA'),
+			_('Who runs an SGP.32 IoT eUICC that also has its own IPA (IPAe). By default the card keeps its own IPA, and the router has no access to the card\'s profiles. "Router (IPAd)" makes the router announce its own IPA to the card. The card then turns its own IPA off and lets the router manage the profiles: eSIM page, lpac, eIM plugin.'));
+		o.value('', _('Card (IPAe, default)'));
+		o.value('ipad', _('Router (IPAd)'));
+		o.optional = true;
+		bind(o);
+
 		o = s.taboption(tab, form.Value, 'pincode', _('SIM PIN'),
 			_('Default SIM PIN for this modem, entered on each start. Empty = unlocked SIM. Per-card overrides live in the SIMs list.'));
 		o.datatype = 'and(uinteger,minlength(4),maxlength(8))';
@@ -543,11 +554,32 @@ return baseclass.extend({
 		o.value('cdma', 'CDMA');
 		bind(o);
 
+		/* NSA vs SA is a switch of its own, not part of "Radio technology":
+		   the modem's vendor AT setting, which wwand knows only for the
+		   Foxconn T99W175 and the Quectel RG50xQ/RM5xxQ (wwand atcmd.uc
+		   nr5g_mode_commands); elsewhere the daemon reports it as not
+		   applied */
+		o = s.taboption(tab, form.ListValue, 'nr5g_mode', _('5G NR mode'),
+			_('Which kind of 5G the modem may use: non-standalone (5G on an LTE anchor), standalone (5G core), or both. Separate from "Radio technology", which only allows 5G at all. Set over QMI on Qualcomm modems (QMI, or MBIM with the QMI passthrough), otherwise over AT on the Foxconn T99W175 and Quectel RG50xQ/RM5xxQ. With "5G NR" alone, "NSA only" finds no network, because NSA needs LTE.'));
+		o.value('', _('Leave modem setting unchanged'));
+		o.value('both', _('NSA and SA'));
+		o.value('nsa', _('NSA only'));
+		o.value('sa', _('SA only'));
+		o.optional = true;
+		bind(o);
+
 		/* the names are config_check / nas.uc RAT_ORDER_IDS; the daemon drops
 		   an unknown or repeated one with a warning, so it is refused here
 		   before it gets that far */
 		o = s.taboption(tab, form.Value, 'rat_order', _('RAT priority'),
 			_('QMI and MBIM modems: the order in which the modem searches the radio technologies, most preferred first, e.g. <code>nr5g,lte</code>. wwand writes it at every start when the modem holds a different one. A technology missing from the list may never be searched for, even when "Radio technology" allows it. Empty = leave the modem\'s order unchanged. Saving a change restarts this modem\'s bring-up, so its connection drops briefly. The current order is shown, and can be changed live, under Modem Tools.'));
+		/* an explicit empty entry, like "Modem default" above, rather than the
+		   optional placeholder: ui.js adds that placeholder only when no '' item
+		   exists (ui.js:1180), and Footstrap hides a placeholder while the list
+		   is open (Footstrap cascade.css:829, `:not([open])`), so
+		   the open box had no text and the row, aligned on the baseline, moved
+		   its label down to the box's bottom edge (luci-app-wwand#17) */
+		o.value('', _('Keep the modem\'s order'));
 		o.value('nr5g,lte', 'NR5G, LTE');
 		o.value('nr5g,lte,umts', 'NR5G, LTE, UMTS');
 		o.value('lte,nr5g', 'LTE, NR5G');
