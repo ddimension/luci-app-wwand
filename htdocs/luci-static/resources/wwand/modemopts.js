@@ -703,6 +703,32 @@ return baseclass.extend({
 		persist.default = '0';
 		bind(persist);
 
+		/* anchor steering (daemon steering.uc): a supervised, volatile lock of
+		   the LTE primary cell onto an EN-DC anchor of the registered network.
+		   Off while a cell lock above is set — the configured lock wins. */
+		var steer = s.taboption(tab, form.ListValue, 'anchor_steering', _('Anchor steering'),
+			_('For a router that does not move: when the serving LTE cell offers no 5G anchor (EN-DC), scan for cells of the registered network, lock the primary cell onto one that does, and release the lock as soon as it is not acquired, offers no anchor, weakens or the data path stalls. Carrier aggregation is never restricted and the lock is never stored in the modem. A scan costs about 15 seconds of service and runs at most every scan interval. Has no effect while an LTE or 5G cell lock is set.'));
+		steer.value('off', _('Off'));
+		steer.value('auto', _('Automatic'));
+		steer.default = 'off';
+		bind(steer);
+
+		var rmin = s.taboption(tab, form.Value, 'steer_rsrp_min', _('Steering: minimum RSRP'),
+			_('dBm. A cell weaker than this is never chosen, and a locked cell that stays below it for 30 seconds is released.'));
+		rmin.datatype = 'range(-140,-44)';
+		rmin.placeholder = '-105';
+		rmin.optional = true;
+		rmin.depends('anchor_steering', 'auto');
+		bind(rmin);
+
+		var sint = s.taboption(tab, form.Value, 'steer_scan_interval', _('Steering: scan interval'),
+			_('Seconds between cell scans (at least 600).'));
+		sint.datatype = 'min(600)';
+		sint.placeholder = '21600';
+		sint.optional = true;
+		sint.depends('anchor_steering', 'auto');
+		bind(sint);
+
 		return { lock4g: lock4g, lock5g: lock5g };
 	},
 
